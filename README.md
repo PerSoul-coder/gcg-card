@@ -10,9 +10,16 @@
 | --- | --- | --- |
 | 离线单文件（推荐分享） | `dist/七圣召唤-卡牌与牌组浏览器.html` | 约 3.1 MB，样式 / 脚本 / 数据快照与压缩数据集全部内联，双击即开、断网可用 |
 | 轻量单文件 | `dist/七圣召唤-卡牌与牌组浏览器-轻量.html` | 约 960 KB，不内嵌原始数据，首次打开联网拉取并缓存 24 小时；压缩数据集仍内联 |
-| 多文件开发版 | 根目录 `deck-viewer.html` | 按 `src/sources.mjs` 的顺序加载 20 个源码模块，便于调试 |
+| 多文件开发版 | 根目录 `deck-viewer.html` | 加载构建产物 `dist/app.js`（TypeScript 源码经 esbuild 打包），便于调试 |
 
-多文件版建议通过本地静态服务器打开（`file://` 下现网数据请求可能受浏览器限制）：
+开发版需先构建一次脚本（源码已迁到 TypeScript，浏览器不能直接执行 `.ts`）：
+
+```powershell
+npm install          # 首次
+npm run build:app    # 改完源码后重新打包
+```
+
+再通过本地静态服务器打开（`file://` 下现网数据请求可能受浏览器限制）：
 
 ```powershell
 python -m http.server 8080
@@ -66,16 +73,17 @@ python -m http.server 8080
 .
 ├─ deck-viewer.html          多文件开发入口
 ├─ deck-viewer.css           全局样式
-├─ src/                      应用源码（按领域拆分）
-│  ├─ sources.mjs            模块加载顺序的唯一声明（构建 / 测试共用）
-│  ├─ 00-resources.js        资源集中管理：数据源、图片地址、元素元数据与图标、存储键
-│  ├─ 05-core.js             核心工具与全局状态
+├─ src/                      应用源码（TypeScript 优先，迁移进行中）
+│  ├─ types.ts               统一数据集类型契约（构建期 / 运行时 / 测试共用）
+│  ├─ core/resources.ts      资源集中管理：数据源、图片地址、元素元数据与图标、存储键
+│  ├─ core/dom.ts            DOM 查询、转义、提示条、剪贴板
+│  ├─ data/state.ts          应用级可变状态（收敛为一个 state 对象）
+│  ├─ data/model.ts          数据模型：类型分类 / 名字归一化 / 影子关系 / 卡面兜底（唯一定义处）
+│  ├─ bridge.ts              迁移期临时接线（迁完即删）
 │  ├─ 07-dataset.js          统一数据集的加载 / Brotli 解码 / 索引（构建期归一化，运行时只读）
 │  ├─ 10-codec.js            分享码编解码
-│  ├─ 12-model.js            数据模型：类型分类 / 名字归一化 / 影子关系 / 卡面兜底（唯一定义处）
 │  ├─ 20-data.js             数据加载：内置快照 → 本地缓存 → 现网
 │  ├─ 30-deps.js             牌组限制 / 打出限制 / 费用拆分
-│  ├─ 35-state.js            应用级可变状态
 │  ├─ 40-concepts.js         概念索引与术语链接化
 │  ├─ 45-pool.js             全量卡池与版本索引
 │  ├─ 47-skills.js           角色技能索引与技能页（费用 / 准备轮数 / 所属角色）
@@ -216,8 +224,9 @@ node tests/test-search.mjs
 
 ## 资源与数据约定
 
-- 所有外部地址、图片地址、存储键、元素元数据与图标入口集中在 `src/00-resources.js`；业务模块只引用常量。
-- 模块加载顺序只在 `src/sources.mjs` 的 `APP_SOURCES` / `ASSET_SOURCES` 声明，构建脚本与测试加载器直接读取。新增模块时，除更新 `sources.mjs` 外，还需同步 `deck-viewer.html` 中对应 `<script>` 的位置。
+- 所有外部地址、图片地址、存储键、元素元数据与图标入口集中在 `src/core/resources.ts`；业务模块只 import 常量。
+- 构建期源码清单只在 `scripts/sources.mjs` 声明：`APP_ENTRY` 是 TypeScript 入口，`LEGACY_SOURCES` 是尚未迁移的旧脚本（每迁一个删一行），`ASSET_SOURCES` 是资源脚本。构建脚本与测试加载器都读这一处。
+- 新增模块时：TS 模块直接 import，无需登记顺序；仍在 `LEGACY_SOURCES` 的旧脚本按数组顺序拼接，新增须追加到末尾。
 - 七元素图标由官方矢量归一化而来：去掉硬编码宽高、填充色统一替换为 `currentColor`，界面按元素色着色，亮 / 暗上下文自动适配。
 - 资源更新后统一调整 `deck-viewer.html` 里的 `?v=` 版本戳，强制浏览器重新拉取。
 
