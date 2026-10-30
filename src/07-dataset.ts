@@ -1,32 +1,31 @@
-/* 统一数据集的加载、解码与索引。
+/* 07-dataset.ts —— 统一数据集的加载与解码。
  *
- * ========== 为什么要有这一层 ==========
+ * ========== 数据只有一份 ==========
  * 四份来源（角色 / 实体 / 关键词 / 补充概念）在原始数据里字段各异，过去靠运行时
  * 的 nameKey、descMirrors、正则匹配等启发式逐处猜测。现在由 scripts/build-dataset.mjs
- * 在构建期归一化为同一种 Record（见 src/types.ts 的契约），判定一次算好。
- * 运行时只读——不再在每个界面重复判断。
+ * 在构建期归一化为同一种记录（见 src/types.ts 的契约），判定一次算好，运行期只读。
+ *
+ * 因此**运行时不再下载原始三份 JSON**：站点提供的 gi-data/dataset.{gz,br,json} 就是
+ * 全部数据。要更新牌库，重跑 `npm run build:dataset` 并重新部署——而不是让每个访客
+ * 每次打开页面都自己归一化一遍。
  *
  * 加载优先级：
- *   1) Node 测试注入的 __DATASET_JSON（避免 file:// 与 fetch 差异）；
+ *   1) 宿主注入（Node 测试的 __DATASET_JSON / 单文件版的 window.BUILTIN_DATASET）；
  *   2) 单文件版内联的压缩包（gzip 优先，浏览器原生可解）；
  *   3) 多文件版 gi-data/dataset.gz → .br → .json；
- *   4) 任一步失败返回 null，调用方回退到原始快照索引，页面不会因数据包问题白屏。 */
+ *   4) 全失败返回 null，由调用方报错——不再有"回退到原始快照"这条第二路径。 */
 
 import type { Dataset, GcgRecord, TermGroup } from "./types";
 import { isDataset } from "./types";
-import { state } from "./data/state";
 import { DATASET_GZ_URL, DATASET_BR_URL, DATASET_JSON_URL } from "./core/resources";
-import { nameKey } from "./data/model";
 
 let DATASET: Dataset | null = null;
 let DATASET_READY = false;
+/** 本次数据来自哪里：builtin（内联/注入）或 network（站点数据包）。 */
+let DATASET_ORIGIN: "builtin" | "network" | "none" = "none";
 
-const dsIndex = {
-  byKey: new Map<string, GcgRecord>(),
-  byKind: new Map<string, GcgRecord[]>(),
-  byDomain: new Map<string, GcgRecord[]>(),
-  byNorm: new Map<string, GcgRecord[]>(),
-};
+const byKey = new Map<string, GcgRecord>();
+const byKind = new Map<string, GcgRecord[]>();
 
 function datasetFromHost(): Dataset | null {
   try {
@@ -65,73 +64,63 @@ async function readDatasetResponse(res: Response, url: string): Promise<unknown>
   return res.json();
 }
 
-async function loadDataset(): Promise<Dataset | null> {
-  if (DATASET_READY) return DATASET;
+function adopt(ds: Dataset, origin: "builtin" | "network"): Dataset {
+  DATASET = ds;
+  DATASET_READY = true;
+  DATASET_ORIGIN = origin;
+  buildDatasetIndex();
+  return ds;
+}
 
-  let host: unknown = datasetFromHost();
-  if (!host && typeof window !== "undefined") {
-    if (window.BUILTIN_DATASET_GZ_B64) host = await decodeBinaryBase64(window.BUILTIN_DATASET_GZ_B64, "gzip");
-    if (!host && window.BUILTIN_DATASET_B64) host = await decodeBinaryBase64(window.BUILTIN_DATASET_B64, "brotli");
-  }
-  if (isDataset(host)) {
-    DATASET = host;
-    DATASET_READY = true;
-    buildDatasetIndex();
-    return DATASET;
+/** 加载数据集。force=true 时跳过内联/注入，直接回站点取最新包（「刷新数据」用）。 */
+async function loadDataset(force = false): Promise<Dataset | null> {
+  if (DATASET_READY && !force) return DATASET;
+
+  if (!force) {
+    const host = datasetFromHost();
+    if (isDataset(host)) return adopt(host, "builtin");
+    if (typeof window !== "undefined") {
+      let inline: unknown = null;
+      if (window.BUILTIN_DATASET_GZ_B64) inline = await decodeBinaryBase64(window.BUILTIN_DATASET_GZ_B64, "gzip");
+      if (!inline && window.BUILTIN_DATASET_B64) inline = await decodeBinaryBase64(window.BUILTIN_DATASET_B64, "brotli");
+      if (isDataset(inline)) return adopt(inline, "builtin");
+    }
   }
 
+  /* 刷新时加时间戳参数，绕过 HTTP 缓存，确保真的拿到新包 */
+  const bust = force ? `?t=${Date.now()}` : "";
   for (const url of [DATASET_GZ_URL, DATASET_BR_URL, DATASET_JSON_URL]) {
     try {
-      const j = await readDatasetResponse(await fetch(url), url);
-      if (isDataset(j)) {
-        DATASET = j;
-        DATASET_READY = true;
-        buildDatasetIndex();
-        return DATASET;
-      }
+      const j = await readDatasetResponse(await fetch(url + bust), url);
+      if (isDataset(j)) return adopt(j, "network");
     } catch {
-      /* 依次降级：gz → br → json，全失败返回 null 由调用方兜底 */
+      /* 依次降级：gz → br → json，全失败返回 null 由调用方提示 */
     }
   }
   return null;
 }
 
 function buildDatasetIndex(): void {
-  dsIndex.byKey.clear();
-  dsIndex.byKind.clear();
-  dsIndex.byDomain.clear();
-  dsIndex.byNorm.clear();
+  byKey.clear();
+  byKind.clear();
   if (!DATASET) return;
   for (const r of DATASET.records) {
     if (!r || !r.key) continue;
-    dsIndex.byKey.set(r.key, r);
-    pushTo(dsIndex.byKind, r.kind, r);
-    pushTo(dsIndex.byDomain, r.domain, r);
-    const nk = r.aliases?.norm || r.name;
-    if (nk) pushTo(dsIndex.byNorm, nk, r);
+    byKey.set(r.key, r);
+    const list = byKind.get(r.kind);
+    if (list) list.push(r);
+    else byKind.set(r.kind, [r]);
   }
 }
 
-function pushTo<T>(map: Map<string, T[]>, key: string, value: T): void {
-  const list = map.get(key);
-  if (list) list.push(value);
-  else map.set(key, [value]);
-}
-
 const dsReady = (): boolean => DATASET_READY;
-const dsByKey = (key: string): GcgRecord | null => dsIndex.byKey.get(key) || null;
-const dsRecords = (kind: string): GcgRecord[] => dsIndex.byKind.get(kind) || [];
-const dsSkills = (): GcgRecord[] => dsIndex.byKind.get("skill") || [];
-const dsByName = (name: string): GcgRecord[] => dsIndex.byNorm.get(nameKey(name)) || [];
+const dsByKey = (key: string): GcgRecord | null => byKey.get(key) || null;
+const dsSkills = (): GcgRecord[] => byKind.get("skill") || [];
 const dsStats = () => DATASET?.stats || null;
 /** 概念索引：名字 → 有序条目（收录 / 去重 / 排序已在构建期完成）。 */
 const dsTerms = (): TermGroup[] => DATASET?.terms || [];
 
-/* 数字 id（卡牌/角色）→ 统一 key；技能用自身 key */
-const dsKeyOfId = (id: number): string =>
-  (state.charById.has(id) ? "char:" : "card:") + id;
-
 export {
-  DATASET, DATASET_READY, dsIndex, datasetFromHost, decodeBinaryBase64, readDatasetResponse,
-  loadDataset, buildDatasetIndex, dsReady, dsByKey, dsRecords, dsSkills, dsByName, dsStats, dsTerms, dsKeyOfId,
+  DATASET, DATASET_READY, DATASET_ORIGIN, datasetFromHost, decodeBinaryBase64, readDatasetResponse,
+  loadDataset, buildDatasetIndex, dsReady, dsByKey, dsSkills, dsStats, dsTerms,
 };

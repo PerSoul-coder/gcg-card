@@ -11,11 +11,16 @@ const { assert } = t;
 
 const harness = `
 return (async () => {
+  /* 记录视图：卡池与索引都从这里取，测试断言的是同一份数据 */
+  const chars = () => charRecords();
+  const cards = () => cardRecords();
+  const idOf = r => Number(r.key.slice(r.key.indexOf(":") + 1));
+  const recByName = n => cards().find(r => r.name === n) || chars().find(r => r.name === n);
   await ensureData();
-  const ent = id => state.entById.get(id);
+  const ent = id => recordOfId(id);
 
   /* ===== 1. 类型分类：唯一来源 ===== */
-  const zh = id => typeZhOf(ent(id));
+  const zh = id => (ent(id) || {}).typeZh || "";
   assert(TYPE_ZH.GCG_CARD_ONSTAGE === "队伍状态", "类型表：GCG_CARD_ONSTAGE → 队伍状态（不再是场地牌）");
   assert(zh(117) === "队伍状态", "激化领域（ONSTAGE）→ 队伍状态");
   assert(zh(113135) === "状态牌", "纵阵武力统筹（STATE）→ 状态牌");
@@ -27,40 +32,41 @@ return (async () => {
   assert(TYPE_ZH.GCG_CARD_STATE === "状态牌" && TYPE_ZH.GCG_CARD_SUMMON === "召唤物", "状态牌 / 召唤物译名保持不变");
 
   /* ===== 2. 准备技能：可查看、且指向技能而不是同名状态 ===== */
-  const beidou = state.CHAR.find(c => c.name === "北斗");
-  const taChao = skillsOf(beidou.id).find(s => s.name === "踏潮");
+  const beidou = chars().find(c => c.name === "北斗");
+  const beidouId = idOf(beidou);
+  const taChao = skillsOf(beidouId).find(s => s.name === "踏潮");
   assert(!!taChao, "北斗「踏潮」进入技能索引");
   assert(taChao.hidden === true && taChao.prepared === true, "踏潮是隐藏的准备技能（hidden + prepared）");
   assert(/造成3点雷元素伤害/.test(taChao.effect), "踏潮效果可读：" + taChao.effect);
   assert(taChao.stateId === 114055, "踏潮关联准备中状态实体 114055");
   const shadowEnt = ent(114055);
-  assert(isShadowState(shadowEnt), "同名状态 114055 被识别为准备状态影子");
+  assert(isShadowId(114055), "同名状态 114055 被识别为准备状态影子");
   assert(!termEntries("踏潮").some(e => e.kind === "card"), "踏潮 不再以状态牌身份占据概念名");
   assert(termRoute(termEntries("踏潮")) === "skill", "点击踏潮 → 技能页");
   assert(!pool.some(x => x.id === 114055), "准备状态不进卡池（不与技能抢名字）");
-  assert(poolStats.shadowFiltered === shadowStateIds.size && poolStats.shadowFiltered > 0,
+  assert(poolStats.shadowFiltered === cards().filter(r => r.flags.shadow).length && poolStats.shadowFiltered > 0,
     "准备状态计数：" + poolStats.shadowFiltered);
 
-  const leiying = state.CHAR.find(c => c.name === "愚人众·雷萤术士");
+  const leiying = chars().find(c => c.name === "愚人众·雷萤术士");
   const ting = termEntries("霆电迸发");
   assert(ting.length === 1 && ting[0].kind === "skill", "霆电迸发 → 唯一技能条目");
   assert(/造成2点雷元素伤害/.test(ting[0].desc), "霆电迸发效果：造成2点雷元素伤害");
 
   /* ===== 3. 技能费用：元素骰 + 充能 ===== */
-  const zhuolang = skillsOf(beidou.id).find(s => s.name === "捉浪");
+  const zhuolang = skillsOf(beidouId).find(s => s.name === "捉浪");
   assert(zhuolang.cost.some(c => c.type === "GCG_COST_DICE_ELECTRO" && c.count === 3), "捉浪：雷元素骰 ×3");
-  const zhuoLei = skillsOf(beidou.id).find(s => s.name === "斫雷");
+  const zhuoLei = skillsOf(beidouId).find(s => s.name === "斫雷");
   assert(zhuoLei.cost.some(c => c.type === "GCG_COST_ENERGY" && c.count === 3), "斫雷：充能 ×3");
   assert(/充能×3/.test(skillCostText(zhuoLei)), "费用文本含充能：" + skillCostText(zhuoLei));
   const rowHtml = skillRowHtml(zhuoLei);
   assert(/class="die en"/.test(rowHtml) && /data-skill=/.test(rowHtml), "技能行渲染充能图标且可点击");
 
   /* ===== 4. 角色详情：隐藏技能不再被过滤 ===== */
-  showDetail(beidou.id);
+  showDetail(beidouId);
   const detailHtml = String(document.getElementById("detail").innerHTML || "");
   assert(detailHtml.includes("踏潮"), "角色详情列出准备技能「踏潮」");
-  assert((detailHtml.match(/data-skill=/g) || []).length === skillsOf(beidou.id).length,
-    "北斗详情技能行数 = 技能索引条数（" + skillsOf(beidou.id).length + "）");
+  assert((detailHtml.match(/data-skill=/g) || []).length === skillsOf(beidouId).length,
+    "北斗详情技能行数 = 技能索引条数（" + skillsOf(beidouId).length + "）");
   assert(!/【/.test(detailHtml), "技能标题不再用【】包裹（改为徽标 + 行块）");
 
   /* ===== 5. 技能页：压栈 / 费用 / 所属角色 / 准备状态 ===== */
@@ -95,12 +101,12 @@ return (async () => {
   assert(st.includes('width="128"') && st.includes('height="128"'), "图标写死 128×128，避免撑开卡壳");
   /* 类型 → 卡壳配色键：四类对局实体各自可辨 */
   const kindOf = id => (cardArtHtml(id).match(/data-kind="([^"]*)"/) || [])[1];
-  const sampleOf = t => (state.ENT.find(e => e.type === t && !hasCardFace(e)) || {}).id;
+  const sampleOf = t => idOf(cards().find(e => e.typeRaw === t && !e.art.hasFace) || cards()[0]);
   assert(kindOf(100) === "state", "状态牌 → state");
   assert(kindOf(sampleOf("GCG_CARD_ATTACHMENT")) === "attach", "附加状态 → attach");
   assert(kindOf(sampleOf("GCG_CARD_ONSTAGE")) === "team", "队伍状态 → team");
-  const summon = state.ENT.find(e => e.type === "GCG_CARD_SUMMON");
-  assert(!!summon && cardArtHtml(summon.id).includes("<img"), "召唤物有真牌面，走牌面分支：" + (summon ? summon.name : "无样例"));
+  const summon = cards().find(e => e.typeRaw === "GCG_CARD_SUMMON");
+  assert(!!summon && cardArtHtml(idOf(summon)).includes("<img"), "召唤物有真牌面，走牌面分支：" + (summon ? summon.name : "无样例"));
   /* 已知缺图的 4 个 id 都不发请求 */
   const noIcon = [113135, 116074, 303215, 303246].filter(id => cardArtHtml(id).includes("/image/"));
   assert(noIcon.length === 0, "4 个已知缺图 id 均不请求：" + noIcon.join(","));

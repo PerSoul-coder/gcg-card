@@ -1,120 +1,89 @@
-/* src/ 应用源码 · 运行时健壮性验证：缓存 TTL / 结构校验 / 超时 / 重试 / 单 flight */
+/* 运行时健壮性：数据包加载（三级回退 / 单 flight / 失败可重试 / 强制刷新）。
+ *
+ * 数据只有一份来源——构建期产出的 gi-data/dataset.{gz,br,json}。
+ * 以前这里测的是「三份原始 JSON 的 localStorage 缓存与超时重试」，
+ * 那层已经不存在了：缓存与重试的对象变成数据包本身，因此断言也随之改测
+ * 真正还在的行为：回退顺序、并发合并、失败释放、刷新绕过 HTTP 缓存。 */
+import zlib from "node:zlib";
 import { createTest, readSources } from "./_env.mjs";
 
-/* 可控 localStorage：测试直接操作 store 来摆布缓存状态 */
-const store = new Map();
-const storage = {
-  getItem: (k) => (store.has(k) ? store.get(k) : null),
-  setItem: (k, v) => store.set(k, String(v)),
-  removeItem: (k) => store.delete(k),
-  clear: () => store.clear(),
-  get length() { return store.size; },
-};
-/* 可控 fetch：记录调用、可编程返回 / 抛错 / 挂起 */
-const fetchCtl = { log: [], impl: async () => { throw new Error("unset"); }, reset() { this.log.length = 0; } };
-const fetchStub = async (url, opts) => { fetchCtl.log.push(url); return fetchCtl.impl(url, opts); };
-
 const DATA = readSources();
-const t = createTest({ data: DATA, storage, fetch: fetchStub });
+
+/* 可控 fetch：记录调用、可编程返回 / 抛错 */
+const fetchCtl = { log: [], impl: async () => { throw new Error("unset"); }, reset() { this.log.length = 0; } };
+const fetchStub = async (url, opts) => { fetchCtl.log.push(String(url)); return fetchCtl.impl(String(url), opts); };
+
+const t = createTest({ data: DATA, fetch: fetchStub });
 const { assert } = t;
+
+/* 宿主注入（__DATASET_JSON）优先于网络：这一组要测的就是网络路径，先把它摘掉 */
+const PAYLOAD = globalThis.__DATASET_JSON;
+delete globalThis.__DATASET_JSON;
+
+/** 模拟 gz 响应（body 走 DecompressionStream）与 json 响应 */
+const GZ = (obj) => new Response(zlib.gzipSync(Buffer.from(JSON.stringify(obj), "utf8")));
+const JSONRES = (obj) => ({ ok: true, json: async () => obj });
 
 const harness = `
 return (async () => {
-  const sleep = ms => new Promise(r => setTimeout(r, ms));
-  /* 等启动时的首次加载（必然失败：初始 impl 抛错）settle，再开始计数 */
-  await sleep(80); fetchCtl.reset();
-
-  /* ===== 1. 缓存：roundtrip / TTL / 旧版接纳 / 结构校验 ===== */
-  writeCache("entities", DATA.entities, 1000);
-  const hit = readCache("entities", 1000);
-  assert(hit && hit.data.length === DATA.entities.length, "缓存 roundtrip（写后读得回）");
-  assert(readCache("entities", 1000) !== null, "同时刻读取有效");
-  assert(readCache("entities", 1000 + 24 * 3600 * 1000 - 1000) !== null, "TTL 边界内仍有效");
-  assert(readCache("entities", 1000 + 24 * 3600 * 1000 + 1) === null, "超过 24h TTL → 过期重拉");
-  store.set("gi-viewer-CHS-latest-entities", JSON.stringify(DATA.entities));
-  const legacy = readCache("entities", 5000);
-  assert(legacy && legacy.data.length === DATA.entities.length, "旧版裸数组缓存平滑接纳（不强制老用户重拉）");
-  store.set("gi-viewer-CHS-latest-entities", JSON.stringify({ v: 1, at: 1, data: [] }));
-  assert(readCache("entities", 2) === null, "空 data → 视为无效");
-  store.set("gi-viewer-CHS-latest-entities", "{ 坏 JSON");
-  assert(readCache("entities", 2) === null, "坏 JSON → 视为无效（不抛错）");
-  store.set("gi-viewer-CHS-latest-entities", JSON.stringify({ v: 99, at: 1, data: DATA.entities }));
-  assert(readCache("entities", 2) === null, "未知版本号 → 视为无效");
-
-  /* ===== 2. fetchJson 超时 ===== */
-  /* 桩遵循 abort 信号（真实浏览器 fetch 也是如此）：挂起请求在超时后被 reject */
-  fetchCtl.impl = (url, opts) => new Promise((_, reject) => {
-    opts.signal.addEventListener("abort", () => reject(new Error("aborted by timeout")));
-  });
-  let timeoutErr = null;
-  await fetchJson("http://x/test", 30).catch(e => { timeoutErr = e; });
-  assert(timeoutErr !== null, "fetchJson 超时即 reject（网络挂起不会永久转圈）");
-
-  /* ===== 3. fetchCategory：失败重试一次即成功 ===== */
-  let calls = 0;
-  fetchCtl.impl = async () => {
-    calls++;
-    if (calls === 1) throw new Error("网络抖动");
-    return { ok: true, json: async () => ({ data: DATA.keywords }) };
-  };
-  store.delete("gi-viewer-CHS-latest-keywords");
-  const kw = await fetchCategory("keywords");
-  assert(kw.length === DATA.keywords.length && calls === 2, "fetchCategory 抖动后重试一次成功（2 次尝试）");
-  assert(store.has("gi-viewer-CHS-latest-keywords"), "成功后写缓存");
-
-  /* ===== 4. 持续失败：抛错、不写缓存 ===== */
-  calls = 0;
-  fetchCtl.impl = async () => { calls++; throw new Error("持续离线"); };
-  store.delete("gi-viewer-CHS-latest-keywords");
-  let catErr = null;
-  await fetchCategory("keywords").catch(e => { catErr = e; });
-  assert(catErr && calls === 2, "持续失败：重试一次后抛出（共 2 次尝试）");
-  assert(!store.has("gi-viewer-CHS-latest-keywords"), "失败不写缓存");
-  assert(/keywords/.test(String(catErr && catErr.message)), "错误信息带类别名");
-
-  /* ===== 5. 单 flight：并发调用只发一次请求 ===== */
+  /* ===== 1. 首次加载：网络取包 → 派生索引就绪 ===== */
   fetchCtl.reset();
-  fetchCtl.impl = async url => {
-    const cat = ["characters", "entities", "keywords"].find(c => url.endsWith("/" + c));
-    return { ok: true, json: async () => ({ data: DATA[cat] }) };
-  };
-  for (const c of ["characters", "entities", "keywords"]) store.delete("gi-viewer-CHS-latest-" + c);
+  fetchCtl.impl = async url => url.includes("dataset.gz") ? GZ(PAYLOAD) : JSONRES(PAYLOAD);
+  await ensureData();
+  const ds = dsStats();
+  assert(!!ds && ds.total > 2000, "数据包加载：记录总数 " + (ds ? ds.total : 0));
+  assert(charRecords().length > 100 && cardRecords().length > 1000, "记录索引：角色 " + charRecords().length + " / 卡牌 " + cardRecords().length);
+  assert(pool.length > 1400, "卡池投影：" + pool.length + " 条");
+
+  /* ===== 2. 单 flight：并发调用只取一次数据包 ===== */
   resetDataState();
-  await Promise.all([ensureData(), ensureData(), ensureData()]);
-  assert(fetchCtl.log.length === 3, "单 flight：3 个并发 ensureData 只发起 3 次请求（实际 " + fetchCtl.log.length + "）");
+  fetchCtl.reset();
+  fetchCtl.impl = async url => url.includes("dataset.gz") ? GZ(PAYLOAD) : JSONRES(PAYLOAD);
+  await Promise.all([ensureData(true), ensureData(true), ensureData(true)]);
+  assert(fetchCtl.log.filter(u => u.includes("dataset.gz")).length === 1,
+    "单 flight：3 个并发 ensureData 只取一次（实际 " + fetchCtl.log.filter(u => u.includes("dataset.gz")).length + " 次）");
   assert(dataReady === true, "加载成功后 dataReady 置位");
 
-  /* ===== 6. 已就绪：直接返回，零请求 ===== */
+  /* ===== 3. 已就绪：不再发请求 ===== */
   fetchCtl.reset();
   await ensureData();
   assert(fetchCtl.log.length === 0, "已就绪：ensureData 不再发请求");
 
-  /* ===== 7. 失败的 flight 不驻留，下次可重试 ===== */
-  fetchCtl.reset();
-  fetchCtl.impl = async () => { throw new Error("又断了"); };
-  /* 清掉缓存，否则 fetchCategory 命中缓存直接返回、根本不会发请求 */
-  for (const c of ["characters", "entities", "keywords"]) store.delete("gi-viewer-CHS-latest-" + c);
+  /* ===== 4. 失败可重试：flight 释放，下次调用重新取 ===== */
   resetDataState();
-  let e1 = null, e2 = null;
-  await ensureData().catch(e => { e1 = e; });
-  await ensureData().catch(e => { e2 = e; });
-  assert(e1 && e2, "失败可重试：两次调用都按预期 reject");
-  assert(dataFlight === null, "失败后 flight 已释放（不驻留坏 promise）");
-  assert(fetchCtl.log.length === 12, "两次失败调用各 3 类 × 2 次尝试 = 12 次请求（实际 " + fetchCtl.log.length + "）");
+  fetchCtl.reset();
+  fetchCtl.impl = async () => { throw new Error("离线"); };
+  let e1 = null;
+  await ensureData(true).catch(e => { e1 = e; });
+  assert(!!e1 && /数据包加载失败/.test(e1.message), "全路径失败：抛错而不是半套数据（" + (e1 ? e1.message : "") + "）");
+  assert(dataReady === false, "失败后 dataReady 不置位（下次调用会重试）");
+  fetchCtl.impl = async url => url.includes("dataset.gz") ? GZ(PAYLOAD) : JSONRES(PAYLOAD);
+  await ensureData(true);
+  assert(dataReady === true, "失败可重试：网络恢复后再次调用成功");
 
-  /* ===== 8. 恢复数据，避免影响后续可能的断言 ===== */
+  /* ===== 5. 刷新：绕过 HTTP 缓存（URL 带时间戳） ===== */
+  resetDataState();
+  fetchCtl.reset();
+  fetchCtl.impl = async url => url.includes("dataset.gz") ? GZ(PAYLOAD) : JSONRES(PAYLOAD);
+  await ensureData(true);
+  assert(fetchCtl.log.some(u => /dataset\\.gz\\?t=\\d+/.test(u)), "强制刷新：URL 带时间戳绕过 HTTP 缓存");
+  assert(dataOrigins.has("network"), "来源如实记录：network（内置快照会记 builtin）");
+
+  /* ===== 6. 三级回退：gz / br 不可用 → json ===== */
+  resetDataState();
   fetchCtl.reset();
   fetchCtl.impl = async url => {
-    const cat = ["characters", "entities", "keywords"].find(c => url.endsWith("/" + c));
-    return { ok: true, json: async () => ({ data: DATA[cat] }) };
+    if (url.includes("dataset.gz")) throw new Error("gz 不可用");
+    if (url.includes("dataset.br")) throw new Error("br 不可用");
+    if (url.includes("dataset.json")) return JSONRES(PAYLOAD);
+    throw new Error("unexpected " + url);
   };
-  for (const c of ["characters", "entities", "keywords"]) store.delete("gi-viewer-CHS-latest-" + c);
-  resetDataState();
-  await ensureData();
-  assert(dataReady === true, "恢复：重新加载成功");
-
+  await ensureData(true);
+  const order = fetchCtl.log.map(u => (u.match(/dataset\\.(\\w+)/) || [])[1]).filter(Boolean);
+  assert(order.join(">") === "gz>br>json", "回退顺序：gz → br → json（实际 " + order.join(">") + "）");
+  assert(dataReady === true, "回退到 json 后成功加载");
 })();
 `;
 
-await t.run(harness, { DATA, store, fetchCtl });
+await t.run(harness, { PAYLOAD, GZ, JSONRES, fetchCtl });
 t.finish();

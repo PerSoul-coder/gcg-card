@@ -1,18 +1,19 @@
 /* 88-compare.ts —— 卡牌对比与牌组差异：并排字段、仅看差异、相似推荐。 */
-import { cardElement, charElement, pool } from "./45-pool";
+import { pool } from "./45-pool";
 import type { DeckDiffEntry, OverlayEntry, PoolEntry } from "./types";
 import { $ } from "./core/dom";
-import { costText, deckReqsOf, diceCost, energyCost, restrictionsOf } from "./30-deps";
+import { costText } from "./30-deps";
+import { recordOfId, nameOfId } from "./data/records";
+import { skillsOf } from "./47-skills";
 import { linkify } from "./40-concepts";
 import { overlayBack, overlayOpen, renderOverlay, topView } from "./90-detail";
 import { draftEncode } from "./80-deck";
 import { parseShareIds } from "./60-parse";
 import { dataReady, ensureData } from "./20-data";
 import { state } from "./data/state";
-import type { RawEntity } from "./data/state";
 import { ELE_ZH, tagZh, eleIcon } from "./core/resources";
 import { esc, setStatus, toast } from "./core/dom";
-import { TYPE_ZH, typeZhOf, cardArtHtml } from "./data/model";
+import { TYPE_ZH, cardArtHtml } from "./data/model";
 import { decks } from "./80-deck";
 import { navBar, tip } from "./90-detail";
 
@@ -26,8 +27,8 @@ const compareState: { ids: number[] } = { ids: [] };
 /* 面板偏好只存内存：仅看差异记住上次选择，相似卡区块每次重新展开 */
 const comparePrefs: { onlyDiff: boolean } = { onlyDiff: false };
 
-function compareName(id) {
-  return state.charById.get(id)?.name || state.entById.get(id)?.name || `#${id}`;
+function compareName(id: number) {
+  return nameOfId(id);
 }
 function cmpBtnHtml(id) {
   const on = compareState.ids.includes(Number(id));
@@ -35,7 +36,7 @@ function cmpBtnHtml(id) {
 }
 function toggleCompare(id) {
   id = Number(id);
-  if (!state.charById.has(id) && !state.entById.has(id)) return;
+  if (!recordOfId(id)) return;
   const i = compareState.ids.indexOf(id);
   if (i >= 0) compareState.ids.splice(i, 1);
   else if (compareState.ids.length >= COMPARE_MAX) { toast(`最多同时对比 ${COMPARE_MAX} 张卡牌`, true); return; }
@@ -56,7 +57,7 @@ function renderCompareBar() {
   const bar = $("compareBar");
   if (!bar) return;
   const body = document.body;
-  const ids = compareState.ids.filter(id => state.charById.has(id) || state.entById.has(id));
+  const ids = compareState.ids.filter(id => !!recordOfId(id));
   if (!ids.length) {
     bar.classList.remove("show"); bar.innerHTML = "";
     if (body && body.classList) body.classList.remove("cmp-on");
@@ -76,37 +77,34 @@ function renderCompareBar() {
 function fieldVal(html, text) {
   return { html: html || "—", text: String(text ?? "").replace(/\s+/g, "") };
 }
-function compareFields(id) {
-  const cf = state.charById.get(id), ef = state.entById.get(id);
-  if (!cf && !ef) return null;
-  /* 到这里至少有一个存在，isChar 决定用哪个：分支内取到的那个一定有值，
-     另一个分支不会读到它。断言收在这里，省得下游几十处都写 ! */
-  const isChar = !!cf;
-  const c = cf as RawEntity, e = ef as RawEntity;
-  const raw = c || e;
-  const el = isChar ? charElement(c) : cardElement(e);
-  const tags = (raw.tags || []).filter(t => !t.startsWith("GCG_TAG_ELEMENT_")).map(tagZh).filter(Boolean);
-  const since = isChar ? c.sinceVersion : e.sinceVersion;
-  const cost = isChar ? "—" : (costText(e.playCost) || "—");
-  const energy = isChar ? `上限 ${c.maxEnergy}` : (energyCost(e.playCost) ? `费用 ${energyCost(e.playCost)}` : "—");
-  const hp = isChar ? String(c.hp) : "—";
-  const rel = !isChar && e.relatedCharacterId != null
-    ? (state.charById.get(e.relatedCharacterId)?.name || String(e.relatedCharacterId)) : "—";
-  const dreq = !isChar ? (deckReqsOf(e).map(r => r.short).join("、") || "—") : "—";
-  const play = !isChar ? (restrictionsOf(e).map(r => r.short).join("、") || "—") : "—";
+function compareFields(id: number) {
+  const r = recordOfId(id);
+  if (!r) return null;
+  const isChar = r.kind === "char";
+  const el = r.stats.element;
+  const tags = r.stats.tagsRaw.filter(t => !t.startsWith("GCG_TAG_ELEMENT_")).map(tagZh).filter(Boolean);
+  const since = r.version;
+  const cost = isChar ? "—" : (costText(r.stats.cost) || "—");
+  const energy = isChar ? `上限 ${r.stats.maxEnergy}` : (r.stats.energy ? `费用 ${r.stats.energy}` : "—");
+  const hp = isChar ? String(r.stats.hp) : "—";
+  const rel = !isChar && r.rel.relatedCharacterId != null ? nameOfId(r.rel.relatedCharacterId) : "—";
+  const dreq = !isChar ? (r.reqs.deck.map(x => x.short).join("、") || "—") : "—";
+  const play = !isChar ? (r.reqs.play.map(x => x.short).join("、") || "—") : "—";
   let effectHtml, effectText;
   if (isChar) {
-    const skills = (c.skills || []).filter(s => !s.hidden);
-    effectHtml = skills.map(s => `<div class="cmp-skill"><b>【${esc(s.name)}】</b>${linkify(esc((s.description || s.rawDescription || "").trim()))}</div>`).join("");
-    effectText = skills.map(s => s.name + (s.description || s.rawDescription || "")).join("");
+    /* 角色技能来自技能索引（与技能页同源），不再从原始 skills 数组读 */
+    const skills = skillsOf(id).filter(s => !s.hidden);
+    effectHtml = skills.map(s => `<div class="cmp-skill"><b>【${esc(s.name)}】</b>${linkify(esc(s.effect || ""))}</div>`).join("");
+    effectText = skills.map(s => s.name + (s.effect || "")).join("");
   } else {
-    effectHtml = (e.description || "").trim() ? linkify(esc((e.description || "").trim())) : "";
-    effectText = e.description || "";
+    const eff = r.desc.effect.trim();
+    effectHtml = eff ? linkify(esc(eff)) : "";
+    effectText = eff;
   }
   return {
-    id: Number(id), isChar, name: raw.name,
+    id: Number(id), isChar, name: r.name,
     rows: {
-      "类型": fieldVal(isChar ? "角色牌" : esc(typeZhOf(e)), isChar ? "角色牌" : typeZhOf(e)),
+      "类型": fieldVal(isChar ? "角色牌" : esc(r.typeZh), isChar ? "角色牌" : r.typeZh),
       "元素": fieldVal(el ? eleIcon(el) + esc(ELE_ZH[el] || el) : "—", el ? (ELE_ZH[el] || el) : ""),
       "费用": fieldVal(esc(cost), cost),
       "充能": fieldVal(esc(energy), energy),
@@ -177,7 +175,7 @@ function swapCompare(fromId, toId) {
   fromId = Number(fromId); toId = Number(toId);
   const i = compareState.ids.indexOf(fromId);
   if (i < 0) return false;
-  if (!state.charById.has(toId) && !state.entById.has(toId)) return false;
+  if (!recordOfId(toId)) return false;
   if (compareState.ids.includes(toId)) return false;
   compareState.ids[i] = toId;
   const top = topView();
@@ -242,7 +240,7 @@ function renderCompareView(v) {
     </div>`;
 }
 function showCompare() {
-  const ids = compareState.ids.filter(id => state.charById.has(id) || state.entById.has(id));
+  const ids = compareState.ids.filter(id => !!recordOfId(id));
   if (ids.length < 2) { toast("至少选择 2 张卡牌才能对比", true); return; }
   const view: OverlayEntry = { kind: "compare", ids: [...ids], onlyDiff: comparePrefs.onlyDiff, showSim: false };
   const top = topView();
@@ -263,10 +261,10 @@ function deckCodeNow() {
 function deckDist(d) {
   const cost = Array(6).fill(0), type = {};
   for (const [id, n] of d.countMap) {
-    const e = state.entById.get(id);
+    const e = recordOfId(id);
     if (!e) continue;
-    cost[Math.min(diceCost(e.playCost), 5)] += n;
-    const t = typeZhOf(e);
+    cost[Math.min(e.stats.dice, 5)] += n;
+    const t = e.typeZh;
     type[t] = (type[t] || 0) + n;
   }
   return { cost, type };
@@ -275,16 +273,16 @@ function deckDist(d) {
    行动牌按 id 汇总数量；added / removed / changed / same 都是行数组。 */
 function diffDecks(codeA, codeB) {
   const A = parseShareIds(codeA), B = parseShareIds(codeB);
-  const charName = id => state.charById.get(id)?.name || `#${id}`;
+  const charName = (id: number) => nameOfId(id);
   const aNames = new Set(A.charIds.map(charName));
   const bNames = new Set(B.charIds.map(charName));
   const charAdded = B.charIds.filter(id => !aNames.has(charName(id)));
   const charRemoved = A.charIds.filter(id => !bNames.has(charName(id)));
   const ids = new Set([...A.countMap.keys(), ...B.countMap.keys()]);
   const rows = [...ids].map(id => {
-    const e = state.entById.get(id);
+    const e = recordOfId(id);
     const a = A.countMap.get(id) || 0, b = B.countMap.get(id) || 0;
-    return { id, name: e?.name || `#${id}`, type: TYPE_ZH[e?.type || ""] || e?.type || "", a, b, delta: b - a };
+    return { id, name: e ? e.name : `#${id}`, type: e ? e.typeZh : "", a, b, delta: b - a };
   }).sort((x, y) => (x.type.localeCompare(y.type, "zh") || x.name.localeCompare(y.name, "zh")));
   return {
     A, B, rows,
@@ -297,8 +295,8 @@ function diffDecks(codeA, codeB) {
 }
 function deckHeadHtml(tag, d) {
   const chars = d.charIds.map(id => {
-    const c = state.charById.get(id);
-    return c ? `<span class="dd-chip">${eleIcon(charElement(c))}${esc(c.name)}</span>` : "";
+    const c = recordOfId(id);
+    return c ? `<span class="dd-chip">${eleIcon(c.stats.element)}${esc(c.name)}</span>` : "";
   }).join("");
   return `<div class="dd-deck"><b>牌组 ${tag}</b><span class="dd-chars">${chars}</span>
     <small>${d.charIds.length} 名角色 · ${d.cardIds.length} 张行动牌</small></div>`;

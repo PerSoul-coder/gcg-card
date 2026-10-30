@@ -6,6 +6,12 @@ const { assert } = t;
 
 const harness = `
 return (async () => {
+  /* 记录视图：卡池与索引都从这里取，测试断言的是同一份数据 */
+  const chars = () => charRecords();
+  const cards = () => cardRecords();
+  const idOf = r => Number(r.key.slice(r.key.indexOf(":") + 1));
+  const recByName = n => cards().find(r => r.name === n) || chars().find(r => r.name === n);
+
   /* ===== 0. 牌组存储：首次启动自动建空牌组 ===== */
   loadDraft();
   assert(decks.length === 1 && activeDeckId === decks[0].id, "首次启动自动创建一个空牌组");
@@ -20,22 +26,22 @@ return (async () => {
   await ensureData();
   /* 卡池 = 角色 + 实体卡 − 测试卡 − 准备状态影子（影子与技能同名，内容只是「将使用技能X」，
      单列成牌只会和技能抢名字；技能页里以「准备中状态」入口保留） */
-  const buildEnts = state.ENT.filter(e => !isTestCard(e) && !isShadowState(e));
-  assert(pool.length === state.CHAR.length + buildEnts.length, "卡池收录全部角色牌与实体卡（" + pool.length + " 条，已排除测试卡与准备状态）");
-  assert(poolStats.shadowFiltered === state.ENT.filter(e => !isTestCard(e) && isShadowState(e)).length && poolStats.shadowFiltered > 0,
+  const buildEnts = cards().filter(r => r.flags.poolable && !r.flags.test && !r.flags.shadow);
+  assert(pool.length === chars().length + buildEnts.length, "卡池收录全部角色牌与实体卡（" + pool.length + " 条，已排除测试卡与准备状态）");
+  assert(poolStats.shadowFiltered === cards().filter(r => r.flags.shadow && !r.flags.test).length && poolStats.shadowFiltered > 0,
     "准备状态并入技能页计数（" + poolStats.shadowFiltered + " 个不进卡池）");
-  assert(poolStats.testFiltered === state.ENT.filter(e => isTestCard(e)).length && poolStats.testFiltered === 5, "测试卡过滤计数（" + poolStats.testFiltered + " 张不进卡池）");
-  assert(poolStats.buildable === state.ENT.filter(e => e.shareId != null).length + state.CHAR.filter(c => c.shareId != null).length,
+  assert(poolStats.testFiltered === cards().filter(r => r.flags.test).length && poolStats.testFiltered === 5, "测试卡过滤计数（" + poolStats.testFiltered + " 张不进卡池）");
+  assert(poolStats.buildable === cards().filter(r => r.share != null).length + chars().filter(r => r.share != null).length,
     "可构筑计数 = 有 shareId 的角色 + 实体卡（" + poolStats.buildable + "）");
   const ganyu = pool.find(x => x.id === 1101);
   assert(ganyu && ganyu.kind === "char" && ganyu.element === "CRYO" && ganyu.hp === 12, "卡池派生字段：甘雨（角色/冰/生命12）");
   const furina = pool.find(x => x.id === 212111);
   assert(furina && furina.element === "HYDRO" && furina.related === "芙宁娜" && furina.tags.includes("天赋"), "天赋牌继承关联角色元素与关联名");
-  const zhans = state.ENT.find(e => e.name === "战欲涌现");
-  const zhansP = pool.find(x => x.id === zhans.id);
+  const zhans = recByName("战欲涌现");
+  const zhansP = pool.find(x => x.id === idOf(zhans));
   assert(zhansP.energyCost === 2 && zhansP.dice === 3, "费用拆分：骰子 3 + 充能 2 分别派生");
   assert(poolStats.versions.length > 5 && verCmp(poolStats.versions[0], poolStats.versions[poolStats.versions.length - 1]) < 0, "版本列表有序（" + poolStats.versions.length + " 个）");
-  assert(poolStats.byType.GCG_CARD_STATE === buildEnts.filter(e => e.type === "GCG_CARD_STATE").length, "类型统计与原始数据一致（测试卡已排除）");
+  assert(poolStats.byType.GCG_CARD_STATE === buildEnts.filter(e => e.typeRaw === "GCG_CARD_STATE").length, "类型统计与原始数据一致（测试卡已排除）");
 
   /* 反链：卡文互引 + 技能文本引用召唤物 */
   assert(backlinks.get("拯救世界的计划")?.has(100) === true, "反链：抵抗之躯(id=100) 卡文引用 拯救世界的计划");
@@ -59,7 +65,7 @@ return (async () => {
   assert(only(browseFilter(), x => x.kind === "card" && x.dice >= 5), "骰子费用 5+：>=5 归并为一档");
   browseState.cost = ""; browseState.energy = "2";
   assert(only(browseFilter(), x => x.kind === "card" && x.energyCost === 2), "充能筛选：恰好 2 点充能");
-  assert(browseFilter().some(x => x.id === zhans.id), "充能筛选：含战欲涌现");
+  assert(browseFilter().some(x => x.id === idOf(zhans)), "充能筛选：含战欲涌现");
   browseState.energy = "0";
   assert(only(browseFilter(), x => x.kind === "card" && x.energyCost === 0), "充能筛选：无充能");
   browseState.energy = ""; browseState.tag = "秘传";
@@ -72,8 +78,8 @@ return (async () => {
 
   /* ===== 4. facet 计数 ===== */
   const f0 = facetCounts();
-  assert(fcn(f0.type, "GCG_CARD_CHARACTER") === state.CHAR.length, "facet：角色牌计数 = 角色总数");
-  assert(fcn(f0.type, "GCG_CARD_EVENT") === buildEnts.filter(e => e.type === "GCG_CARD_EVENT").length, "facet：事件牌计数正确（测试卡已排除）");
+  assert(fcn(f0.type, "GCG_CARD_CHARACTER") === chars().length, "facet：角色牌计数 = 角色总数");
+  assert(fcn(f0.type, "GCG_CARD_EVENT") === buildEnts.filter(e => e.typeRaw === "GCG_CARD_EVENT").length, "facet：事件牌计数正确（测试卡已排除）");
   assert(fcn(f0.el, "PYRO") === pool.filter(x => x.element === "PYRO").length, "facet：火元素计数 = 全库火元素条目");
   assert(Object.values(f0.cost).reduce((a, c) => a + c.n, 0) === pool.filter(x => x.kind === "card").length, "facet：费用各档总计 = 卡牌总数（角色不计费）");
   /* 双计数：每格拆成可构筑 / 不可构筑，两数相加必须等于该格总数 */
@@ -98,8 +104,8 @@ return (async () => {
   assert(chipZero.includes("<b>0</b>") && chipZero.includes("/367"), "chip：整类不可构筑时显示「0 / 367」");
   browseState.type = "GCG_CARD_CHARACTER";
   const f1 = facetCounts();
-  assert(fcn(f1.type, "GCG_CARD_CHARACTER") === state.CHAR.length, "facet：类型维度不受自身筛选影响（仍为全量计数）");
-  assert(fcn(f1.el, "PYRO") === state.CHAR.filter(c => (c.tags || []).includes("GCG_TAG_ELEMENT_PYRO")).length, "facet：类型=角色时元素维度只统计角色");
+  assert(fcn(f1.type, "GCG_CARD_CHARACTER") === chars().length, "facet：类型维度不受自身筛选影响（仍为全量计数）");
+  assert(fcn(f1.el, "PYRO") === chars().filter(c => c.stats.tagsRaw.includes("GCG_TAG_ELEMENT_PYRO")).length, "facet：类型=角色时元素维度只统计角色");
   Object.assign(browseState, { type: "", el: "", cost: "", energy: "", tag: "", ver: "" });
 
   /* ===== 5. 排序 ===== */
@@ -112,7 +118,7 @@ return (async () => {
   assert(browseFilter()[0].name === byName[byName.length - 1].name, "排序：方向取反");
   browseState.sort = "cost"; browseState.dir = 1;
   const byCost = browseFilter();
-  assert(byCost.slice(0, state.CHAR.length).every(x => x.kind === "char"), "排序：按费用时角色沉到一端");
+  assert(byCost.slice(0, chars().length).every(x => x.kind === "char"), "排序：按费用时角色沉到一端");
   browseState.sort = "ver"; browseState.dir = 1;
   const byVer = browseFilter();
   let verOk = true;
@@ -237,23 +243,25 @@ return (async () => {
   /* ===== 7. 多牌组管理 ===== */
   draftClear();
   const dA = newDeck("牌组A");
-  const cA = state.CHAR.find(c => c.shareId != null);
-  draftAdd(cA.id);
-  const cardA = state.ENT.find(e => e.shareId != null && ["GCG_CARD_MODIFY", "GCG_CARD_EVENT", "GCG_CARD_ASSIST", "GCG_CARD_SUPPORT"].includes(e.type));
-  draftAdd(cardA.id); draftAdd(cardA.id);
+  const cA = chars().find(c => c.share != null);
+  const cAId = idOf(cA);
+  draftAdd(cAId);
+  const cardA = cards().find(e => e.share != null && ["GCG_CARD_MODIFY", "GCG_CARD_EVENT", "GCG_CARD_ASSIST", "GCG_CARD_SUPPORT"].includes(e.typeRaw));
+  const cardAId = idOf(cardA);
+  draftAdd(cardAId); draftAdd(cardAId);
   assert(dA.name === "牌组A" && dA.chars.length === 1 && dA.cards.length === 1 && dA.cards[0][1] === 2, "牌组A：角色与行动牌写入存储结构");
-  assert(draftTotal() === 2 && draftHas(cA.id), "draft 门面读数正确");
+  assert(draftTotal() === 2 && draftHas(cAId), "draft 门面读数正确");
   const dCopy = newDeck("牌组A 副本");
   dCopy.chars = [...dA.chars];
   dCopy.cards = dA.cards.map(([id, c]) => [id, c]);
   syncFromActive();
-  assert(draft.chars.length === 1 && (draft.cards.get(cardA.id) || 0) === 2, "复制牌组：内容完整切换");
+  assert(draft.chars.length === 1 && (draft.cards.get(cardAId) || 0) === 2, "复制牌组：内容完整切换");
   selectDeck(dA.id);
   assert(draftTotal() === 2, "切回牌组A：draft 跟随活动牌组");
   saveDecks(); loadDecks();
   assert(decks.length === 3, "loadDecks：恢复 3 个牌组（迁移的我的牌组 + A + 副本）");
   selectDeck(decks.find(d => d.name === "牌组A").id);
-  assert(draftTotal() === 2 && draft.chars.includes(cA.id), "持久化 roundtrip：内容不丢失");
+  assert(draftTotal() === 2 && draft.chars.includes(cAId), "持久化 roundtrip：内容不丢失");
   const before = decks.length;
   deleteDeckById(activeDeckId);
   assert(decks.length === before - 1, "删除活动牌组后自动切换到其余牌组");
@@ -275,10 +283,10 @@ return (async () => {
   /* 装满 3 角色 + 30 张后校验通过。选卡须无构筑门槛（天赋/共鸣/地区牌
      依赖特定角色），且避开秘传（整套限 1） */
   draftClear();
-  for (const c of state.CHAR.filter(c => c.shareId != null).slice(0, 3)) draftAdd(c.id);
-  const pool2 = state.ENT.filter(e => e.shareId != null && ["GCG_CARD_MODIFY", "GCG_CARD_EVENT", "GCG_CARD_ASSIST", "GCG_CARD_SUPPORT"].includes(e.type)
-    && deckReqsOf(e).length === 0 && !(e.tags || []).includes("GCG_TAG_LEGEND")).slice(0, 16);
-  for (const e of pool2) { draftAdd(e.id); draftAdd(e.id); }
+  for (const c of chars().filter(c => c.share != null).slice(0, 3)) draftAdd(idOf(c));
+  const pool2 = cards().filter(e => e.share != null && ["GCG_CARD_MODIFY", "GCG_CARD_EVENT", "GCG_CARD_ASSIST", "GCG_CARD_SUPPORT"].includes(e.typeRaw)
+    && e.reqs.deck.length === 0 && !e.stats.tagsRaw.includes("GCG_TAG_LEGEND")).slice(0, 16);
+  for (const e of pool2) { const eid = idOf(e); draftAdd(eid); draftAdd(eid); }
   assert(deckProblems().length === 0, "3 角色 + 30 张（无门槛卡）：校验全清");
   assert(typeof draftEncode() === "string" && draftEncode().length > 0, "合法牌组可生成分享码");
 
@@ -312,37 +320,39 @@ return (async () => {
   assert(scopeRow().includes('data-scope="desc"'), "检索范围行：含描述开关（可关闭提速）");
 
   /* ===== 8. 详情「加入牌组」：同名卡可放 2 张（秘传 1 张） ===== */
-  const plain = state.ENT.find(e => e.shareId != null && e.type === "GCG_CARD_EVENT"
-    && !((e.tags || []).includes("GCG_TAG_LEGEND")) && deckReqsOf(e).length === 0);
-  assert(!!plain && copyLimit(plain.id) === 2, "上限判定：普通同名卡 2 张");
+  const plain = cards().find(e => e.share != null && e.typeRaw === "GCG_CARD_EVENT"
+    && !e.stats.tagsRaw.includes("GCG_TAG_LEGEND") && e.reqs.deck.length === 0);
+  const plainId = idOf(plain);
+  assert(!!plain && copyLimit(plainId) === 2, "上限判定：普通同名卡 2 张");
   draftClear();
-  assert(deckActionHtml(plain.id, true, null).includes("加入牌组"), "详情主按钮：未加入时是「加入牌组」");
-  draftAdd(plain.id);
-  const b1 = deckActionHtml(plain.id, true, null);
+  assert(deckActionHtml(plainId, true, null).includes("加入牌组"), "详情主按钮：未加入时是「加入牌组」");
+  draftAdd(plainId);
+  const b1 = deckActionHtml(plainId, true, null);
   assert(b1.includes("再加一张") && b1.includes("1/2"), "详情主按钮：已加入 1 张时提示「再加一张 1/2」");
-  draftAdd(plain.id);
-  assert((draft.cards.get(plain.id) || 0) === 2, "同名卡确实可以加入第 2 张");
-  const b2 = deckActionHtml(plain.id, true, null);
+  draftAdd(plainId);
+  assert((draft.cards.get(plainId) || 0) === 2, "同名卡确实可以加入第 2 张");
+  const b2 = deckActionHtml(plainId, true, null);
   assert(b2.includes("已满") && b2.includes("disabled"), "详情主按钮：加满后禁用并显示「已满 2/2」");
   assert(b2.includes("移出"), "详情：加满后仍保留「移出」入口");
-  draftAdd(plain.id);
-  assert((draft.cards.get(plain.id) || 0) === 2, "第 3 张被同名上限拦下");
-  const legend = state.ENT.find(e => e.shareId != null && (e.tags || []).includes("GCG_TAG_LEGEND") && deckReqsOf(e).length === 0);
+  draftAdd(plainId);
+  assert((draft.cards.get(plainId) || 0) === 2, "第 3 张被同名上限拦下");
+  const legend = cards().find(e => e.share != null && e.stats.tagsRaw.includes("GCG_TAG_LEGEND") && e.reqs.deck.length === 0);
   if (legend) {
     draftClear();
-    draftAdd(legend.id); draftAdd(legend.id);
-    assert(copyLimit(legend.id) === 1 && (draft.cards.get(legend.id) || 0) === 1, "秘传牌整套限 1 张");
+    const legendId = idOf(legend);
+    draftAdd(legendId); draftAdd(legendId);
+    assert(copyLimit(legendId) === 1 && (draft.cards.get(legendId) || 0) === 1, "秘传牌整套限 1 张");
   }
   /* 卡库瓦片上的数量徽标：显示当前已加入的份数，加满时高亮 */
   draftClear();
-  draftAdd(plain.id);
-  const tile1 = browseTile(pool.find(x => x.id === plain.id));
+  draftAdd(plainId);
+  const tile1 = browseTile(pool.find(x => x.id === plainId));
   assert(tile1.includes("qcnt") && tile1.includes("×1"), "卡库瓦片：已加入 1 张时显示 ×1");
-  draftAdd(plain.id);
-  const tile2 = browseTile(pool.find(x => x.id === plain.id));
+  draftAdd(plainId);
+  const tile2 = browseTile(pool.find(x => x.id === plainId));
   assert(tile2.includes("qcnt max") && tile2.includes("×2"), "卡库瓦片：加满时徽标高亮显示 ×2");
   draftClear();
-  assert(!browseTile(pool.find(x => x.id === plain.id)).includes("qcnt"), "卡库瓦片：未加入时不显示数量徽标");
+  assert(!browseTile(pool.find(x => x.id === plainId)).includes("qcnt"), "卡库瓦片：未加入时不显示数量徽标");
 
   /* ===== 9. 视图切换：牌组摘要只属于卡面视图 ===== */
   state.current = { chars: [], charIds: [], order: [], groups: {} };

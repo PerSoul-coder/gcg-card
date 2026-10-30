@@ -11,6 +11,11 @@ const { assert } = t;
 
 const harness = `
 return (async () => {
+  /* 记录视图：卡池与索引都从这里取，测试断言的是同一份数据 */
+  const chars = () => charRecords();
+  const cards = () => cardRecords();
+  const idOf = r => Number(r.key.slice(r.key.indexOf(":") + 1));
+  const recByName = n => cards().find(r => r.name === n) || chars().find(r => r.name === n);
   await ensureData();
 
   /* ===== 1. 装备牌特技进入技能索引 ===== */
@@ -45,8 +50,8 @@ return (async () => {
   state.overlayStack = [];
 
   /* ===== 4. 角色简介不产生术语链接 ===== */
-  const furina = state.CHAR.find(c => c.name === "芙宁娜") || state.CHAR[0];
-  showDetail(furina.id);
+  const furina = chars().find(c => c.name === "芙宁娜") || chars()[0];
+  showDetail(idOf(furina));
   const detailHtml = String(document.getElementById("detail").innerHTML || "");
   const story = (detailHtml.match(/<div class="dtext dstory">([\\s\\S]*?)<\\/div>/) || [])[1] || "";
   assert(!!story, "角色详情含简介区");

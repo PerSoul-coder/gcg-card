@@ -6,10 +6,15 @@ const { assert } = t;
 
 const harness = `
 return (async () => {
+  /* 记录视图：卡池与索引都从这里取，测试断言的是同一份数据 */
+  const chars = () => charRecords();
+  const cards = () => cardRecords();
+  const idOf = r => Number(r.key.slice(r.key.indexOf(":") + 1));
+  const recByName = n => cards().find(r => r.name === n) || chars().find(r => r.name === n);
   await decodeAndRender(SAMPLE);
   const k0 = n => termEntries(n)[0] && termEntries(n)[0].kind;
   const d0 = n => (termEntries(n)[0] && termEntries(n)[0].desc) || "";
-  assert(state.KW.length === 149, "术语表加载：149 条");
+  assert(cards().length + chars().length > 1400, "数据集加载：角色 " + chars().length + " + 卡牌 " + cards().length);
   assert(termIndex.size > 1000, "概念索引规模：" + termIndex.size + "（卡牌+角色+术语）");
   assert(k0("战斗行动") === "keyword", "术语命中：战斗行动 → keyword");
   assert(k0("静水流涌之辉") === "card", "卡牌命中：静水流涌之辉 → card");
@@ -85,11 +90,11 @@ return (async () => {
   assert(termEntries("丝柯克")[0].id === 1116 && termEntries("杜林")[0].id === 1317,
     "丝柯克/杜林 → 主版本（1116/1317，非 66xx 变体）");
   /* 补充库卡牌不与 piovium 同名卡重复占位（同种类排除的跨源形态） */
-  const piovCardNames = new Set(state.ENT.map(e => e.name));
+  const piovCardNames = new Set(cards().map(e => e.name));
   const extraRecords = DATASET.records.filter(r => r.source === "genshin-db");
   for (const r of extraRecords) {
     if (r.typeRaw !== "card" && r.typeRaw !== "character") continue;
-    if (!piovCardNames.has(r.name) && !new Set(state.CHAR.map(c => c.name)).has(r.name)) continue;
+    if (!piovCardNames.has(r.name) && !new Set(chars().map(c => c.name)).has(r.name)) continue;
     const kinds = termEntries(r.name).map(e => GROUP[e.kind] || e.kind);
     assert(new Set(kinds).size === kinds.length, "跨源同种类排除：" + r.name + "（" + kinds.join("+") + "）");
   }
@@ -186,7 +191,7 @@ return (async () => {
 
   /* 占位符：可见文本零泄漏（残留仅存在于 hidden 引擎技能与未加工的 rawDescription） */
   let visLeak = 0;
-  for (const x of [...state.CHAR, ...state.ENT]) {
+  for (const x of [...chars(), ...cards()]) {
     if (x.description && /D__KEY__|\$\[[KS]\d+\]/.test(x.description)) visLeak++;
     for (const s of x.skills || []) if (!s.hidden && s.description && /D__KEY__|\$\[[KS]\d+\]/.test(s.description)) visLeak++;
   }

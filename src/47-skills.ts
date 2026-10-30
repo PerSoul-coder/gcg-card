@@ -7,7 +7,7 @@ import { state } from "./data/state";
 import type { SkillEntry } from "./types";
 import { tagZh } from "./core/resources";
 import { esc } from "./core/dom";
-import { nameKey, shadowStateBySkill, cardArtHtml } from "./data/model";
+import { nameKey, cardArtHtml } from "./data/model";
 import { linkify } from "./40-concepts";
 import { backlinkHtml, navBar } from "./90-detail";
 
@@ -33,16 +33,7 @@ export function resetSkillIndex(): void {
   skillsOfOwner.clear();
 }
 
-const PREPARE_TURNS_RE = /（需准备(\d+)个行动轮）/;
-function skillDescOf(s) {
-  return String((s.description || s.rawDescription || "")).trim();
-}
-/* 效果文本里去掉「（需准备 n 个行动轮）」这行——它是节奏说明，不是效果，
-   提到徽标上更清楚，正文只留技能实际做了什么。 */
-function skillEffectText(desc) {
-  return String(desc || "").split("\n").filter(l => !PREPARE_TURNS_RE.test(l)).join("\n").trim();
-}
-/* 统一数据集路径：技能来源 = 角色技能 + 装备牌特技（构建期已归一、已去重）。
+/* 技能来源 = 角色技能 + 装备牌特技（构建期已归一、已去重、已剥离「需准备 n 个行动轮」这行）。
    装备牌的「特技：X」过去完全不在索引里，导致卡文里的 X 既搜不到也点不动。 */
 function buildSkillIndexFromDataset() {
   const rows: SkillEntry[] = dsSkills().map(r => {
@@ -88,61 +79,8 @@ function buildSkillIndexFromDataset() {
 }
 
 function buildSkillIndex() {
-  SKILLS = [];
-  skillByKey.clear();
-  skillByName.clear();
-  skillsOfOwner.clear();
-  if (typeof dsReady === "function" && dsReady()) { buildSkillIndexFromDataset(); return; }
-  const seen = new Set();
-  for (const c of state.CHAR) {
-    const list: SkillEntry[] = [];
-    for (const s of c.skills || []) {
-      /* 没有 id 的技能无法构成稳定键（也无法与数据集路径对齐），直接跳过 */
-      if (!s || typeof s.name !== "string" || !s.name || s.id == null) continue;
-      const dedupeId = c.id + ":" + s.id;
-      if (seen.has(dedupeId)) continue;      /* 数据里偶有完全重复的一条 */
-      seen.add(dedupeId);
-      const desc = skillDescOf(s);
-      const altOf = list.find(x => x.name === s.name);
-      if (altOf) {                            /* 同名阶段记录：只留描述更完整的一条 */
-        altOf.altCount++;
-        if (desc.length > altOf.desc.length) { altOf.desc = desc; altOf.id = s.id; altOf.key = c.id + ":" + s.id; }
-        continue;
-      }
-      const shadow = shadowStateBySkill.get(nameKey(s.name));
-      const turns = (PREPARE_TURNS_RE.exec(desc) || [])[1];
-      list.push({
-        kind: "skill",
-        ownerKind: "char",   /* 旧数据源路径只处理角色技能；装备牌特技走数据集路径 */
-        key: c.id + ":" + s.id,
-        id: s.id,
-        ownerId: c.id,
-        ownerName: c.name,
-        name: s.name,
-        englishName: s.englishName || "",
-        tag: s.type || "",
-        tagZh: SKILL_TAG_ZH[s.type || ""] || "技能",
-        cost: Array.isArray(s.playCost) ? s.playCost : [],
-        desc,
-        effect: skillEffectText(desc),
-        hidden: !!s.hidden,
-        prepared: !!turns || !!shadow,
-        prepareTurns: turns ? Number(turns) : (shadow ? 1 : 0),
-        stateId: shadow ? shadow.stateId : null,
-        altCount: 0,
-      });
-    }
-    /* 排序：普攻 → 战技 → 爆发 → 被动 → 特殊；同类型保持数据原顺序 */
-    list.sort((a, b) => SKILL_TAG_ORDER.indexOf(a.tag) - SKILL_TAG_ORDER.indexOf(b.tag));
-    if (list.length) skillsOfOwner.set("char:" + c.id, list);
-    for (const s of list) {
-      SKILLS.push(s);
-      skillByKey.set(s.key, s);
-      const k = nameKey(s.name);
-      if (!skillByName.has(k)) skillByName.set(k, []);
-      skillByName.get(k)!.push(s);
-    }
-  }
+  resetSkillIndex();
+  buildSkillIndexFromDataset();
 }
 const skillsOf = charId => skillsOfOwner.get("char:" + charId) || [];
 const skillsOfCard = cardId => skillsOfOwner.get("card:" + cardId) || [];
@@ -211,4 +149,4 @@ function showSkill(key) {
   renderOverlay();
 }
 
-export { SKILL_TAG_ZH, SKILL_TAG_ORDER, SKILLS, skillByKey, skillByName, skillsOfOwner, PREPARE_TURNS_RE, skillDescOf, skillEffectText, buildSkillIndexFromDataset, buildSkillIndex, skillsOf, skillsOfCard, skillOf, skillsNamed, skillCostText, skillRowHtml, skillsHtml, skillsHtmlCard, renderSkillView, showSkill };
+export { SKILL_TAG_ZH, SKILL_TAG_ORDER, SKILLS, skillByKey, skillByName, skillsOfOwner, buildSkillIndex, skillsOf, skillsOfCard, skillOf, skillsNamed, skillCostText, skillRowHtml, skillsHtml, skillsHtmlCard, renderSkillView, showSkill };

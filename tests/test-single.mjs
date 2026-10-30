@@ -25,36 +25,26 @@ assert(!/<script[^>]+src=/i.test(html), "无外链脚本（JS 已内联）");
 assert(!/<img[^>]+src="(?!https?:|data:|\$\{)/.test(html), "无本地图片引用（卡面图仅走 HTTPS）");
 assert(/<style>[\s\S]*:root\s*\{/.test(html), "样式表内容已内联（含 :root 变量）");
 
-/* ===== 2. 内置数据快照 ===== */
-const m = html.match(/<script id="builtin-data" type="application\/json">([\s\S]*?)<\/script>/);
-assert(!!m, "内置数据块存在");
+/* ===== 2. 内置数据包 =====
+   内联的是构建期归一化的数据集（gzip + base64），不是三份原始 JSON：
+   运行时只读数据集，再内联原始快照就是纯粹的重复（单文件因此从 3.1MB 降到 0.9MB）。 */
+const m = html.match(/<script id="builtin-dataset" type="text\/plain">([\s\S]*?)<\/script>/);
+assert(!!m, "内置数据包存在");
 if (m) {
-  const raw = m[1];
-  assert(raw.length > 1_000_000, `数据块体积合理（${(raw.length / 1024 / 1024).toFixed(2)} MB 文本）`);
-  assert(!raw.includes("<"), "数据块不含裸 <（全部转义为 \\u003c，杜绝标签提前闭合）");
-  assert(!/<\/script/i.test(raw), "数据块不含 </script 序列");
-
-  let parsed = null;
-  try { parsed = JSON.parse(raw); } catch (e) { console.error("  FAIL: 内置数据 JSON 解析失败 -", e.message); fails++; }
-  assert(!!parsed, "内置数据可被 JSON.parse 还原");
-  if (parsed) {
-    for (const cat of ["characters", "entities", "keywords"]) {
-      const src = JSON.parse(fs.readFileSync(path.join(here, `gi-data/${cat}.json`), "utf8")).data;
-      assert(Array.isArray(parsed[cat]) && parsed[cat].length === src.length,
-        `内置 ${cat} 条目数与源一致（${src.length}）`);
-      /* 逐条深比较：确保没有截断、没有字段丢失 */
-      assert(JSON.stringify(parsed[cat]) === JSON.stringify(src), `内置 ${cat} 内容与源快照完全一致`);
-    }
-  }
+  const b64 = m[1].trim();
+  assert(/^[A-Za-z0-9+/=]+$/.test(b64), "内联数据是可解析的 base64（无换行污染）");
+  const gzSrc = fs.readFileSync(path.join(here, "gi-data/dataset.gz"));
+  assert(Buffer.from(b64, "base64").equals(gzSrc), "内联内容与 gi-data/dataset.gz 逐字节一致");
+  assert(!/<\/script/i.test(b64), "数据块不含 </script 序列");
 }
 
 /* ===== 3. 脚本顺序与内容 ===== */
 const iStyle = html.indexOf("<style>");
-const iData = html.indexOf('id="builtin-data"');
-const iHook = html.indexOf("window.BUILTIN_DATA = JSON.parse");
+const iData = html.indexOf('id="builtin-dataset"');
+const iHook = html.indexOf("window.BUILTIN_DATASET_GZ_B64");
 const iApp = html.indexOf("function decodeRaw(src)");
-assert(iStyle > 0 && iData > iStyle, "样式在数据块之前内联");
-assert(iHook > iData && iHook < iApp, "数据解析钩子位于数据块之后、应用之前（否则 BUILTIN_DATA 不可见）");
+assert(iStyle > 0 && iData > iStyle, "样式在数据包之前内联");
+assert(iHook > iData && iHook < iApp, "数据包读取钩子位于数据块之后、应用之前（否则数据集不可见）");
 assert(iApp > 0, "应用脚本已内联");
 
 /* 资源（拼音索引 / 补充概念库 / 元素图标）已是 ESM 模块，随应用包一起内联 */
@@ -71,27 +61,25 @@ assert(!html.includes("CONCEPTS_EXTRA"), "补充概念库已并入数据集，�
 assert(html.includes("PINYIN_DATA"), "拼音索引已随应用包内联");
 
 /* ===== 4. 体积与构建信息 ===== */
-/* 主文件 = 原始三份快照（约 2.2MB）+ Brotli 数据集 base64（约 0.3MB）+ 脚本样式。
-   上限用来兜住"误把未压缩数据重复内联"的回归，不是抠几十 KB。 */
-assert(bytes > 2_500_000 && bytes < 3_500_000, `文件体积在预期区间（${(bytes / 1024 / 1024).toFixed(2)} MB）`);
+/* 主文件 = 应用包（约 0.34MB）+ 数据集 gzip base64（约 0.55MB）+ 样式。
+   上限用来兜住"把未压缩数据或原始三份快照又内联回来"的回归，不是抠几十 KB。 */
+assert(bytes > 700_000 && bytes < 1_300_000, `文件体积在预期区间（${(bytes / 1024 / 1024).toFixed(2)} MB）`);
 assert(html.includes('id="builtin-dataset"') && html.includes("BUILTIN_DATASET_GZ_B64"), "压缩数据集已内联并交给运行时");
 assert(/单文件版 · build-single\.mjs 生成于 \d{4}-\d{2}-\d{2}/.test(html), "头部含构建时间戳（可追溯版本）");
-assert(/数据快照（characters 155 \/ entities 1347 \/ keywords 149）/.test(html), "头部标注内置数据规模");
+assert(/统一数据集（[\d.]+ KB gzip）/.test(html), "头部标注内置数据集规模");
 assert(!/deck-viewer\.(?:css|js|html)\?v=/.test(html), "无残留的资源版本戳查询串（单文件不靠 URL 版本戳）");
 
 /* ===== 5. 轻量版 ===== */
 const LITE = path.join(here, "dist", "七圣召唤-卡牌与牌组浏览器-轻量.html");
 if (fs.existsSync(LITE)) {
   const liteHtml = fs.readFileSync(LITE, "utf8");
-  assert(!liteHtml.includes('id="builtin-data"'), "轻量版不内嵌数据块");
+  assert(!liteHtml.includes('id="builtin-dataset"'), "轻量版不内嵌数据包");
   assert(!/<script[^>]+src=/i.test(liteHtml), "轻量版脚本同样全内联");
   assert(liteHtml.includes(appBlock), "轻量版应用脚本与源文件逐字一致（整段比对）");
   assert(liteHtml.includes(`<style>\n${cssSrc}\n</style>`), "轻量版样式与源文件逐字一致（整段比对）");
-  /* 轻量版 = 应用脚本 + 资源脚本（拼音 102KB + 概念库 91KB + 官方元素矢量 48KB）
-     + gzip 数据集 base64（约 0.42MB）。不内嵌原始三份快照（否则会到 2.7MB）。 */
-  assert(Buffer.byteLength(liteHtml) < 1_100_000, `轻量版体积 < 1.05MB（${(Buffer.byteLength(liteHtml) / 1024).toFixed(0)} KB）`);
-  assert(!liteHtml.includes('id="builtin-data"'), "轻量版不含原始数据快照");
-  assert(liteHtml.includes('id="builtin-dataset"'), "轻量版仍内联压缩数据集（保证特技等索引可用）");
+  /* 轻量版只有应用包 + 样式：数据首次打开时从站点取。 */
+  assert(Buffer.byteLength(liteHtml) < 600_000, `轻量版体积 < 600KB（${(Buffer.byteLength(liteHtml) / 1024).toFixed(0)} KB）`);
+  assert(liteHtml.includes("dataset.gz"), "轻量版保留数据包的获取路径（运行时按需拉取）");
 }
 
 console.log(fails ? `\n${fails} 条断言失败` : "\n全部通过");

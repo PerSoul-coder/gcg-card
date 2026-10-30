@@ -98,6 +98,14 @@ export interface SkillExtras {
   hidden: boolean;
 }
 
+/** 牌间依赖：构筑门槛与打出限制。
+ *  以前在运行时按 tags + 描述正则现算，同一张牌在卡库、详情、导出里可能算出不同结果；
+ *  现在构建期算一次写进记录，运行期只读。 */
+export interface Reqs {
+  deck: DeckReq[];
+  play: PlayRestriction[];
+}
+
 /** 一条归一化记录。 */
 export interface GcgRecord {
   key: string;
@@ -115,6 +123,12 @@ export interface GcgRecord {
   stats: Stats;
   rel: Rel;
   flags: Flags;
+  /** 分享码 id：牌组分享码里出现的就是它。null 表示不可加入牌组。 */
+  share: number | null;
+  /** 牌间依赖（构筑门槛 + 打出限制），构建期算好。 */
+  reqs: Reqs;
+  /** 检索语料（名称 + 全文，小写）。空串表示不参与描述检索（技能 / 术语）。 */
+  searchText: string;
   version: string;
   /** 出边：本记录文本中引用到的其他记录 key。 */
   refs: string[];
@@ -187,9 +201,9 @@ export interface ParsedCard {
   type: string;
   typeRaw: string;
   element: string;
-  tags: Array<string | null>;
+  tags: string[];
   tagsRaw: string[];
-  playCost: unknown;
+  playCost: CostEntry[];
   dice: number;
   energy: number;
   related?: string | null;
@@ -262,11 +276,11 @@ export interface PoolEntry {
   energy?: number | null;
   ver?: string;
   share?: number | null;
-  restrictions: unknown[];
-  deckReqs: unknown[];
+  restrictions: PlayRestriction[];
+  deckReqs: DeckReq[];
   related?: string | null;
   relatedId: number | null;
-  playCost: unknown;
+  playCost: CostEntry[];
   dice: number;
   energyCost: number;
   desc: string;
@@ -286,7 +300,7 @@ export interface SkillEntry {
   /** 原始技能类型码与中文名：普攻 / 战技 / 爆发 / 被动 / 特殊。 */
   tag: string;
   tagZh: string;
-  cost: unknown[];
+  cost: CostEntry[];
   desc: string;
   /** 去掉「需准备 n 个行动轮」后的效果正文。 */
   effect: string;

@@ -1,5 +1,6 @@
 /* 95-export.ts —— 导出：JSON / CSV / 文本，字段形状是对外契约。 */
-import { allReqs, costText, diceCost, energyCost } from "./30-deps";
+import { allReqs, costText } from "./30-deps";
+import { recordOfId, shareOfId } from "./data/records";
 import { $ } from "./core/dom";
 import { skillsOf } from "./47-skills";
 import { showDeckDiff } from "./88-compare";
@@ -38,8 +39,8 @@ function deckMarkdown() {
     `> 分享码：\`${state.current!.code}\`　导出时间：${new Date().toLocaleString("zh-CN")}`, ""];
   L.push(`## 角色`);
   for (const c of state.current!.chars) {
-    const raw = state.charById.get(c.id);
-    const tags = (raw?.tags || []).map(tagZh).filter(Boolean).join("·");
+    const raw = recordOfId(c.id);
+    const tags = (raw?.stats.tags || []).filter(Boolean).join("·");
     L.push(`- **${c.name}**（${tags}）　生命 ${c.hp} · 充能 ${c.energy} · ${c.since || ""}`);
   }
   for (const t of state.current!.order) {
@@ -59,15 +60,15 @@ function deckMarkdown() {
 function buildExport() {
   const cards: ExportCard[] = [];
   for (const t of state.current!.order) for (const x of state.current!.groups[t]) {
-    const e = state.entById.get(x.id);
+    const e = recordOfId(x.id);
     if (!e) continue;   /* 牌组里出现卡池缺记录的 id（数据版本不一致）时跳过，不让整份导出失败 */
     cards.push({
-      id: x.id, shareId: state.idToShare[x.id] ?? null,
-      name: x.name, typeRaw: e.type || "", type: x.type,
-      tagsRaw: e.tags || [], tags: x.tags,
-      playCostRaw: e.playCost,
+      id: x.id, shareId: shareOfId(x.id),
+      name: x.name, typeRaw: e.typeRaw, type: x.type,
+      tagsRaw: e.stats.tagsRaw, tags: x.tags,
+      playCostRaw: e.stats.cost,
       diceCost: x.dice, energyCost: x.energy,
-      relatedCharacterId: e.relatedCharacterId ?? null, relatedCharacter: x.related ?? null,
+      relatedCharacterId: e.rel.relatedCharacterId ?? null, relatedCharacter: x.related ?? null,
       restrictions: x.restrictions,
       /* 牌组限制（加入牌组需满足的角色/元素/地区依赖）与打出限制分开导出 */
       deckRequirements: (x.deckReqs || []).map(r => ({
@@ -77,17 +78,17 @@ function buildExport() {
         minCount: "n" in r ? r.n ?? null : null,
       })),
       count: x.count, sinceVersion: x.since,
-      description: (e.description || "").trim(),
+      description: e.desc.effect.trim(),
       image: imgFull(x.id),
       category: t,
     });
   }
   const chars: ExportChar[] = state.current!.chars.map(c => {
-    const raw = state.charById.get(c.id);
+    const raw = recordOfId(c.id);
     return {
-      id: c.id, shareId: state.idToShare[c.id] ?? null,
+      id: c.id, shareId: shareOfId(c.id),
       name: c.name, englishName: raw?.englishName || null,
-      element: c.element, tagsRaw: raw?.tags || [], tags: (raw?.tags || []).map(tagZh).filter(Boolean),
+      element: c.element, tagsRaw: raw?.stats.tagsRaw || [], tags: (raw?.stats.tags || []).filter(Boolean),
       hp: c.hp, maxEnergy: c.energy, sinceVersion: c.since,
       /* 技能与界面同源：准备技能 / 被动技能不再被 hidden 过滤掉，
          费用（元素骰 + 充能）一并导出，避免"界面上有、导出里没有" */
@@ -131,7 +132,7 @@ function toCSV() {
   for (const t of state.current!.order) for (const x of state.current!.groups[t]) {
     rows.push([t, x.count, x.name, x.type, costText(x.playCost), x.dice, x.energy,
       allReqs(x).map(r => r.label).join("；"), x.related || "", x.tags.join("·"), x.since || "",
-      state.idToShare[x.id] ?? "", x.id, x.desc].map(q).join(","));
+      shareOfId(x.id) ?? "", x.id, x.desc].map(q).join(","));
   }
   return "\ufeff" + head.map(q).join(",") + "\n" + rows.join("\n");
 }
@@ -194,7 +195,7 @@ $("exportMenu").addEventListener("click", ev => {
 function encodeCurrent() {
   const ids = [...state.current!.charIds, ...state.current!.cardIds];
   const shareIds = ids.map(id => {
-    const s = state.idToShare[id];
+    const s = shareOfId(id);
     if (s == null) throw new Error(`卡牌 ${id} 不可分享`);
     return s;
   });

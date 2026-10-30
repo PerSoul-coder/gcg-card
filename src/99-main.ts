@@ -11,12 +11,12 @@ import { resetBacklinks } from "./50-backlinks";
 import { SKILLS, resetSkillIndex } from "./47-skills";
 import { beginRenameDeck, closeDraftPanel, deleteDeckById, draftClear, draftEncode, draftLoadCurrent, draftRemoveCard, draftRemoveChar, draftSetCount, duplicateDeck, loadDraft, newDeck, renderDraft, renderDraftPanel, syncFromActive, toggleDraftPanel } from "./80-deck";
 import { overlayOpen, showDetail } from "./90-detail";
-import { resetEntityState, state } from "./data/state";
+import { resetViewState, state } from "./data/state";
+import { recordOfId, charRecords, resetRecordIndex } from "./data/records";
 import { SAMPLE, STORAGE_KEYS } from "./core/resources";
 import { closeTopLayer } from "./core/layers";
 import { setStatus, toast, copyText } from "./core/dom";
-import { shadowStateIds, shadowStateBySkill } from "./data/model";
-import { dataReady, writeCache } from "./20-data";
+import { dataReady } from "./20-data";
 import { backlinks } from "./50-backlinks";
 import { refreshSuggest } from "./70-search";
 
@@ -145,13 +145,14 @@ function renderDataInfo() {
   const origin = [...dataOrigins].map(k => ORIGIN_ZH[k] || k).join(" + ") || "—";
   const imgNote = dataOrigins.has("builtin") && !dataOrigins.has("network") ? "　|　卡面图需联网" : "";
   const ds = dsStats();
-  el.innerHTML = `数据源：piovium 官方静态数据 v5 · CHS　|　${state.CHAR.length} 角色 · ${pool.filter(x => x.kind === "card").length} 卡牌 · ${SKILLS.length} 技能 · ${ds ? `${ds.conceptNames} 个概念` : `${state.KW.length} 术语`}${testNote}${shadowNote}　|　${origin}${imgNote}`;
+  el.innerHTML = `数据源：piovium 官方静态数据 v5 · CHS　|　${charRecords().length} 角色 · ${pool.filter(x => x.kind === "card").length} 卡牌 · ${SKILLS.length} 技能 · ${ds ? `${ds.conceptNames} 个概念` : "0 个概念"}${testNote}${shadowNote}　|　${origin}${imgNote}`;
 }
 $("btnRefresh").addEventListener("click", async () => {
   /* 不预先清缓存：网络不可用时旧缓存 / 内置快照还能兜住，不至于整页失去数据。
      拉取成功后 writeCache 会自然覆盖旧值。 */
   resetDataState();      /* 重置单 flight，强制 ensureData 真正重新拉取 */
-  resetEntityState();    /* 实体集合与 id/分享码索引 */
+  resetRecordIndex();    /* 记录表与 id/分享码索引 */
+  resetViewState();      /* 详情 / 翻页上下文 */
   resetConceptIndex();   /* 概念索引与术语正则 */
   resetPool();           /* 卡池与统计 */
   resetBacklinks();      /* 反链 */
@@ -240,7 +241,7 @@ function routeHash() {
     return (async () => {
       try {
         await ensureData();
-        if (state.charById.has(id) || state.entById.has(id)) showDetail(id);
+        if (recordOfId(id)) showDetail(id);
         else setStatus("链接中的卡牌 id 不存在或已失效", "err");
       } catch (e) { setStatus("加载失败：" + (e as Error).message, "err"); }
     })();

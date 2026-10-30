@@ -8,8 +8,8 @@
 
 | 方式 | 入口 | 说明 |
 | --- | --- | --- |
-| 离线单文件（推荐分享） | `dist/七圣召唤-卡牌与牌组浏览器.html` | 约 3.1 MB，样式 / 脚本 / 数据快照与压缩数据集全部内联，双击即开、断网可用 |
-| 轻量单文件 | `dist/七圣召唤-卡牌与牌组浏览器-轻量.html` | 约 960 KB，不内嵌原始数据，首次打开联网拉取并缓存 24 小时；压缩数据集仍内联 |
+| 离线单文件（推荐分享） | `dist/七圣召唤-卡牌与牌组浏览器.html` | 约 0.94 MB，样式 / 脚本 / 统一数据包（`dataset.gz`）全部内联，双击即开、断网可用 |
+| 轻量单文件 | `dist/七圣召唤-卡牌与牌组浏览器-轻量.html` | 约 0.41 MB，不内嵌数据包，首次打开联网拉取 `gi-data/dataset.gz` |
 | 多文件开发版 | 根目录 `deck-viewer.html` | 加载构建产物 `dist/app.js`（TypeScript 源码经 esbuild 打包），便于调试 |
 
 开发版需先构建一次脚本（源码已迁到 TypeScript，浏览器不能直接执行 `.ts`）：
@@ -89,14 +89,15 @@ python -m http.server 8080
 │  ├─ types.ts               统一数据集类型契约（构建期 / 运行时 / 测试共用）
 │  ├─ core/resources.ts      资源集中管理：数据源、图片地址、元素元数据与图标、存储键
 │  ├─ core/dom.ts            DOM 查询、转义、提示条、剪贴板
-│  ├─ data/state.ts          应用级可变状态（收敛为一个 state 对象）
+│  ├─ data/state.ts          应用级可变状态（只留视图状态：牌组 / 视图栈 / 翻页基准）
+│  ├─ data/records.ts        统一记录的运行时查表（按 id / 分享码 / 角色卡牌分组），唯一数据入口
 │  ├─ data/model.ts          数据模型：类型分类 / 名字归一化 / 影子关系 / 卡面兜底（唯一定义处）
-│  ├─ 07-dataset.ts          统一数据集的加载 / Brotli 解码 / 索引（构建期归一化，运行时只读）
+│  ├─ 07-dataset.ts          统一数据集的加载 / gzip 解码 / 索引（构建期归一化，运行时只读）
 │  ├─ 10-codec.ts            分享码编解码
-│  ├─ 20-data.ts             数据加载：内置快照 → 本地缓存 → 现网
-│  ├─ 30-deps.ts             牌组限制 / 打出限制 / 费用拆分
+│  ├─ 20-data.ts             数据加载与派生索引装配：数据包 → 记录表 → 技能 / 概念 / 卡池 / 反链
+│  ├─ 30-deps.ts             依赖与费用的渲染与校验（判定在构建期，这里只有徽标 / 门槛校验 / 缺口说明）
 │  ├─ 40-concepts.ts         概念索引（投影 dataset.terms）与术语链接化
-│  ├─ 45-pool.ts             全量卡池与版本索引
+│  ├─ 45-pool.ts             卡池：记录的纯投影与统计
 │  ├─ 47-skills.ts           角色技能索引与技能页（费用 / 准备轮数 / 所属角色）
 │  ├─ 50-backlinks.ts        反链索引（翻转 dataset 出边）与概念条目渲染
 │  ├─ 60-parse.ts            分享码 → 牌组解析与输入路由
@@ -113,9 +114,9 @@ python -m http.server 8080
 │  ├─ dataset.gz             gzip 压缩包（浏览器原生 DecompressionStream 主路径）
 │  ├─ dataset.br             Brotli 压缩包（体积更小，供 Node / 归档 / 未来解码器）
 │  ├─ dataset.meta.json      数据集计数与构建时间（便于快速核对）
-│  ├─ characters.json        角色快照
-│  ├─ entities.json          卡牌 / 状态 / 召唤物快照
-│  ├─ keywords.json          官方规则术语快照
+│  ├─ characters.json        角色原始数据（仅构建期输入）
+│  ├─ entities.json          卡牌 / 状态 / 召唤物原始数据（仅构建期输入）
+│  ├─ keywords.json          官方规则术语原始数据（仅构建期输入）
 │  ├─ concepts-extra.json    补充概念库（genshin-db 构建，仅构建期输入）
 │  ├─ concepts-extra.js      同上，ESM 形式供构建脚本读取（不再进入运行时）
 │  ├─ pinyin.js              拼音索引（构建期生成）
@@ -165,13 +166,15 @@ node scripts/build-dataset.mjs
 发布目录固定为 `site/`，入口固定是 `site/index.html`——这样链接不会因为产物名带中文而变长，重发也永远落在同一个应用上（链接不变，内容替换）。
 
 ```powershell
-# 生成发布用的目录（内置数据快照版，断网也能用）
+# 生成发布用的目录（内置数据包版，断网也能用）
 node scripts/build-single.mjs --out=site/index.html
 ```
 
 改动后要同步线上：重跑上面这条命令，再对 `D:/Administrator/桌面/data/site` 重新发布即可，不需要改任何发布参数。
 
-为什么发布的是「内置数据快照」版而不是轻量版：单文件版把三份数据内嵌进 HTML，打开即用、不依赖官方接口的跨域策略；线上只多一个卡面图的 HTTPS 依赖（`static-data.piovium.org`），没有后端、没有数据库，静态托管就够。轻量版仍留给「想用最新数据、且接受首次联网 2MB」的场景（本地打开用）。
+为什么发布的是「内置数据包」版而不是轻量版：单文件版把构建期归一化的 `dataset.gz` 内嵌进 HTML，打开即用、不依赖任何接口；线上只多一个卡面图的 HTTPS 依赖（`static-data.piovium.org`），没有后端、没有数据库，静态托管就够。轻量版留给「想随时拿到最新数据、且接受首次联网 400KB」的场景。
+
+卡池要更新时（官方发新卡）：重跑 `npm run build:dataset` 把最新原始数据归一化为 `gi-data/dataset.*`，再按上面这条命令重新生成发布目录——数据加工在构建期，不是每个访客打开页面时各算一遍。
 
 ## 测试
 
@@ -248,7 +251,7 @@ node tests/test-search.mjs
 
 ## 数据来源
 
-- 卡牌数据：piovium 官方静态数据服务 `https://static-data.piovium.org/api/v5`，本地缓存 24 小时，失败时回退到内置快照。
+- 卡牌数据：piovium 官方静态数据服务 `https://static-data.piovium.org/api/v5`。原始三份 JSON 只在构建期读取（`npm run build:dataset`），归一化为 `gi-data/dataset.{json,gz,br}`；运行时不再下载原始 JSON，也不再有本地 24 小时缓存。
 - 规则与术语释义：theBowja/genshin-db 中文快照（`vendor/genshin-db-data`）。
 - 拼音索引：`pinyin-pro` 构建期生成，运行时零依赖。
 - 七元素矢量图标：`assets/原神元素图标-矢量`。

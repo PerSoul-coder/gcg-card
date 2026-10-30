@@ -1,7 +1,8 @@
 /* 70-search.ts —— 检索：卡牌、概念、技能的统一定位与建议。 */
 import { BROWSE_DIMS, browseFilter, browseState, passFilter, renderBrowse, renderBrowseResults, syncBrowseHash } from "./85-views";
 import { $ } from "./core/dom";
-import { cardElement, charElement, pool } from "./45-pool";
+import { pool } from "./45-pool";
+import { recordOfId } from "./data/records";
 import { KIND_ZH, backlinks } from "./50-backlinks";
 import { escapeRe, termIndex } from "./40-concepts";
 import { dataReady, ensureData } from "./20-data";
@@ -344,7 +345,7 @@ function nearNames(q, limit = 6) {
 const CAT_ORDER = ["角色", "装备牌", "支援牌", "事件牌", "队伍状态", "状态牌", "召唤物", "附加状态", "概念"];
 function resultTypeLabel(r) {
   if (r.kind === "char") return "角色";
-  if (r.kind === "card") return typeZhOf(state.entById.get(r.id));
+  if (r.kind === "card") return recordOfId(r.id)?.typeZh || "卡牌";
   if (r.kind === "skill") return "技能";
   return "概念";   /* 概念类统一一档分类；具体种类由卡块自身标出 */
 }
@@ -425,7 +426,7 @@ function matchChip(r) {
 
 function sugKindLabel(r) {
   if (r.kind === "char") return "角色";
-  if (r.kind === "card") return typeZhOf(state.entById.get(r.id)) || "卡牌";
+  if (r.kind === "card") return recordOfId(r.id)?.typeZh || "卡牌";
   return KIND_ZH[r.ckind] || "概念";
 }
 
@@ -444,8 +445,7 @@ function renderSuggestItems(q, items) {
     return;
   }
   box.innerHTML = items.map((r, i) => {
-    const raw = r.id != null ? (r.kind === "char" ? state.charById.get(r.id) : state.entById.get(r.id)) : undefined;
-    const el = raw ? (r.kind === "char" ? charElement(raw) : cardElement(raw)) : "";
+    const el = r.id != null ? recordOfId(r.id)?.stats.element || "" : "";
     return `
     <div class="sug-item" role="option" id="sug-opt-${i}" data-i="${i}" aria-selected="false">
       ${el ? eleIcon(el, "sug-el") : ""}

@@ -6,17 +6,16 @@ import { browseVisibleIds } from "./85-views";
 import { renderSkillView, showSkill, skillOf } from "./47-skills";
 import { compareState, renderCompareView, renderDeckDiffView } from "./88-compare";
 import { renderOddsView } from "./86-odds";
-import { cardElement, charElement } from "./45-pool";
-import { R_STYLE, deckReqsOf, reqElement, restrictionsOf } from "./30-deps";
+import { R_STYLE, reqElement } from "./30-deps";
 import { termEntries } from "./40-concepts";
 import { state } from "./data/state";
-import type { OverlayEntry } from "./types";
-import type { RawEntity } from "./data/state";
+import type { GcgRecord, OverlayEntry } from "./types";
+import { recordOfId, nameOfId, isCharId, isShadowId, cardRecords } from "./data/records";
 import { ELE_ZH, ELE_COLOR, tagZh, eleIcon, enPips } from "./core/resources";
 import { esc, toast, copyText } from "./core/dom";
 import { registerLayer, syncScrollLock } from "./core/layers";
-import { typeZhOf, isFieldEntity, isShadowState, cardArtHtml } from "./data/model";
-import { BUILTIN_DATA } from "./20-data";
+import { cardArtHtml } from "./data/model";
+import { dataOrigins } from "./20-data";
 import { costHtml } from "./30-deps";
 import { linkify } from "./40-concepts";
 import { pool, poolStats } from "./45-pool";
@@ -33,17 +32,17 @@ function backlinkHtml(name: string, selfId: number | null = null) {
   const b = backlinks.get(name);
   if (!b || !b.size) return "";
   /* 准备状态影子不进"被引用"：它只是技能自己的运行时标记，列出来会与技能同名同义 */
-  const ids = [...b].filter(x => x !== selfId && !isShadowState(state.entById.get(x)));
+  const ids = [...b].filter(x => x !== selfId && !isShadowId(x));
   if (!ids.length) return "";
   const byName = new Map();      /* 卡片显示名 → { id, n } */
   for (const id of ids) {
-    const t = state.charById.get(id) || state.entById.get(id);
+    const t = recordOfId(id);
     if (!t) continue;
     const cur = byName.get(t.name);
-    if (!cur) byName.set(t.name, { id, n: 1, deckable: t.shareId != null });
+    if (!cur) byName.set(t.name, { id, n: 1, deckable: t.share != null });
     else {
       cur.n++;
-      if (!cur.deckable && t.shareId != null) { cur.id = id; cur.deckable = true; }
+      if (!cur.deckable && t.share != null) { cur.id = id; cur.deckable = true; }
     }
   }
   const all = [...byName.entries()];
@@ -56,17 +55,20 @@ function backlinkHtml(name: string, selfId: number | null = null) {
 }
 /* 角色天赋牌 chips（卡牌详情中排除自身，避免自指） */
 function charTalentChips(charId: number, excludeId: number | null = null): string {
-  const list = state.ENT.filter(x => x.relatedCharacterId === charId && (x.tags || []).includes("GCG_TAG_TALENT"));
+  const list = cardRecords().filter(r =>
+    r.rel.relatedCharacterId === charId && r.stats.tagsRaw.includes("GCG_TAG_TALENT"));
   if (!list.length) return "";
-  return `<div class="drel"><b>天赋牌</b><span class="blchips">` + list.map(x =>
-    `<button class="blchip${x.id === excludeId ? " self" : ""}" data-goto="${x.id}" title="${esc(x.name)}${x.id === excludeId ? "（当前卡牌）" : ""}">${esc(x.name)}</button>`).join("") + `</span></div>`;
+  return `<div class="drel"><b>天赋牌</b><span class="blchips">` + list.map(r => {
+    const cid = Number(r.key.slice(5));
+    return `<button class="blchip${cid === excludeId ? " self" : ""}" data-goto="${cid}" title="${esc(r.name)}${cid === excludeId ? "（当前卡牌）" : ""}">${esc(r.name)}</button>`;
+  }).join("") + `</span></div>`;
 }
-function draftHas(id) { return state.charById.has(id) ? draft.chars.includes(id) : draft.cards.has(id); }
+function draftHas(id) { return isCharId(id) ? draft.chars.includes(id) : draft.cards.has(id); }
 /* 详情页的主行动：加入牌组。
    同名卡可以放 2 张（秘传 1 张，见 80-deck 的 copyLimit），所以这里不能做成
    「加入 / 移出」二选一——那只允许加 1 张。已加入时按钮写「再加一张 ×1/2」，
    加满才禁用；移出另作次级入口，一次清掉这张卡的全部份数。 */
-function deckActionHtml(id: number, joinable: boolean, c: RawEntity | null): string {
+function deckActionHtml(id: number, joinable: boolean, c: GcgRecord | null): string {
   if (!joinable) return "";
   if (c) {
     const has = draft.chars.includes(id);
@@ -180,8 +182,7 @@ function viewLabel(v) {
   if (v.kind === "compare") return "卡牌对比";
   if (v.kind === "deckdiff") return "牌组对比";
   if (v.kind === "odds") return "抽牌概率";
-  const c = state.charById.get(v.id), e = state.entById.get(v.id);
-  return (c && c.name) || (e && e.name) || "上一页";
+  return nameOfId(v.id) || "上一页";
 }
 /* 弹层顶栏：返回（仅栈深 > 1 时出现）+ 自定义按钮组 + 关闭 */
 function navBar(extra = "") {
@@ -202,11 +203,13 @@ function pagerHtml(v: Extract<OverlayEntry, { kind: "detail" }>): string {
 }
 function renderDetailView(v) {
   const id = v.id;
-  const c = state.charById.get(id), e = state.entById.get(id);
+  const rec = recordOfId(id);
+  const c = rec && rec.kind === "char" ? rec : null;
+  const e = rec && rec.kind === "card" ? rec : null;
   /* 只有带分享码 id 的条目能进牌组：对局实体（状态/召唤物/附加状态）与历史变体
      都不可构筑，给它们显示「加入牌组」只会点出一个失败的 toast */
   const joinTarget = c || e;
-  const joinable = !!joinTarget && joinTarget.shareId != null;
+  const joinable = !!joinTarget && joinTarget.share != null;
   /* 主行动（加入牌组）文字化，一眼可读；复制链接降为次级 */
   const joinBtn = deckActionHtml(id, joinable, c ?? null);
   const cmpOn = compareState.ids.includes(id);
@@ -218,19 +221,19 @@ function renderDetailView(v) {
   const nav = navBar(`${pagerHtml(v)}${joinBtn}${cmpBtn}${cmpOpenBtn}<button class="lbtn" title="复制该卡链接" data-act="copyLink">复制链接</button>`);
   let html;
   if (c) {
-    const el = charElement(c);
-    const tags = (c.tags || []).filter(t => !t.startsWith("GCG_TAG_ELEMENT")).map(tagZh).filter(Boolean);
+    const el = c.stats.element;
+    const tags = c.stats.tagsRaw.filter(t => !t.startsWith("GCG_TAG_ELEMENT")).map(tagZh).filter(Boolean);
     html = `${nav}<div class="dimg">${cardArtHtml(id, { kind: "detail", alt: c.name })}</div>
       <div class="dinfo"><h2>${esc(c.name)}</h2>
-      <div class="meta">${el ? `<span class="tagpill">${eleIcon(el)}${esc(ELE_ZH[el] || el)}</span>` : ""}${tags.map(t => `<span class="tagpill">${esc(t)}</span>`).join("")}<span class="tagpill">生命 ${c.hp}</span><span class="tagpill">充能上限 ${enPips(c.maxEnergy || 0)}</span><span class="tagpill">${esc(c.sinceVersion || "")}</span></div>
-      ${c.storyText ? `<div class="dtext dstory">${esc(c.storyText.trim())}</div>` : ""}
+      <div class="meta">${el ? `<span class="tagpill">${eleIcon(el)}${esc(ELE_ZH[el] || el)}</span>` : ""}${tags.map(t => `<span class="tagpill">${esc(t)}</span>`).join("")}<span class="tagpill">生命 ${c.stats.hp}</span><span class="tagpill">充能上限 ${enPips(c.stats.maxEnergy || 0)}</span><span class="tagpill">${esc(c.version || "")}</span></div>
+      ${c.desc.story ? `<div class="dtext dstory">${esc(c.desc.story)}</div>` : ""}
       ${skillsHtml(id)}
       ${charTalentChips(id)}${backlinkHtml(c.name, id)}</div>`;
   } else if (e) {
-    const tags = (e.tags || []).map(tagZh).filter(Boolean);
-    const dreqs = deckReqsOf(e);
-    const eEl = cardElement(e);
-    const rs = restrictionsOf(e);
+    const tags = e.stats.tags;
+    const dreqs = e.reqs.deck;
+    const eEl = e.stats.element;
+    const rs = e.reqs.play;
     /* 统一「依赖与限制」：牌组限制（构筑门槛）与打出限制（对局中生效）同构呈现。
        deckChar 的角色名做成可跳转 chip，直接顺藤摸瓜到角色详情 */
     const reqRow = r => {
@@ -245,16 +248,16 @@ function renderDetailView(v) {
       ${dreqs.length ? `<div class="rgroup rgroup-deck"><div class="rhead"><b>牌组限制</b><span class="rghint">加入牌组需满足</span></div>${dreqs.map(reqRow).join("")}</div>` : ""}
       ${rs.length ? `<div class="rgroup rgroup-play"><div class="rhead"><b>打出限制</b><span class="rghint">对局中生效</span></div>${rs.map(reqRow).join("")}</div>` : ""}
     </div>` : "";
-    const relChip = e.relatedCharacterId != null
-      ? `<div class="drel"><b>关联角色</b><span class="blchips"><button class="blchip" data-goto="${e.relatedCharacterId}">${eEl ? eleIcon(eEl) : ""}${esc(state.charById.get(e.relatedCharacterId)?.name || e.relatedCharacterId)}</button></span></div>` : "";
+    const relChip = e.rel.relatedCharacterId != null
+      ? `<div class="drel"><b>关联角色</b><span class="blchips"><button class="blchip" data-goto="${e.rel.relatedCharacterId}">${eEl ? eleIcon(eEl) : ""}${esc(nameOfId(e.rel.relatedCharacterId))}</button></span></div>` : "";
     html = `${nav}<div class="dimg">${cardArtHtml(id, { kind: "detail", alt: e.name })}</div>
       <div class="dinfo"><h2>${esc(e.name)}</h2>
-      <div class="meta"><span class="tagpill">${esc(typeZhOf(e))}</span>${eEl ? `<span class="tagpill">${eleIcon(eEl)}${esc(ELE_ZH[eEl] || eEl)}</span>` : ""}${costHtml(e.playCost)}${tags.map(t => `<span class="tagpill">${esc(t)}</span>`).join("")}${e.relatedCharacterId ? `<span class="tagpill">关联：${esc(state.charById.get(e.relatedCharacterId)?.name || e.relatedCharacterId)}</span>` : ""}<span class="tagpill">${esc(e.sinceVersion || "")}</span></div>
-      ${isFieldEntity(e) ? `<div class="dnote">对局实体：由技能或卡牌效果在对局中生成，不可加入牌组。</div>` : ""}
+      <div class="meta"><span class="tagpill">${esc(e.typeZh)}</span>${eEl ? `<span class="tagpill">${eleIcon(eEl)}${esc(ELE_ZH[eEl] || eEl)}</span>` : ""}${costHtml(e.stats.cost)}${tags.map(t => `<span class="tagpill">${esc(t)}</span>`).join("")}${e.rel.relatedCharacterId ? `<span class="tagpill">关联：${esc(nameOfId(e.rel.relatedCharacterId))}</span>` : ""}<span class="tagpill">${esc(e.version || "")}</span></div>
+      ${e.domain === "field" ? `<div class="dnote">对局实体：由技能或卡牌效果在对局中生成，不可加入牌组。</div>` : ""}
       ${reqBlock}
-      <div class="dtext">${linkify(esc((e.description || "").trim()))}</div>
-      ${skillsHtmlCard(e.id)}
-      ${relChip}${e.relatedCharacterId != null ? charTalentChips(e.relatedCharacterId, id) : ""}${backlinkHtml(e.name, id)}</div>`;
+      <div class="dtext">${linkify(esc(e.desc.effect.trim()))}</div>
+      ${skillsHtmlCard(id)}
+      ${relChip}${e.rel.relatedCharacterId != null ? charTalentChips(e.rel.relatedCharacterId, id) : ""}${backlinkHtml(e.name, id)}</div>`;
   } else html = nav;
   $("detail").innerHTML = html;
 }
@@ -268,7 +271,7 @@ function draftToggleModal(): void {
   const top = topView();
   if (!top || top.kind !== "detail") return;
   const id = top.id;
-  if (state.charById.has(id)) {
+  if (isCharId(id)) {
     /* 角色是唯一的（3 个槽，同一角色不重复），所以角色仍按开关处理 */
     if (draft.chars.includes(id)) draftRemoveChar(id); else draftAdd(id);
   } else {
@@ -281,7 +284,7 @@ function draftToggleModal(): void {
 function draftRemoveFromDetail(): void {
   const top = topView();
   if (!top || top.kind !== "detail") return;
-  if (state.charById.has(top.id)) draftRemoveChar(top.id); else draftRemoveCard(top.id);
+  if (isCharId(top.id)) draftRemoveChar(top.id); else draftRemoveCard(top.id);
   renderOverlay();
 };
 /* 弹层内的操作按钮：模板只输出 data-act，具体调用在这里分发。
@@ -339,9 +342,9 @@ Ctrl+P　打印当前列表视图
 · 底部牌组栏可管理多套牌组；凑齐 3 角色 + 30 行动牌后「生成分享码」，可复制给他人导入。
 
 <b>数据来源</b>
-卡牌数据来自 piovium 官方静态数据服务（static-data.piovium.org，v5 · 简体中文）${BUILTIN_DATA
-  ? "，本单文件已内置一份数据快照，断网也能浏览与构筑；卡面图仍需联网，「更多 → 刷新数据」可拉取官方最新数据"
-  : "，首次加载后缓存于浏览器本地，24 小时自动更新"}；规则与术语释义来自 genshin-db 静态快照。明显是测试用途的卡牌（名称含（test）/（Test）等标记，当前 ${poolStats.testFiltered} 张）不进入卡库与检索；与技能同名的「准备中状态」并入技能页（当前 ${poolStats.shadowFiltered} 个）。状态牌 / 队伍状态 / 附加状态在数据源里没有牌面，界面给它们同比例（420:720）的「卡壳」并叠上 128×128 的对局状态图标，卡壳本身用类型色与类型字标明这是对局实体、不是卡牌；极少数连图标都没有的（数据源缺图）只留 ◈ 卡壳。解码与编码逻辑移植自 genius-invokation @gi-tcg/assets-manager（AGPL-3.0）。
+卡牌数据来自 piovium 官方静态数据服务（static-data.piovium.org，v5 · 简体中文）${dataOrigins.has("builtin")
+  ? "，本单文件已内置一份数据快照，断网也能浏览与构筑；卡面图仍需联网"
+  : "，由站点随构建产物提供，刷新页面即取最新"}；规则与术语释义来自 genshin-db 静态快照。明显是测试用途的卡牌（名称含（test）/（Test）等标记，当前 ${poolStats.testFiltered} 张）不进入卡库与检索；与技能同名的「准备中状态」并入技能页（当前 ${poolStats.shadowFiltered} 个）。状态牌 / 队伍状态 / 附加状态在数据源里没有牌面，界面给它们同比例（420:720）的「卡壳」并叠上 128×128 的对局状态图标，卡壳本身用类型色与类型字标明这是对局实体、不是卡牌；极少数连图标都没有的（数据源缺图）只留 ◈ 卡壳。解码与编码逻辑移植自 genius-invokation @gi-tcg/assets-manager（AGPL-3.0）。
 </div></div>`;
   setOverlayOpen(true);
 }

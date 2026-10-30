@@ -1,31 +1,40 @@
-/* 45-pool.ts —— 卡池：记录投影成浏览条目，派生筛选所需的字段与统计。 */
-import { deckReqsOf, diceCost, energyCost, isTestCard, reqElement, restrictionsOf } from "./30-deps";
-import { state } from "./data/state";
-import type { PoolEntry, PoolStats, ReqBadge } from "./types";
-import type { RawEntity } from "./data/state";
-import { tagZh } from "./core/resources";
-import { TYPE_ORDER, typeZhOf, isDeckable, domainOfEntity, isShadowState, hasCardFace } from "./data/model";
+/* 45-pool.ts —— 卡池：统一记录的投影。
+ *
+ * 卡池回答"卡库要展示哪些条目"，它与统一数据集不是两份数据，而是同一份数据的
+ * 一个视图：构建期已经判定好 poolable / test / shadow / deckable，算好了元素、
+ * 费用、限制与检索语料，这里只做投影 + 计数，不再推导任何东西。
+ *
+ * 收录范围：全部角色牌 + 全部可入卡库的实体卡（含对局中生成的场地/状态/召唤物，
+ * 它们不可入构筑但可以查）。测试卡与准备状态影子在构建期就标好了，这里按标记排除
+ * 并计数——排除理由是数据事实，不是运行时猜测。 */
 
-/* ---------- 全量卡池（卡库浏览的数据基础） ----------
-   收录角色牌 + 全部实体卡（装备/事件/援助/场地/状态/召唤物/附加状态）。
-   与卡库检索的分工：检索面向"找构筑组件"（可加入牌组的卡 + 概念），
-   卡库浏览面向"查全部数据"（含对局中生成的场地/状态/召唤物，不可入构筑）。
-   统一派生字段一次算好，之后的筛选、排序、渲染都只读这份索引。 */
-/* 类型顺序来自 12-model.js 的 TYPE_ORDER（唯一定义）；这里保留旧名以便既有调用处不变 */
+import { charRecords, cardRecords, nameOfId } from "./data/records";
+import type { GcgRecord, PoolEntry, PoolStats } from "./types";
+import { TYPE_ORDER } from "./data/model";
+
+/* 类型顺序来自 model.ts 的 TYPE_ORDER（唯一定义）；这里保留旧名以便既有调用处不变 */
 const POOL_TYPE_ORDER = TYPE_ORDER;
-const verTuple = v => { const m = String(v || "").match(/^v(\d+)\.(\d+)/); return m ? [+m[1], +m[2]] : [0, 0]; };
-function verCmp(a, b) { const [a1, a2] = verTuple(a), [b1, b2] = verTuple(b); return a1 - b1 || a2 - b2; }
+
+const verTuple = (v: string | undefined): [number, number] => {
+  const m = /^v(\d+)\.(\d+)/.exec(String(v || ""));
+  return m ? [+m[1], +m[2]] : [0, 0];
+};
+function verCmp(a: string, b: string): number {
+  const [a1, a2] = verTuple(a), [b1, b2] = verTuple(b);
+  return a1 - b1 || a2 - b2;
+}
+
 let pool: PoolEntry[] = [];
 /* 卡池版本：每次重建 +1。卡库的筛选结果 / 分面计数按「筛选状态 + 版本」记忆，
    数据刷新后旧缓存自动失效，不用逐个调用处手工清。 */
 let poolVersion = 0;
+let poolStats: PoolStats = { total: 0, buildable: 0, testFiltered: 0, shadowFiltered: 0, byType: {}, byEl: {}, byTag: {}, versions: [] };
 
 /** 使卡池派生的记忆缓存失效。重建卡池时自增；
  *  对外暴露成函数，避免外部直接改计数（测试验证失效路径也走这里）。 */
 export function invalidatePoolMemo(): void {
   poolVersion += 1;
 }
-let poolStats: PoolStats = { total: 0, buildable: 0, testFiltered: 0, shadowFiltered: 0, byType: {}, byEl: {}, byTag: {}, versions: [] };
 
 /** 清空卡池与统计（供「刷新数据」使用）。 */
 export function resetPool(): void {
@@ -33,48 +42,57 @@ export function resetPool(): void {
   poolVersion = 0;
   poolStats = { total: 0, buildable: 0, testFiltered: 0, shadowFiltered: 0, byType: {}, byEl: {}, byTag: {}, versions: [] };
 }
-const charElement = c => (c.tags.find(t => t.startsWith("GCG_TAG_ELEMENT")) || "").replace("GCG_TAG_ELEMENT_", "");
-/* 卡牌所属元素：天赋牌随关联角色；元素共鸣等牌取牌组限制里的元素门槛 */
-function cardElement(e: RawEntity, rel: RawEntity | null = null, dreqs: ReqBadge[] | null = null) {
-  const c = rel || (e && e.relatedCharacterId != null ? state.charById.get(e.relatedCharacterId) : null);
-  if (c) return charElement(c);
-  return reqElement((dreqs || deckReqsOf(e)).find(r => r.code === "deckEl"));
+
+const idOf = (r: GcgRecord): number => Number(r.key.slice(r.key.indexOf(":") + 1));
+
+/** 记录 → 卡库条目。字段一一对应，不做任何推导。 */
+function poolEntryOf(r: GcgRecord): PoolEntry {
+  const relatedId = r.rel.relatedCharacterId;
+  return {
+    kind: r.kind === "char" ? "char" : "card",
+    id: idOf(r),
+    name: r.name,
+    englishName: r.englishName,
+    element: r.stats.element,
+    type: r.typeZh,
+    typeRaw: r.typeRaw,
+    domain: r.domain,
+    deckable: r.flags.deckable,
+    art: r.art.hasFace,
+    tags: r.stats.tags,
+    tagsRaw: r.stats.tagsRaw,
+    hp: r.stats.hp,
+    energy: r.stats.maxEnergy,
+    ver: r.version,
+    share: r.share,
+    restrictions: r.reqs.play,
+    deckReqs: r.reqs.deck,
+    related: relatedId == null ? null : nameOfId(relatedId),
+    relatedId: relatedId ?? null,
+    playCost: r.stats.cost,
+    dice: r.stats.dice,
+    energyCost: r.stats.energy,
+    desc: (r.kind === "char" ? r.desc.story : r.desc.effect).trim(),
+    /* 检索语料在构建期拼好：角色含简介与技能，卡牌含效果与特技 */
+    descAll: r.searchText,
+  };
 }
+
 function buildPool() {
   pool = [];
-  for (const c of state.CHAR) pool.push({
-    kind: "char", id: c.id, name: c.name, englishName: c.englishName,
-    element: charElement(c), type: "角色牌", typeRaw: "GCG_CARD_CHARACTER",
-    domain: "char", deckable: true, art: true,
-    tags: (c.tags || []).map(tagZh).filter(Boolean), tagsRaw: c.tags || [],
-    hp: c.hp, energy: c.maxEnergy, ver: c.sinceVersion,
-    share: c.shareId, restrictions: [], deckReqs: [], related: null, relatedId: null,
-    playCost: [], dice: -1, energyCost: 0, desc: (c.storyText || "").trim(),
-    descAll: [c.storyText || "", ...(c.skills || []).map(s => `${s.name || ""}${s.description || ""}`)].join("\n").toLowerCase(),
-  });
+  for (const r of charRecords()) pool.push(poolEntryOf(r));
+
   let testFiltered = 0, shadowFiltered = 0;
-  for (const e of state.ENT) {
-    if (!e.type || !POOL_TYPE_ORDER.includes(e.type)) continue;
-    /* 明显测试卡不进牌库（判据见 isTestCard；详情深链仍可查） */
-    if (isTestCard(e)) { testFiltered++; continue; }
+  for (const r of cardRecords()) {
+    if (!r.flags.poolable) continue;
+    /* 明显测试卡不进牌库（详情深链仍可查） */
+    if (r.flags.test) { testFiltered++; continue; }
     /* 准备状态影子不进牌库：它与技能同名、内容只是「本角色将使用技能 X」，
        单列成一张状态牌只会和技能抢名字（技能页里以「准备中状态」入口保留） */
-    if (isShadowState(e)) { shadowFiltered++; continue; }
-    const rel = e.relatedCharacterId != null ? state.charById.get(e.relatedCharacterId) : null;
-    const dreqs = deckReqsOf(e);
-    pool.push({
-      kind: "card", id: e.id, name: e.name, englishName: e.englishName,
-      element: cardElement(e, rel, dreqs), type: typeZhOf(e), typeRaw: e.type || "",
-      domain: domainOfEntity(e), deckable: isDeckable(e),
-      art: hasCardFace(e),
-      tags: (e.tags || []).map(tagZh).filter(Boolean), tagsRaw: e.tags || [],
-      hp: null, energy: null, ver: e.sinceVersion,
-      share: e.shareId, restrictions: restrictionsOf(e), deckReqs: dreqs,
-      related: rel?.name || null, relatedId: e.relatedCharacterId ?? null,
-      playCost: e.playCost, dice: diceCost(e.playCost), energyCost: energyCost(e.playCost),
-      desc: (e.description || "").trim(), descAll: (e.description || "").toLowerCase(),
-    });
+    if (r.flags.shadow) { shadowFiltered++; continue; }
+    pool.push(poolEntryOf(r));
   }
+
   /* 统计：筛选 chips 计数与全局数据信息行都读这里 */
   const byType: Record<string, number> = {}, byEl: Record<string, number> = {}, byTag: Record<string, number> = {};
   for (const x of pool) {
@@ -93,4 +111,4 @@ function buildPool() {
   poolVersion++;
 }
 
-export { POOL_TYPE_ORDER, verTuple, verCmp, pool, poolVersion, poolStats, charElement, cardElement, buildPool };
+export { POOL_TYPE_ORDER, verTuple, verCmp, pool, poolVersion, poolStats, buildPool };

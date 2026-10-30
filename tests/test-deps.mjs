@@ -7,7 +7,10 @@ const { assert } = t;
 const harness = `
 return (async () => {
   await ensureData();
-  const byName = n => state.ENT.find(e => e.name === n);
+  const byName = n => cardRecords().find(e => e.name === n);
+  const idOf = r => Number(r.key.slice(r.key.indexOf(":") + 1));
+  /* 记录里的 reqs 就是构建期算好的结果——这里断言的是"判定确实被前移且结果正确" */
+  const deckReqsOf = r => (r ? r.reqs.deck : []);
 
   /* ===== 1. deckReqsOf：三类牌组限制解析 ===== */
   const ganyuTalent = byName("唯此一心");
@@ -39,7 +42,7 @@ return (async () => {
 
   /* 全库卫生 + 覆盖计数（154 需角色 / 14 需元素 / 11 需地区阵营） */
   let leaked = 0, nChar = 0, nEl = 0, nTag = 0;
-  for (const e of state.ENT) for (const r of deckReqsOf(e)) {
+  for (const e of cardRecords()) for (const r of e.reqs.deck) {
     if (/[#{]|REALNAME/.test(r.label + r.short)) leaked++;
     if (r.code === "deckChar") nChar++;
     else if (r.code === "deckEl") nEl++;
@@ -49,7 +52,7 @@ return (async () => {
   assert(nChar === 154 && nEl === 14 && nTag === 11,
     "覆盖计数：" + nChar + " 张需角色 / " + nEl + " 张需元素 / " + nTag + " 张需地区阵营");
 
-  const plain = state.ENT.find(e => e.shareId != null && ["GCG_CARD_MODIFY", "GCG_CARD_EVENT"].includes(e.type) && deckReqsOf(e).length === 0);
+  const plain = cardRecords().find(e => e.share != null && ["GCG_CARD_MODIFY", "GCG_CARD_EVENT"].includes(e.typeRaw) && e.reqs.deck.length === 0);
   assert(plain && deckReqsOf(plain).length === 0, "普通卡（" + plain.name + "）无牌组限制");
 
   /* ===== 2. deckReqMet 校验语义 ===== */
@@ -123,8 +126,8 @@ return (async () => {
   assert(testNames.every(n => !pool.some(x => x.name === n)), "测试卡全部不进卡池");
   assert(!searchCards("test").some(r => r.kind === "card" && testNames.includes(r.name)), "检索 test 不出测试卡");
   assert(!searchCards("测试").some(r => r.kind === "card" && r.name.includes("测试")), "检索「测试」不出测试卡");
-  assert(testNames.every(n => state.ENT.some(e => e.name === n)), "测试卡仍在原始数据中（详情深链可查）");
-  const testId = state.ENT.find(e => e.name === "（test）测试用").id;
+  assert(testNames.every(n => cardRecords().some(e => e.name === n)), "测试卡仍在数据集里（详情深链可查）");
+  const testId = idOf(cardRecords().find(e => e.name === "（test）测试用"));
   showDetail(testId);
   assert(String($("detail").innerHTML).includes("测试用"), "测试卡详情深链仍可渲染");
   draftClear();
@@ -158,10 +161,11 @@ return (async () => {
   draftClear();
   draftAdd(1101); draftAdd(1102); draftAdd(1301);
   draftAdd(211011); draftAdd(331101);
-  const fill = state.ENT.filter(e => e.shareId != null && ["GCG_CARD_MODIFY", "GCG_CARD_EVENT", "GCG_CARD_ASSIST", "GCG_CARD_SUPPORT"].includes(e.type)
-    && deckReqsOf(e).length === 0 && !(e.tags || []).includes("GCG_TAG_LEGEND"));
+  const fill = cardRecords().filter(e => e.share != null && ["GCG_CARD_MODIFY", "GCG_CARD_EVENT", "GCG_CARD_ASSIST", "GCG_CARD_SUPPORT"].includes(e.typeRaw)
+    && e.reqs.deck.length === 0 && !e.stats.tagsRaw.includes("GCG_TAG_LEGEND"));
   for (const e of fill) {
-    while (draftTotal() < 30 && (draft.cards.get(e.id) || 0) < 2) draftAdd(e.id);
+    const eid = idOf(e);
+    while (draftTotal() < 30 && (draft.cards.get(eid) || 0) < 2) draftAdd(eid);
     if (draftTotal() >= 30) break;
   }
   assert(draftTotal() === 30, "端到端：凑满 30 张行动牌");

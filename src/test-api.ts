@@ -13,6 +13,7 @@ export * from "./core/resources";
 export * from "./core/layers";
 export * from "./data/model";
 export * from "./data/state";
+export * from "./data/records";
 export * from "./types";
 export * from "./07-dataset";
 export * from "./10-codec";

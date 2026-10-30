@@ -2,14 +2,12 @@
 import { decodeRaw } from "./10-codec";
 import { $ } from "./core/dom";
 import { ensureData } from "./20-data";
-import { cardElement } from "./45-pool";
-import { deckReqsOf, diceCost, energyCost, restrictionsOf } from "./30-deps";
+import { idOfShare, recordOfId, nameOfId } from "./data/records";
 import { renderGrid, renderList, renderSummary } from "./85-views";
 import { state } from "./data/state";
 import { STORAGE_KEYS, tagZh, eleIcon } from "./core/resources";
 import { esc, setStatus } from "./core/dom";
 import { registerLayer } from "./core/layers";
-import { TYPE_ZH } from "./data/model";
 import { pool } from "./45-pool";
 
 /* ---------- 历史 ---------- */
@@ -53,7 +51,7 @@ function parseShareIds(code) {
   const src = String(code || "").trim();
   const shareIds = decodeRaw(src);
   const ids = shareIds.map(s => {
-    const id = state.shareMap[s];
+    const id = idOfShare(s);
     if (!id) throw new Error(`未知的分享 id ${s}，分享码可能有误或数据版本不匹配`);
     return id;
   });
@@ -74,17 +72,17 @@ async function decodeAndRender(code: string, opts: { noHash?: boolean; noHistory
     const { charIds, cardIds, countMap } = parseShareIds(code);
     const groups = {};
     for (const [id, count] of countMap) {
-      const e = state.entById.get(id);
+      const e = recordOfId(id);
       if (!e) throw new Error(`未知卡牌 id ${id}`);
-      const type = TYPE_ZH[e.type || ""] || e.type || "";
+      const type = e.typeZh;
       (groups[type] ??= []).push({
-        id, count, name: e.name, type, typeRaw: e.type, element: cardElement(e),
-        tags: (e.tags || []).map(tagZh).filter(Boolean), tagsRaw: e.tags || [],
-        playCost: e.playCost, dice: diceCost(e.playCost), energy: energyCost(e.playCost),
-        related: e.relatedCharacterId ? state.charById.get(e.relatedCharacterId)?.name : null,
-        relatedId: e.relatedCharacterId ?? null,
-        restrictions: restrictionsOf(e), deckReqs: deckReqsOf(e),
-        desc: (e.description || "").trim(), since: e.sinceVersion,
+        id, count, name: e.name, type, typeRaw: e.typeRaw, element: e.stats.element,
+        tags: e.stats.tags, tagsRaw: e.stats.tagsRaw,
+        playCost: e.stats.cost, dice: e.stats.dice, energy: e.stats.energy,
+        related: e.rel.relatedCharacterId == null ? null : nameOfId(e.rel.relatedCharacterId),
+        relatedId: e.rel.relatedCharacterId ?? null,
+        restrictions: e.reqs.play, deckReqs: e.reqs.deck,
+        desc: e.desc.effect.trim(), since: e.version,
       });
     }
     const known = ["装备牌", "支援牌", "事件牌", "援助牌"];
@@ -93,10 +91,10 @@ async function decodeAndRender(code: string, opts: { noHash?: boolean; noHistory
     state.current = {
       code, charIds, cardIds,
       chars: charIds.map(id => {
-        const c = state.charById.get(id);
+        const c = recordOfId(id);
         if (!c) throw new Error(`未知角色 id ${id}`);
-        return { id, name: c.name, hp: c.hp, energy: c.maxEnergy, since: c.sinceVersion,
-          element: ((c.tags || []).find(t => t.startsWith("GCG_TAG_ELEMENT")) || "").replace("GCG_TAG_ELEMENT_", "") };
+        return { id, name: c.name, hp: c.stats.hp ?? undefined, energy: c.stats.maxEnergy ?? undefined,
+          since: c.version, element: c.stats.element };
       }),
       groups, order,
     };

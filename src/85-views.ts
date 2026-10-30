@@ -1,10 +1,11 @@
 /* 85-views.ts —— 卡面 / 列表视图与卡库浏览：筛选、分面、分页、瓦片渲染。 */
-import { R_STYLE, R_ZH, allReqs, deckReqsOf, depBadges, energyCost, reqElement, restrictionsOf } from "./30-deps";
+import { R_STYLE, R_ZH, allReqs, depBadges, reqElement } from "./30-deps";
+import { recordOfId, isCharId } from "./data/records";
 import { $ } from "./core/dom";
 import { showOdds } from "./86-odds";
 import { CAT_ORDER, clearBrowseFilters, corpusKey, hlText, loadRecent, nearNames, resultTypeLabel, searchCards, searchState, toggleSearchScope } from "./70-search";
 import { termEntries } from "./40-concepts";
-import { POOL_TYPE_ORDER, cardElement, pool, poolStats, poolVersion, verCmp } from "./45-pool";
+import { POOL_TYPE_ORDER, pool, poolStats, poolVersion, verCmp } from "./45-pool";
 import { copyLimit, draft, draftAdd } from "./80-deck";
 import { dataReady } from "./20-data";
 import { openTermName, showDetail } from "./90-detail";
@@ -12,7 +13,7 @@ import { state } from "./data/state";
 import { STORAGE_KEYS, imgFull, ELE_ZH, ELE_COLOR, ENERGY_ICON, ELE_ICONS, eleIcon, enPips } from "./core/resources";
 import { esc } from "./core/dom";
 import type { PoolEntry, SearchHit } from "./types";
-import { TYPE_ZH, typeZhOf, isDeckable, isFieldEntity, cardArtHtml } from "./data/model";
+import { TYPE_ZH, cardArtHtml } from "./data/model";
 import { costHtml, costText } from "./30-deps";
 import { linkify } from "./40-concepts";
 import { KIND_ZH } from "./50-backlinks";
@@ -190,16 +191,16 @@ function searchTile(r) {
   }
   const isChar = r.kind === "char";
   /* kind 为角色/卡牌时 id 必定存在（概念命中走上面分支），这里取到的是原始记录 */
-  const raw = isChar ? state.charById.get(r.id!) : state.entById.get(r.id!);
+  const raw = recordOfId(r.id!);
   if (!raw) return "";   /* 数据里出现检索命中但卡池缺记录：宁可空着也不渲染半张卡 */
-  const ele = isChar ? ((raw!.tags || []).find(t => t.startsWith("GCG_TAG_ELEMENT")) || "").replace("GCG_TAG_ELEMENT_", "") : cardElement(raw);
-  const meta = isChar ? `${eleIcon(ele)} ${ELE_ZH[ele] || ele} · 生命 ${raw.hp} · 充能 ${raw.maxEnergy}`
-    : `${ele ? eleIcon(ele) + " · " : ""}${esc(typeZhOf(raw))}${costText(raw.playCost) ? " · " + esc(costText(raw.playCost)) : ""}`;
+  const ele = raw.stats.element;
+  const meta = isChar ? `${eleIcon(ele)} ${ELE_ZH[ele] || ele} · 生命 ${raw.stats.hp} · 充能 ${raw.stats.maxEnergy}`
+    : `${ele ? eleIcon(ele) + " · " : ""}${esc(raw.typeZh)}${costText(raw.stats.cost) ? " · " + esc(costText(raw.stats.cost)) : ""}`;
   /* 依赖徽标：与卡面/卡库同一套渲染（牌组限制 + 打出限制） */
-  const badges = isChar ? "" : depBadges([...deckReqsOf(raw), ...restrictionsOf(raw)]);
-  /* 不可构筑原因区分：对局实体（状态/召唤物）vs 历史版本变体 —— 判据统一来自 12-model */
+  const badges = isChar ? "" : depBadges([...raw.reqs.deck, ...raw.reqs.play]);
+  /* 不可构筑原因区分：对局实体（状态/召唤物）vs 历史版本变体 */
   const noShareWarn = r.noShare
-    ? (isFieldEntity(raw)
+    ? (raw.domain === "field"
       ? `<span class="vwarn" title="对局中生成的实体，不可加入构筑">实体</span>`
       : `<span class="vwarn" title="历史版本变体，不可加入构筑">变体</span>`)
     : "";
@@ -345,7 +346,7 @@ function browseFilter(st = browseState): PoolEntry[] {
   return list;
 }
 /* ---------- 可构筑 / 不可构筑：卡库的分组 ----------
-   判据只有「有没有分享 id」（12-model 的 isDeckable），不按类型再猜一次。
+   判据只有「有没有分享 id」（构建期写进 record.share），不按类型再猜一次。
    卡库的用途是找构筑组件，把 800 多个对局实体（状态/召唤物/队伍状态）与历史
    变体混排进来，真正能用的 600 多张会被淹掉——所以默认只列可构筑的，
    其余收进折叠分组；需要查实体数据时展开即可，展开状态记在本地。 */
@@ -495,7 +496,7 @@ function syncTileQty() {
   const nodes = document.querySelectorAll(".tile[data-id]");
   for (const el of nodes) {
     const id = Number(el.dataset.id);
-    const n = state.charById.has(id) ? 0 : (draft.cards.get(id) || 0);
+    const n = isCharId(id) ? 0 : (draft.cards.get(id) || 0);
     const box = el.querySelector(".imgbox");
     if (!box) continue;
     let b = box.querySelector(".qcnt") as HTMLElement | null;

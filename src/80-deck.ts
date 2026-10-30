@@ -1,17 +1,16 @@
 /* 80-deck.ts —— 牌组草稿：增删、份数上限、持久化与分享码生成。 */
-import { costText, deckReqMet, deckReqsOf } from "./30-deps";
+import { costText, deckReqMet, reqGapText } from "./30-deps";
+import { recordOfId, shareOfId, nameOfId, isCharId } from "./data/records";
 import { $ } from "./core/dom";
 import { decodeRaw, encodeRaw } from "./10-codec";
 import { syncTileQty } from "./85-views";
-import { cardElement, charElement } from "./45-pool";
+import { pool } from "./45-pool";
 import { state } from "./data/state";
 import type { Deck, Draft } from "./types";
 import { STORAGE_KEYS, imgFull, eleIcon } from "./core/resources";
 import { esc, toast } from "./core/dom";
 import { registerLayer, syncScrollLock } from "./core/layers";
 import { TYPE_ZH } from "./data/model";
-import { reqGapText } from "./30-deps";
-import { pool } from "./45-pool";
 
 /* ---------- 牌组：多牌组存储 + 草稿门面 ----------
    decks: [{id, name, chars:[], cards:[[id,count]], updatedAt}]，持久化于 localStorage。
@@ -110,8 +109,8 @@ function loadDraft() {
 }
 /* 数据就绪后清理失效 id（数据版本更新导致旧卡不存在） */
 function pruneDraft() {
-  draft.chars = draft.chars.filter(id => state.charById.has(id));
-  draft.cards = new Map([...draft.cards].filter(([id, v]) => state.entById.has(id) && v > 0));
+  draft.chars = draft.chars.filter(id => isCharId(id));
+  draft.cards = new Map([...draft.cards].filter(([id, v]) => !!recordOfId(id) && v > 0));
   saveDraft();
 }
 function draftTotal() { let n = 0; for (const v of draft.cards.values()) n += v; return n; }
@@ -120,24 +119,24 @@ function draftTotal() { let n = 0; for (const v of draft.cards.values()) n += v;
    改一处漏两处时就会出现「管理面板能加到 2、详情只能加 1」这类不一致。 */
 const COPY_LIMIT = 2, LEGEND_COPY_LIMIT = 1;
 function copyLimit(idOrEnt) {
-  const e = typeof idOrEnt === "object" ? idOrEnt : state.entById.get(idOrEnt);
-  return (e && (e.tags || []).includes("GCG_TAG_LEGEND")) ? LEGEND_COPY_LIMIT : COPY_LIMIT;
+  const e = typeof idOrEnt === "object" ? idOrEnt : recordOfId(idOrEnt);
+  return (e && (e.stats.tagsRaw || []).includes("GCG_TAG_LEGEND")) ? LEGEND_COPY_LIMIT : COPY_LIMIT;
 }
 function draftAdd(id) {
   let msg = "已加入当前牌组";
-  if (state.charById.has(id)) {
-    if (state.idToShare[id] == null) { toast("该角色版本不可加入构筑", true); return; }
+  if (isCharId(id)) {
+    if (shareOfId(id) == null) { toast("该角色版本不可加入构筑", true); return; }
     if (draft.chars.includes(id)) { toast("该角色已在牌组中"); return; }
     if (draft.chars.length >= 3) { toast("角色槽已满（3 名）", true); return; }
     draft.chars.push(id);
-    msg = `已加入角色「${state.charById.get(id)?.name || id}」（${draft.chars.length}/3）`;
-  } else if (state.entById.has(id)) {
-    if (state.idToShare[id] == null) { toast("该版本不可加入构筑", true); return; }
-    const e = state.entById.get(id);
+    msg = `已加入角色「${recordOfId(id)?.name || id}」（${draft.chars.length}/3）`;
+  } else if (!!recordOfId(id)) {
+    if (shareOfId(id) == null) { toast("该版本不可加入构筑", true); return; }
+    const e = recordOfId(id);
     if (!e) { toast("该卡牌不在卡池中", true); return; }
     /* 牌组构筑门槛：不满足「才能加入牌组」的条件时拒绝加入（与官方选卡一致），
        并说明缺什么——先提示而不是让用户生成分享码时才发现 */
-    const bad = deckReqsOf(e).find(r => !deckReqMet(r, draft.chars));
+    const bad = (e ? e.reqs.deck : []).find(r => !deckReqMet(r, draft.chars));
     if (bad) { toast(`「${e.name}」无法加入：${reqGapText(bad, draft.chars)}`, true); return; }
     const cur = draft.cards.get(id) || 0;
     const max = copyLimit(e);
@@ -156,14 +155,14 @@ function draftRemoveChar(id) { draft.chars = draft.chars.filter(x => x !== id); 
 function draftRemoveCard(id) { draft.cards.delete(id); saveDraft(); renderDraft(); }
 function draftSetCount(id, d) {
   const cur = draft.cards.get(id) || 0, next = cur + d;
-  const e = state.entById.get(id);
+  const e = recordOfId(id);
   const max = copyLimit(e);
   if (next <= 0) draftRemoveCard(id);
   else if (next > max) return;
   else if (d > 0 && draftTotal() >= 30) { toast("行动牌已满（30 张）", true); return; }
   else {
     /* 加量同样过构筑门槛：中途换掉角色后，旧卡不应继续加量 */
-    const bad = e ? deckReqsOf(e).find(r => !deckReqMet(r, draft.chars)) : null;
+    const bad = e ? (e ? e.reqs.deck : []).find(r => !deckReqMet(r, draft.chars)) : null;
     if (bad) { toast(`「${e?.name || id}」无法加入：${reqGapText(bad, draft.chars)}`, true); return; }
     draft.cards.set(id, next), saveDraft(), renderDraft();
   }
@@ -183,14 +182,14 @@ function deckProblems() {
   const legendCount = [...draft.cards].filter(([id]) => copyLimit(id) === 1).reduce((a, [, c]) => a + c, 0);
   if (legendCount > 1) errs.push(`秘传牌整套限 1 张（当前 ${legendCount}）`);
   const over = [...draft.cards].filter(([id, c]) => c > copyLimit(id));
-  if (over.length) errs.push(`${over.length} 种卡牌超过同名上限（${over.map(([id]) => state.entById.get(id)?.name || id).join("、")}）`);
+  if (over.length) errs.push(`${over.length} 种卡牌超过同名上限（${over.map(([id]) => recordOfId(id)?.name || id).join("、")}）`);
   /* 牌组限制（才能加入牌组的门槛）：当前 3 名角色是否满足每张卡的构筑依赖。
      同一缺口归并成一条，避免整齐的共鸣套刷出十几行重复提示。 */
   const byReq = new Map();
   for (const [id] of draft.cards) {
-    const e = state.entById.get(id);
+    const e = recordOfId(id);
     if (!e) continue;
-    for (const r of deckReqsOf(e)) {
+    for (const r of (e ? e.reqs.deck : [])) {
       if (deckReqMet(r, draft.chars)) continue;
       const k = r.code + "|" + (r.tag || r.name || "");
       if (!byReq.has(k)) byReq.set(k, { req: r, cards: [] });
@@ -207,8 +206,8 @@ function draftEncode() {
   if (errs.length) throw new Error(errs[0]);
   const ids = [...draft.chars, ...[...draft.cards].flatMap(([id, c]) => Array(c).fill(id))];
   const shareIds = ids.map(id => {
-    const s = state.idToShare[id];
-    if (s == null) throw new Error(`「${(state.charById.get(id) || state.entById.get(id))?.name || id}」无分享 id，不可生成分享码`);
+    const s = shareOfId(id);
+    if (s == null) throw new Error(`「${(recordOfId(id) || recordOfId(id))?.name || id}」无分享 id，不可生成分享码`);
     return s;
   });
   const code = encodeRaw(shareIds);
@@ -238,9 +237,9 @@ function renderDraftPanel() {
   const slot = i => {
     const id = draft.chars[i];
     if (id == null) return `<div class="dslot empty"><span>空角色槽</span></div>`;
-    const c = state.charById.get(id);
+    const c = recordOfId(id);
     if (!c) return `<div class="dslot empty"><span>失效角色</span></div>`;
-    const el = charElement(c);
+    const el = (c ? c.stats.element : "");
     return `<div class="dslot"><img src="${imgFull(id)}" loading="lazy" decoding="async" alt="">
       <b>${el ? eleIcon(el) : ""}${esc(c.name)}</b><button data-rmc="${id}" title="移除">✕</button></div>`;
   };
@@ -248,7 +247,7 @@ function renderDraftPanel() {
   const deckList = decks.map(d => {
     const n = d.cards.reduce((s, [, c]) => s + c, 0);
     const avatars = d.chars.slice(0, 3).map(id => {
-      const c = state.charById.get(id);
+      const c = recordOfId(id);
       return c ? `<img class="dk-av" src="${imgFull(id)}" alt="" title="${esc(c.name)}" loading="lazy">` : "";
     }).join("");
     const name = deckRenameId === d.id
@@ -265,9 +264,9 @@ function renderDraftPanel() {
   }).join("");
   const byType = {};
   for (const [id, count] of draft.cards) {
-    const e = state.entById.get(id);
+    const e = recordOfId(id);
     if (!e) continue;
-    (byType[TYPE_ZH[e.type || ""]] ??= []).push({ id, count, name: e.name, cost: costText(e.playCost), el: cardElement(e) });
+    (byType[e.typeZh] ??= []).push({ id, count, name: e.name, cost: costText(e.stats.cost), el: (e ? e.stats.element : "") });
   }
   const order = ["装备牌", "支援牌", "事件牌"].filter(t => byType[t])
     .concat(Object.keys(byType).filter(t => !["装备牌", "支援牌", "事件牌"].includes(t)));

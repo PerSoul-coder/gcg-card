@@ -222,16 +222,20 @@ type Record = {
   2. 多文件版：`fetch("gi-data/dataset.gz")` → `DecompressionStream("gzip")` → JSON；
   3. gzip 不可用：尝试 `dataset.br`（Brotli，视浏览器支持）；
   4. 再失败：回退 `fetch("gi-data/dataset.json")`。
-- `buildDatasetIndex()`：建立 `byKey` / `byKind` / `byDomain` / `byName`（norm/cosmetic）。
+- `buildDatasetIndex()`：建立 `byKey` / `byKind`。
+- 记录索引（`data/records.ts`）：把 `records` 编译成查表（`recordOfId` / `idOfShare` /
+  `shareOfId` / `charRecords` / `cardRecords`）。界面取「一张牌是什么」只有这一条路径。
 - 概念索引（`40-concepts`）：只读 `dataset.terms` 做字段投影，再编译成扫描正则。
   收录、去重、排序、身份挂载全部在构建期完成——运行时不再有 `entryBetter` / `descMirrors` /
   `kwMirrorsEntity` 这类启发式，也不再有「补充库与现网谁先注册」的顺序依赖。
+- 卡池（`45-pool`）：`charRecords()` + `cardRecords()` 的纯投影，字段一一对应，
+  统计（可构筑数 / 排除计数 / 分面计数）由投影结果算，不再二次推导。
 - 反链（`50-backlinks`）：只读 `refs` 翻转成「谁引用了我」，不再二次扫描文本。
 
-数据源分工（当前状态）：`dataset.records` 负责概念、技能、反链与所有判定；
-`CHAR` / `ENT` / `KW` 仍是卡库与详情渲染的字段来源（原始字段未经投影）。
-两套并存是已知的中间状态：把卡池与详情也切到记录，需要对 `stats` 做更完整的建模，
-留到 UI 重组（P3）之后统一处理。
+数据源分工（已收敛）：**运行时只有一份数据**——`dataset`，它包含概念、技能、反链、
+卡池与详情需要的全部字段。原始三份 JSON（characters / entities / keywords）只作为
+构建期输入存在，不再被内联、不再被下载、也不再有「回退到原始快照」这条路。
+运行时负责的只有：解码数据包、建查表、渲染。
 
 模块组织：源码为标准 ESM，依赖由各模块的 `import` 表达；`src/main.ts` 只固定顶层副作用次序。浏览器产物由 esbuild 打成单个 IIFE（`dist/app.js`），因为单 HTML 需要内联脚本且要能在 `file://` 下运行。测试执行同一份产物，通过 `src/test-api.ts` 的导出面访问内部符号——全局暴露只存在于测试进程。
 
@@ -295,13 +299,19 @@ type Record = {
 
 | 旧 | 新 |
 | --- | --- |
-| `CHAR[]` | `kind=char` 记录 |
-| `ENT[]` | `kind=card` 记录（domain=card/field） |
+| `CHAR[]` | `charRecords()`（`kind=char` 记录） |
+| `ENT[]` | `cardRecords()`（`kind=card` 记录，domain=card/field） |
 | `KW[]` | `kind=term` 记录 |
 | `SKILLS[]` | `kind=skill` 记录（含角色技能与装备牌特技） |
-| `pool[]` | 视图投影：`flags.poolable` |
-| `termIndex` | `byName` 索引 |
+| `charById` / `entById` / `charByName` | `recordOfId` / `nameOfId`（data/records.ts） |
+| `shareMap` / `idToShare` | `idOfShare` / `shareOfId`（按 `record.share` 建） |
+| `pool[]` | 视图投影：`charRecords()` + `flags.poolable` |
+| `termIndex` | `dataset.terms` 投影 |
 | `backlinks` | 记录的 `refs` 反向表 |
+| `deckReqsOf` / `restrictionsOf` / `isTestCard` | 构建期写入 `record.reqs` / `flags.test` |
+| `cardElement` / `charElement` | `record.stats.element`（构建期按 tag → 关联角色 → 元素门槛推导） |
+| 三份原始 JSON 的 24h 本地缓存 | 无：数据包由站点提供，刷新用时间戳绕过 HTTP 缓存 |
+| 单文件内联原始快照 | 单文件只内联 `dataset.gz`（3.1MB → 0.94MB） |
 
 ---
 
@@ -339,6 +349,15 @@ P3 验收：
 - 切到「牌组 · 卡面 / 列表」时操作条才出现，返回卡库即收起（`body[data-view]` 驱动，不靠入口逐个调用）；
 - 页头「更多」只含全局动作（刷新数据 / 数据信息 / 说明），牌组动作在牌组操作条内；
 - 外部分享链接 `#<分享码>` 解析后直达卡面视图；
+
+P4 验收：
+
+- 卡池与详情不再读原始快照：全库 1480 条卡池条目与记录逐字段对账，0 差异
+  （两处刻意的更正除外：秘传费用不再算作骰子、8 个无分享码的角色不再标为可入组）；
+- 牌组限制与打出限制对账：1347 张实体、179 条牌组限制、218 条打出限制，构建期与旧运行时完全一致；
+- `deckReqsOf` / `restrictionsOf` / `isTestCard` / `cardElement` 等运行时启发式已删除；
+- 单文件只内联 `dataset.gz`（0.94MB，gzip 542KB；原 3.12MB），轻量版 0.41MB；
+- 全量测试 14/14 通过，`tsc --noEmit` 0 错误。
 - 示例牌组改为按需加载，首屏不再写入历史记录。
 
 ## 12. 分阶段
@@ -349,3 +368,4 @@ P3 验收：
 | P1 | 检索语料统一、linkable、反链迁移 | 已完成：概念索引与反链全部消费统一记录；反应术语改构建期派生；linkable 与 mirror 解耦 |
 | P2 | 浮层层管理、滑动链、Esc | 已完成：core/layers 统一登记层序，Esc 只关最上层；锁滚动只对模态层（overlay / draftPanel），历史与对比栏不再误锁 |
 | P3 | UI 重组：默认卡库、分享码入口下沉 | 已完成：一级视图卡库在前；牌组操作条只属于牌组视图（body[data-view] 驱动显隐）；页头只放全局动作；首屏不再自动解析示例 |
+| P4 | 建模补齐：卡池 / 详情 / 对比 / 导出全部消费统一记录，删除原始快照与运行时启发式 | 已完成：记录补 `share` / `reqs` / `searchText` 与卡片元素；`data/records.ts` 成为唯一查表入口；`30-deps` 只剩渲染与校验；单文件只内联数据包 |

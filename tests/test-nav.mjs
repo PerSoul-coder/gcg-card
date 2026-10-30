@@ -6,6 +6,11 @@ const { assert } = t;
 
 const harness = `
 return (async () => {
+  /* 记录视图：卡池与索引都从这里取，测试断言的是同一份数据 */
+  const chars = () => charRecords();
+  const cards = () => cardRecords();
+  const idOf = r => Number(r.key.slice(r.key.indexOf(":") + 1));
+  const recByName = n => cards().find(r => r.name === n) || chars().find(r => r.name === n);
   await decodeAndRender(SAMPLE, { noHash: true });
 
   /* ===== 1. 卡面视图入口：翻页上下文 = 牌组内顺序 ===== */
@@ -46,9 +51,9 @@ return (async () => {
   showDetail(browseIds[7]);
   assert(topView().ids.length === browseIds.length && topView().idx === 7,
     "卡库入口：翻页上下文 = 当前可见列表（" + browseIds.length + " 张，位置 8）");
-  assert(!browseIds.some(id => isTestCard(state.entById.get(id) || {})), "卡库翻页列表不含测试卡");
+  assert(!browseIds.some(id => !!recordOfId(id)?.flags.test), "卡库翻页列表不含测试卡");
   /* 默认视图只列可构筑的牌：不可构筑的实体/变体收在折叠分组里，不参与翻页 */
-  assert(browseIds.every(id => (state.entById.get(id) || state.charById.get(id) || {}).shareId != null),
+  assert(browseIds.every(id => shareOfId(id) != null),
     "卡库折叠态：翻页列表只含可构筑条目");
   assert(browseIds.length < pool.length, "卡库折叠态：可见列表小于全库（" + browseIds.length + "/" + pool.length + "）");
 
@@ -197,19 +202,19 @@ return (async () => {
     "同码对比：无新增 / 移除 / 变化");
   const base = parseShareIds(SAMPLE);
   const used = new Set([...base.charIds, ...base.cardIds]);
-  const altCard = state.ENT.find(e => state.idToShare[e.id] != null && !used.has(e.id) && !isTestCard(e));
+  const altCard = cards().find(e => e.share != null && !used.has(idOf(e)) && !e.flags.test);
   const altCardIds = decodeRaw(SAMPLE).slice();
   /* 必须替换「只带 1 张」的行动牌：替换 2 张中的一张只会变成数量变化，不是移除 */
-  const singleSlot = altCardIds.findIndex((sid, i) => i >= 3 && base.countMap.get(state.shareMap[sid]) === 1);
+  const singleSlot = altCardIds.findIndex((sid, i) => i >= 3 && base.countMap.get(idOfShare(sid)) === 1);
   assert(singleSlot >= 3, "换牌用例：找到仅 1 张的行动牌槽位");
-  altCardIds[singleSlot] = state.idToShare[altCard.id];
+  altCardIds[singleSlot] = altCard.share;
   const altCode = encodeRaw(altCardIds);
   const cardDiff = diffDecks(SAMPLE, altCode);
   assert(cardDiff.added.length === 1 && cardDiff.removed.length === 1 && cardDiff.changed.length === 0,
     "换一张行动牌：新增 1 种 / 移除 1 种");
-  const altChar = state.CHAR.find(c => state.idToShare[c.id] != null && !base.charIds.includes(c.id) && !isTestCard(c));
+  const altChar = chars().find(c => c.share != null && !base.charIds.includes(idOf(c)) && !c.flags.test);
   const altCharIds = decodeRaw(SAMPLE).slice();
-  altCharIds[2] = state.idToShare[altChar.id];
+  altCharIds[2] = altChar.share;
   const charCode = encodeRaw(altCharIds);
   const charDiff = diffDecks(SAMPLE, charCode);
   assert(charDiff.charAdded.length === 1 && charDiff.charRemoved.length === 1,

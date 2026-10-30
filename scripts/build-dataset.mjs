@@ -58,7 +58,8 @@ function loadTaxonomy() {
     typeZhOf: __MODEL.typeZhOf, typeSpecOf: __MODEL.typeSpecOf,
     nameKey: __MODEL.nameKey, cosmeticKey: __MODEL.cosmeticKey,
     PREPARED_STATE_RE: __MODEL.PREPARED_STATE_RE,
-    TAG_ZH: __RES.TAG_ZH, ELE_ZH: __RES.ELE_ZH, WEAPON_ZH: __RES.WEAPON_ZH, tagZh: __RES.tagZh
+    TAG_ZH: __RES.TAG_ZH, ELE_ZH: __RES.ELE_ZH, WEAPON_ZH: __RES.WEAPON_ZH, tagZh: __RES.tagZh,
+    ELE_CODE: __RES.ELE_CODE, NATION_CODE: __RES.NATION_CODE, CAMP_CODE: __RES.CAMP_CODE
   })`;
   return vm.runInContext(code + expr, ctx);
 }
@@ -95,8 +96,15 @@ function pinyinOf(name) {
 }
 
 /* ---------- 3. 工具 ---------- */
-const diceCostOf = cost => (cost || []).filter(c => /^GCG_COST_DICE/.test(c) && !/ENERGY/.test(c)).length;
-const energyCostOf = cost => (cost || []).filter(c => c === "GCG_COST_ENERGY").length;
+/* 费用是按「条目 × 数量」计的：{type:"GCG_COST_DICE_GEO", count:2} 是 2 点岩骰，
+   不是 1 点。早先这里按条目数（length）算，于是所有卡的费用都算成了 0/1，
+   直到卡池要从记录里取费用才暴露——所以判据必须落在 count 上。 */
+const costTypeOf = c => (c && typeof c === "object" ? String(c.type || "") : String(c || ""));
+const costCountOf = c => (c && typeof c === "object" ? Number(c.count) || 0 : 1);
+const isEnergyCost = c => costTypeOf(c) === "GCG_COST_ENERGY";
+const isDiceCost = c => /^GCG_COST_DICE/.test(costTypeOf(c)) && !isEnergyCost(c);
+const diceCostOf = cost => (cost || []).filter(isDiceCost).reduce((a, c) => a + costCountOf(c), 0);
+const energyCostOf = cost => (cost || []).filter(isEnergyCost).reduce((a, c) => a + costCountOf(c), 0);
 const elemOfTags = tags => (tags || []).find(t => t.startsWith("GCG_TAG_ELEMENT"))?.replace("GCG_TAG_ELEMENT_", "") || "";
 const normDesc = s => String(s || "").replace(/^费用：\d+\s*/, "").replace(/[\s\p{P}\p{S}]/gu, "");
 /* 编辑距离相似度。只比长度比例是不够的：两条描述长度相同但内容完全不同
@@ -142,6 +150,103 @@ for (const e of ENT) {
   const k = T.nameKey(e.name);
   if (!shadowBySkill.has(k)) shadowBySkill.set(k, { stateId: e.id, stateName: e.name });
 }
+
+/* ---------- 5.5 牌间依赖（构筑门槛 + 打出限制） ----------
+ * 这两类判定过去在运行时的 30-deps 里按 tags + 描述正则现算：
+ *   · 牌组限制 deckChar / deckEl / deckTag —— 加入牌组前必须满足；
+ *   · 打出限制 legend / talent / weapon / once —— 对局中生效。
+ * 现算的问题是同一张牌在卡库、详情、导出三处各算一遍，规则改一处就漏两处；
+ * 而且 deckChar 需要角色名，运行时要靠 charById 反查，index 没建好就静默失配。
+ * 这里一次算完写进记录，运行期只读。 */
+const charNameById = new Map(CHAR.map(c => [c.id, c.name]));
+const charIdByName = new Map(CHAR.map(c => [c.name, c.id]));
+const REQ_CHAR_RE = /牌组中包含([^，。]{2,12}?)，才能加入牌组/;
+const REQ_MIN_RE = /牌组包含至少(\d+)个[^，]*?角色，才能加入牌组/;
+const REQ_MIN_PARTS_RE = /牌组包含至少(\d+)个([^，]*?)(元素|)角色，才能加入牌组/;
+
+function deckReqsOf(e) {
+  const R = [];
+  /* 具体角色：结构化 id 优先；id 缺失（新卡暂无角色数据）时退回描述正则 */
+  if (e.relatedCharacterId != null) {
+    const n = charNameById.get(e.relatedCharacterId) || "";
+    if (n) R.push({ code: "deckChar", name: n, charId: e.relatedCharacterId,
+      short: `牌组·${n}`, label: `牌组限制：牌组中需包含角色「${n}」才能加入` });
+  } else {
+    const m = REQ_CHAR_RE.exec(e.description || "");
+    /* 描述里含 #{REALNAME[..]} 占位的卡（如梦迹一风）取不到真名，宁可不判也不写错名字 */
+    if (m && !/[#{\[]/.test(m[1])) {
+      const n = m[1].trim();
+      R.push({ code: "deckChar", name: n, charId: charIdByName.get(n) ?? null,
+        short: `牌组·${n}`, label: `牌组限制：牌组中需包含角色「${n}」才能加入` });
+    }
+  }
+  /* 元素 / 地区 / 阵营：结构化 tags 按基名归并（同一 tag 重复出现只收一次）；
+     tags 缺失时用描述兜底解析，标签码从反查表还原 */
+  const seen = new Set();
+  const push = (tag, zh, n) => {
+    if (seen.has(tag)) return;
+    seen.add(tag);
+    if (tag.startsWith("GCG_TAG_ELEMENT_"))
+      R.push({ code: "deckEl", tag, name: zh, n, short: `牌组·${n}×${zh}`,
+        label: `牌组限制：牌组需包含至少 ${n} 名${zh}元素角色才能加入` });
+    else
+      R.push({ code: "deckTag", tag, name: zh, n, short: `牌组·${n}×${zh}`,
+        label: `牌组限制：牌组需包含至少 ${n} 名「${zh}」角色才能加入` });
+  };
+  for (const t of e.relatedCharacterTags || []) {
+    if (!/^GCG_TAG_(ELEMENT|NATION|CAMP)_(.+)$/.test(t)) continue;
+    const mn = REQ_MIN_RE.exec(e.description || "");
+    push(t, T.tagZh(t), mn ? +mn[1] : 2);
+  }
+  if (!seen.size) {
+    const m = REQ_MIN_PARTS_RE.exec(e.description || "");
+    if (m) {
+      const n = +m[1], txt = m[2].replace(/^「|」$/g, "");
+      const tag = T.ELE_CODE[txt] || T.NATION_CODE[txt] || T.CAMP_CODE[txt];
+      if (tag) push(tag, txt, n);
+    }
+  }
+  return R;
+}
+
+function playRestrictionsOf(e) {
+  const R = [];
+  const tags = e.tags || [];
+  if (tags.includes("GCG_TAG_LEGEND"))
+    R.push({ code: "legend", short: "秘传·限1", label: "秘传牌：整套牌组只能放入 1 张（含同名卡）" });
+  if (tags.includes("GCG_TAG_TALENT") && e.relatedCharacterId != null) {
+    const n = charNameById.get(e.relatedCharacterId) || e.relatedCharacterId;
+    R.push({ code: "talent", short: "须在场", label: `天赋牌：仅当 ${n} 在场时才能打出` });
+  }
+  if (tags.includes("GCG_TAG_WEAPON")) {
+    const w = tags.find(t => /^GCG_TAG_WEAPON_(?!.*NONE$).+$/.test(t) && t !== "GCG_TAG_WEAPON");
+    if (w) {
+      const zh = T.WEAPON_ZH[w.replace("GCG_TAG_WEAPON_", "")] || w;
+      R.push({ code: "weapon", short: zh, label: `装备限制：仅可装备给${zh}角色` });
+    }
+  }
+  const m = /最多打出(\d+|一|两|二|三)张/.exec(e.description || "");
+  if (m) R.push({ code: "once", short: `限${m[1]}张`, label: `打出限制：本场对局最多打出 ${m[1]} 张` });
+  return R;
+}
+const NO_REQS = { deck: [], play: [] };
+
+/* 卡牌元素：自身 tag → 关联角色 → 牌组限制里的元素门槛（元素共鸣牌）。
+   天赋牌自身不带元素 tag，过去只能靠运行时的 cardElement 现推，
+   于是卡池（运行时）能筛元素、记录（构建期）却查不到。 */
+const charTagsById = new Map(CHAR.map(c => [c.id, c.tags || []]));
+function cardElementOf(e, tags) {
+  const own = elemOfTags(tags);
+  if (own) return own;
+  const relTags = e.relatedCharacterId != null ? charTagsById.get(e.relatedCharacterId) : null;
+  if (relTags) return elemOfTags(relTags);
+  const req = deckReqsOf(e).find(r => r.code === "deckEl");
+  return req && req.tag ? String(req.tag).replace("GCG_TAG_ELEMENT_", "") : "";
+}
+/* 检索语料：名称之外的全文（角色含简介与技能，卡牌含效果与特技），小写。
+   过去由卡池在运行时拼接，只服务卡库；检索若从记录取名字就永远匹配不到描述。 */
+const corpusOf = (name, english, texts) =>
+  [name, english, ...texts.filter(Boolean)].join("\n").toLowerCase();
 
 /* ---------- 6. 实体身份表（用于补充库接回真实身份） ---------- */
 const entByNorm = new Map();
@@ -198,6 +303,12 @@ for (const c of CHAR) {
     },
     rel: { ownerKey: null, ownerName: null, ownerKind: null, relatedCharacterId: null, relatedCharacterKey: null },
     flags: { deckable: c.shareId != null, poolable: true, shadow: false, mirror: false, test: false, entity: false },
+    share: c.shareId ?? null,
+    reqs: NO_REQS,
+    searchText: corpusOf(c.name, c.englishName, [
+      (c.storyText || "").trim(),
+      ...(c.skills || []).map(x => `${x.name || ""}${x.description || ""}`),
+    ]),
     version: c.sinceVersion || "",
     refs: [], source: "piovium",
   });
@@ -230,6 +341,7 @@ for (const c of CHAR) {
       flags: {
         deckable: false, poolable: false, shadow: false, mirror: false, test: false, entity: false,
       },
+      share: null, reqs: NO_REQS, searchText: "",
       version: c.sinceVersion || "",
       refs: [], source: "piovium",
       prepared: !!turns || !!shadow, prepareTurns: turns ? Number(turns) : (shadow ? 1 : 0),
@@ -260,7 +372,7 @@ for (const e of ENT) {
       cost: e.playCost || [], dice: diceCostOf(e.playCost), energy: energyCostOf(e.playCost),
       hp: null, maxEnergy: null,
       tags: tags.map(T.tagZh).filter(Boolean), tagsRaw: tags,
-      element: elemOfTags(tags),
+      element: cardElementOf(e, tags),
     },
     rel: {
       ownerKey: null, ownerName: null, ownerKind: null,
@@ -275,6 +387,12 @@ for (const e of ENT) {
       test: isTestCard(e),
       entity: spec.domain === "field",
     },
+    share: e.shareId ?? null,
+    reqs: { deck: deckReqsOf(e), play: playRestrictionsOf(e) },
+    searchText: corpusOf(e.name, e.englishName, [
+      (e.description || "").trim(),
+      ...(e.skills || []).map(x => `${x.name || ""}${x.description || ""}`),
+    ]),
     version: e.sinceVersion || "",
     refs: [], source: "piovium",
   });
@@ -306,6 +424,7 @@ for (const e of ENT) {
       flags: {
         deckable: false, poolable: false, shadow: false, mirror: false, test: isTestCard(e), entity: false,
       },
+      share: null, reqs: NO_REQS, searchText: "",
       version: e.sinceVersion || "",
       refs: [], source: "piovium",
       prepared: false, prepareTurns: 0, stateId: null,
@@ -335,6 +454,7 @@ function termRecord({ key, name, desc, typeRaw, typeZh, source, art, rel, mirror
     stats: { cost: [], dice: -1, energy: 0, hp: null, maxEnergy: null, tags: [], tagsRaw: [], element: "" },
     rel: rel || { ownerKey: null, ownerName: null, ownerKind: null, relatedCharacterId: null, relatedCharacterKey: null },
     flags: { deckable: false, poolable: false, shadow: false, mirror: !!mirror, dupIdentity: !!dupIdentity, test: false, entity: false },
+    share: null, reqs: NO_REQS, searchText: "",
     version: "", refs: [], source,
     ...(extra || {}),
   };
