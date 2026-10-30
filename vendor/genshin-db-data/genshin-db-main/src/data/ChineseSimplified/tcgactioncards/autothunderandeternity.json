@@ -1,0 +1,16 @@
+{
+	"id": 520117,
+	"name": "自行·雷与永恒",
+	"cardtype": "GCG_CARD_ASSIST",
+	"cardtypetext": "支援牌",
+	"tags": [
+		"GCG_TAG_ABC"
+	],
+	"tagstext": [
+		"自走牌"
+	],
+	"description": "战斗开始时：我方最左侧角色角色等级+1，并且获得2点充能。",
+	"descriptionraw": "<color=#FFFFFFFF>战斗开始时：</color>我方最左侧角色$[K64]+1，并且获得2点$[K310]。",
+	"descriptionreplaced": "<color=#FFFFFFFF>战斗开始时：</color>我方最左侧角色<color=#FFFFFFFF>角色等级</color>+1，并且获得2点<color=#FFFFFFFF>{SPRITE_PRESET#1110}充能</color>。",
+	"playcost": []
+}

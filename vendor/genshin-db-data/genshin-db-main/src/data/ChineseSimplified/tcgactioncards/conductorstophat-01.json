@@ -1,0 +1,18 @@
+{
+	"id": 533008,
+	"name": "指挥的礼帽",
+	"cardtype": "GCG_CARD_MODIFY",
+	"cardtypetext": "装备牌",
+	"tags": [
+		"GCG_TAG_ARTIFACT",
+		"GCG_TAG_ABC"
+	],
+	"tagstext": [
+		"圣遗物",
+		"自走牌"
+	],
+	"description": "附属角色蓄力后：+4攻击力，并获得1点充能。（使用非蓄力技能后移除）",
+	"descriptionraw": "<color=#FFFFFFFF>附属角色蓄力后：</color>+4攻击力，并获得1点充能。（使用非蓄力技能后移除）",
+	"descriptionreplaced": "<color=#FFFFFFFF>附属角色蓄力后：</color>+4攻击力，并获得1点充能。（使用非蓄力技能后移除）",
+	"playcost": []
+}

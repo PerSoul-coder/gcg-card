@@ -1,0 +1,13 @@
+{
+	"id": 172022,
+	"name": "虹剑势",
+	"statustypetext": "阵营出战状态",
+	"cardtype": "GCG_CARD_ONSTAGE",
+	"cardtypetext": "出战状态",
+	"tags": [],
+	"description": "我方角色使用技能后：造成水元素伤害。（受行秋攻击力强化）",
+	"descriptionraw": "<color=#FFFFFFFF>我方角色使用技能后：</color>造成$[K152]。（受行秋攻击力强化）",
+	"descriptionreplaced": "<color=#FFFFFFFF>我方角色使用技能后：</color>造成{SPRITE_PRESET#2102}<color=#80C0FFFF>水元素伤害</color>。（受行秋攻击力强化）",
+	"countingtype": "GCG_TOKEN_LIFE",
+	"bufftype": "GCG_STATE_BUFF_HYDRO"
+}

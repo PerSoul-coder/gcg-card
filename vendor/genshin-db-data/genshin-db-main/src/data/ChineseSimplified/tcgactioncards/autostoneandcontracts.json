@@ -1,0 +1,16 @@
+{
+	"id": 520116,
+	"name": "自行·岩与契约",
+	"cardtype": "GCG_CARD_ASSIST",
+	"cardtypetext": "支援牌",
+	"tags": [
+		"GCG_TAG_ABC"
+	],
+	"tagstext": [
+		"自走牌"
+	],
+	"description": "战斗开始前：我方最左侧角色+1攻击力，最右侧角色+6最大生命值。",
+	"descriptionraw": "<color=#FFFFFFFF>战斗开始前：</color>我方最左侧角色+1攻击力，最右侧角色+6最大生命值。",
+	"descriptionreplaced": "<color=#FFFFFFFF>战斗开始前：</color>我方最左侧角色+1攻击力，最右侧角色+6最大生命值。",
+	"playcost": []
+}

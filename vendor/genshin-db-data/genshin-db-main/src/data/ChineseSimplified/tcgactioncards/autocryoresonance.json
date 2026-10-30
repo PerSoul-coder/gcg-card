@@ -1,0 +1,16 @@
+{
+	"id": 520108,
+	"name": "自行·冰之共鸣",
+	"cardtype": "GCG_CARD_ASSIST",
+	"cardtypetext": "支援牌",
+	"tags": [
+		"GCG_TAG_ABC"
+	],
+	"tagstext": [
+		"自走牌"
+	],
+	"description": "战斗开始时：我方有至少1个冰元素角色，本场对战敌方受到的伤害+1。如果我方有至少3个冰元素角色，则额外+1。（第4场战斗及之后，效果翻倍）",
+	"descriptionraw": "<color=#FFFFFFFF>战斗开始时：</color>我方有至少1个冰元素角色，本场对战敌方受到的伤害+1。如果我方有至少3个冰元素角色，则额外+1。（第4场战斗及之后，效果翻倍）",
+	"descriptionreplaced": "<color=#FFFFFFFF>战斗开始时：</color>我方有至少1个冰元素角色，本场对战敌方受到的伤害+1。如果我方有至少3个冰元素角色，则额外+1。（第4场战斗及之后，效果翻倍）",
+	"playcost": []
+}

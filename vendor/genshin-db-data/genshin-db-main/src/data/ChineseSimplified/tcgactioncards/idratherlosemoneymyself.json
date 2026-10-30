@@ -1,0 +1,15 @@
+{
+	"id": 332036,
+	"name": "「看到那小子挣钱…」",
+	"shareid": 405,
+	"cardtype": "GCG_CARD_EVENT",
+	"cardtypetext": "事件牌",
+	"tags": [],
+	"tagstext": [],
+	"description": "本回合中，对方每获得1个元素骰时，如果你未宣布回合结束，则你生成1个万能元素；否则，生成1点护盾。\n可用次数：3",
+	"descriptionraw": "本回合中，对方每获得1个元素骰时，如果你未宣布回合结束，则你生成1个$[K411]；否则，生成1点<color=#FFFFFFFF>$[C203]</color>。\\n<color=#FFFFFFFF>$[K3]：3</color>",
+	"descriptionreplaced": "本回合中，对方每获得1个元素骰时，如果你未宣布回合结束，则你生成1个<color=#FFFFFFFF>{SPRITE_PRESET#1111}万能元素</color>；否则，生成1点<color=#FFFFFFFF>护盾</color>。\\n<color=#FFFFFFFF><color=#FFFFFFFF>可用次数</color>：3</color>",
+	"storytitle": "「看到那小子挣钱…」",
+	"storytext": "「…比我自己亏钱还难受！」",
+	"playcost": []
+}

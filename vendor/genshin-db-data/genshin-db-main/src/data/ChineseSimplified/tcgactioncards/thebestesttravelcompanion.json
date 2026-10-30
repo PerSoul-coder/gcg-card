@@ -1,0 +1,21 @@
+{
+	"id": 332001,
+	"name": "最好的伙伴！",
+	"shareid": 241,
+	"cardtype": "GCG_CARD_EVENT",
+	"cardtypetext": "事件牌",
+	"tags": [],
+	"tagstext": [],
+	"description": "生成2个万能元素。",
+	"descriptionraw": "生成2个$[K411]。",
+	"descriptionreplaced": "生成2个<color=#FFFFFFFF>{SPRITE_PRESET#1111}万能元素</color>。",
+	"storytitle": "最好的伙伴！",
+	"storytext": "「你是万千星辰中的一颗，于我而言却是整个世界。」",
+	"source": "达成牌手手册的奖励条件后领取",
+	"playcost": [
+		{
+			"costtype": "GCG_COST_DICE_VOID",
+			"count": 2
+		}
+	]
+}

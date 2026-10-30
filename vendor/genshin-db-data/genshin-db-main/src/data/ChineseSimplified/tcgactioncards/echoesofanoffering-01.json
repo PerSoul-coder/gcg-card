@@ -1,0 +1,18 @@
+{
+	"id": 533012,
+	"name": "（test）来歆余响",
+	"cardtype": "GCG_CARD_MODIFY",
+	"cardtypetext": "装备牌",
+	"tags": [
+		"GCG_TAG_ARTIFACT",
+		"GCG_TAG_DISABLE"
+	],
+	"tagstext": [
+		"圣遗物",
+		"弃用"
+	],
+	"description": "（test）附属角色使用技能后：本回合+1攻击力。",
+	"descriptionraw": "（test）<color=#FFFFFFFF>附属角色使用技能后：</color>本回合+1攻击力。",
+	"descriptionreplaced": "（test）<color=#FFFFFFFF>附属角色使用技能后：</color>本回合+1攻击力。",
+	"playcost": []
+}

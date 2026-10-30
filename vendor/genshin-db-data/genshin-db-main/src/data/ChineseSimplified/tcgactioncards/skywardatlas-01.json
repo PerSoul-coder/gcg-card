@@ -1,0 +1,20 @@
+{
+	"id": 532105,
+	"name": "天空之卷",
+	"cardtype": "GCG_CARD_MODIFY",
+	"cardtypetext": "装备牌",
+	"tags": [
+		"GCG_TAG_WEAPON",
+		"GCG_TAG_WEAPON_CATALYST",
+		"GCG_TAG_ABC"
+	],
+	"tagstext": [
+		"武器",
+		"法器",
+		"自走牌"
+	],
+	"description": "攻击力+3。\n附属角色行动后：造成3点物理伤害。",
+	"descriptionraw": "攻击力+3。\\n<color=#FFFFFFFF>附属角色行动后：</color>造成3点$[K100]。",
+	"descriptionreplaced": "攻击力+3。\\n<color=#FFFFFFFF>附属角色行动后：</color>造成3点{SPRITE_PRESET#2100}<color=#FFFFFFFF>物理伤害</color>。",
+	"playcost": []
+}

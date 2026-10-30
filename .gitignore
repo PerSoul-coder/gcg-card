@@ -1,0 +1,8 @@
+node_modules/
+.build-tools/node_modules/
+.build-tools/_inspect*.mjs
+dist/
+site/
+.DS_Store
+Thumbs.db
+*.log

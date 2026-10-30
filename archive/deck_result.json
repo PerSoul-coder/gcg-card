@@ -1,0 +1,538 @@
+{
+  "code": "JDCS4mwOFiLBRXUkJlLiRkwkEmCx8YAPGxFxaLcWFYGBilgYI6Ey2zMdDLEyaVIWJJAA",
+  "roundTripVerified": true,
+  "characters": [
+    {
+      "id": 1711,
+      "name": "菈乌玛",
+      "hp": 11,
+      "maxEnergy": 2,
+      "element": "草",
+      "weapon": "法器",
+      "nation": "挪德卡莱",
+      "skills": [
+        "林麓旅踏",
+        "圣言述咏·终宵永眠",
+        "圣言述咏·众心为月",
+        "月兆祝赐·千籁恩宠",
+        "月兆祝赐·千籁恩宠"
+      ],
+      "sinceVersion": "v6.6.0"
+    },
+    {
+      "id": 1217,
+      "name": "哥伦比娅",
+      "hp": 10,
+      "maxEnergy": 3,
+      "element": "水",
+      "weapon": "法器",
+      "nation": "挪德卡莱",
+      "skills": [
+        "月露泼降",
+        "万古潮汐",
+        "她的乡愁",
+        "月兆祝赐·借汝月光",
+        "月兆祝赐·借汝月光",
+        "月露泼降",
+        ""
+      ],
+      "sinceVersion": "v7.1.0"
+    },
+    {
+      "id": 1211,
+      "name": "芙宁娜",
+      "hp": 12,
+      "maxEnergy": 2,
+      "element": "水",
+      "weapon": "单手剑",
+      "nation": "枫丹",
+      "skills": [
+        "独舞之邀",
+        "孤心沙龙",
+        "万众狂欢",
+        "",
+        "始基力：圣俗杂座"
+      ],
+      "sinceVersion": "v4.7.0"
+    }
+  ],
+  "cards": [
+    {
+      "id": 212111,
+      "name": "「诸君听我颂，共举爱之杯！」",
+      "type": "装备牌",
+      "tags": [
+        "GCG_TAG_TALENT",
+        "GCG_TAG_SLOWLY"
+      ],
+      "playCost": [
+        {
+          "type": "GCG_COST_DICE_HYDRO",
+          "count": 3
+        }
+      ],
+      "relatedCharacter": "芙宁娜",
+      "description": "战斗行动：我方出战角色为芙宁娜时，装备此牌。\n芙宁娜装备此牌后，立刻使用一次孤心沙龙。\n装备有此牌的芙宁娜使用孤心沙龙时，会对自身附属万众瞩目。（角色普通攻击时根据形态触发不同效果）\n（牌组中包含芙宁娜，才能加入牌组）",
+      "sinceVersion": "v4.7.0"
+    },
+    {
+      "id": 212171,
+      "name": "遍照花海，隐入群山",
+      "type": "装备牌",
+      "tags": [
+        "GCG_TAG_TALENT",
+        "GCG_TAG_SLOWLY"
+      ],
+      "playCost": [
+        {
+          "type": "GCG_COST_DICE_HYDRO",
+          "count": 3
+        }
+      ],
+      "relatedCharacter": "哥伦比娅",
+      "description": "战斗行动：我方出战角色为哥伦比娅时，装备此牌。\n哥伦比娅装备此牌后，立刻使用一次万古潮汐。\n装备有此卡牌的哥伦比娅在场时，敌方受到月感电后：我方一名充能未满的角色获得1点充能。\n敌方受到月绽放后：我方出战角色下次受到的伤害-1。\n敌方受到月结晶后：自动免费打出手牌中当前元素骰费用最高的1张月笼协奏。（每回合2次）\n（牌组中包含哥伦比娅，才能加入牌组）",
+      "sinceVersion": "v7.1.0"
+    },
+    {
+      "id": 217111,
+      "name": "「唇啊，为我纺出歌与吟哦」",
+      "type": "装备牌",
+      "tags": [
+        "GCG_TAG_TALENT",
+        "GCG_TAG_SLOWLY"
+      ],
+      "playCost": [
+        {
+          "type": "GCG_COST_DICE_DENDRO",
+          "count": 3
+        }
+      ],
+      "relatedCharacter": "菈乌玛",
+      "description": "战斗行动：我方出战角色为菈乌玛时，装备此牌。\n菈乌玛装备此牌后，立刻使用一次圣言述咏·终宵永眠。\n我方触发绽放和月绽放后：治疗我方受伤最多的角色2点。（每回合1次）\n（牌组中包含菈乌玛，才能加入牌组）",
+      "sinceVersion": "v6.6.0"
+    },
+    {
+      "id": 311106,
+      "name": "四风原典",
+      "type": "装备牌",
+      "tags": [
+        "GCG_TAG_WEAPON",
+        "法器"
+      ],
+      "playCost": [
+        {
+          "type": "GCG_COST_DICE_SAME",
+          "count": 2
+        }
+      ],
+      "relatedCharacter": null,
+      "description": "此牌每有1点「伤害加成」，角色造成的伤害+1。\n结束阶段：此牌累积1点「伤害加成」。（最多累积到2点）\n（「法器」角色才能装备。角色最多装备1件「武器」）",
+      "sinceVersion": "v4.3.0"
+    },
+    {
+      "id": 311508,
+      "name": "静水流涌之辉",
+      "type": "装备牌",
+      "tags": [
+        "GCG_TAG_WEAPON",
+        "单手剑"
+      ],
+      "playCost": [
+        {
+          "type": "GCG_COST_DICE_SAME",
+          "count": 2
+        }
+      ],
+      "relatedCharacter": null,
+      "description": "我方角色受到伤害或治疗后：此牌累积1点「湖光」。\n角色进行普通攻击时：如果已有12点「湖光」，则消耗12点，使此技能少花费2个无色元素且造成的伤害+1，并且治疗所附属角色1点（每回合1次）。\n（「单手剑」角色才能装备。角色最多装备1件「武器」）",
+      "sinceVersion": "v4.7.0"
+    },
+    {
+      "id": 312031,
+      "name": "少女易逝的芳颜",
+      "type": "装备牌",
+      "tags": [
+        "GCG_TAG_ARTIFACT"
+      ],
+      "playCost": [
+        {
+          "type": "GCG_COST_DICE_SAME",
+          "count": 1
+        }
+      ],
+      "relatedCharacter": null,
+      "description": "附属角色受到圣遗物以外的治疗后：治疗我方受伤最多的角色1点。（每回合至多触发2次）\n（角色最多装备1件「圣遗物」）",
+      "sinceVersion": "v5.2.0"
+    },
+    {
+      "id": 312031,
+      "name": "少女易逝的芳颜",
+      "type": "装备牌",
+      "tags": [
+        "GCG_TAG_ARTIFACT"
+      ],
+      "playCost": [
+        {
+          "type": "GCG_COST_DICE_SAME",
+          "count": 1
+        }
+      ],
+      "relatedCharacter": null,
+      "description": "附属角色受到圣遗物以外的治疗后：治疗我方受伤最多的角色1点。（每回合至多触发2次）\n（角色最多装备1件「圣遗物」）",
+      "sinceVersion": "v5.2.0"
+    },
+    {
+      "id": 321018,
+      "name": "梅洛彼得堡",
+      "type": "援助牌",
+      "tags": [
+        "GCG_TAG_PLACE"
+      ],
+      "playCost": [
+        {
+          "type": "GCG_COST_DICE_SAME",
+          "count": 1
+        }
+      ],
+      "relatedCharacter": null,
+      "description": "我方出战角色受到伤害或治疗后：此牌累积1点「禁令」（可叠加，最多叠加到6）。如果此牌已有6点禁令，则消耗6点，赋予对方1张随机手牌无效化。",
+      "sinceVersion": "v4.5.0"
+    },
+    {
+      "id": 321018,
+      "name": "梅洛彼得堡",
+      "type": "援助牌",
+      "tags": [
+        "GCG_TAG_PLACE"
+      ],
+      "playCost": [
+        {
+          "type": "GCG_COST_DICE_SAME",
+          "count": 1
+        }
+      ],
+      "relatedCharacter": null,
+      "description": "我方出战角色受到伤害或治疗后：此牌累积1点「禁令」（可叠加，最多叠加到6）。如果此牌已有6点禁令，则消耗6点，赋予对方1张随机手牌无效化。",
+      "sinceVersion": "v4.5.0"
+    },
+    {
+      "id": 321037,
+      "name": "霜月之坊",
+      "type": "援助牌",
+      "tags": [
+        "GCG_TAG_PLACE"
+      ],
+      "playCost": [
+        {
+          "type": "GCG_COST_DICE_SAME",
+          "count": 4
+        }
+      ],
+      "relatedCharacter": null,
+      "description": "入场时：抓2张牌，治疗我方受伤最多的角色2点。\n结束阶段：赋予我方随机2张手牌费用降低。\n可用次数：2",
+      "sinceVersion": "v6.4.0"
+    },
+    {
+      "id": 321037,
+      "name": "霜月之坊",
+      "type": "援助牌",
+      "tags": [
+        "GCG_TAG_PLACE"
+      ],
+      "playCost": [
+        {
+          "type": "GCG_COST_DICE_SAME",
+          "count": 4
+        }
+      ],
+      "relatedCharacter": null,
+      "description": "入场时：抓2张牌，治疗我方受伤最多的角色2点。\n结束阶段：赋予我方随机2张手牌费用降低。\n可用次数：2",
+      "sinceVersion": "v6.4.0"
+    },
+    {
+      "id": 322002,
+      "name": "凯瑟琳",
+      "type": "援助牌",
+      "tags": [
+        "GCG_TAG_ALLY"
+      ],
+      "playCost": [
+        {
+          "type": "GCG_COST_DICE_SAME",
+          "count": 1
+        }
+      ],
+      "relatedCharacter": null,
+      "description": "我方执行「切换角色」行动时：将此次切换视为「快速行动」而非「战斗行动」。（每回合1次）",
+      "sinceVersion": "v3.3.0"
+    },
+    {
+      "id": 330013,
+      "name": "另一侧的霜月",
+      "type": "事件牌",
+      "tags": [
+        "GCG_TAG_LEGEND",
+        "GCG_TAG_NON_DISCOVERABLE"
+      ],
+      "playCost": [
+        {
+          "type": "GCG_COST_LEGEND",
+          "count": 1
+        }
+      ],
+      "relatedCharacter": null,
+      "description": "打出及每个行动阶段开始时：赋予我方随机1张手牌费用降低。\n（整局游戏只能打出一张「秘传」卡牌；这张牌一定在你的起始手牌中）",
+      "sinceVersion": "v6.6.0"
+    },
+    {
+      "id": 331006,
+      "name": "元素幻变：绽放祝佑",
+      "type": "援助牌",
+      "tags": [
+        "GCG_TAG_CARD_BLESSING",
+        "GCG_TAG_NON_DISCOVERABLE"
+      ],
+      "playCost": [
+        {
+          "type": "GCG_COST_DICE_SAME",
+          "count": 2
+        }
+      ],
+      "relatedCharacter": null,
+      "description": "元素幻变：水元素草元素\n投掷阶段：总是投出2个水元素骰和2个草元素骰。\n我方触发绽放或月绽放反应后：弃置此牌并从绽放祝佑·甘露和绽放祝佑·蔓生中挑选一项加入手牌。",
+      "sinceVersion": "v6.5.0"
+    },
+    {
+      "id": 331202,
+      "name": "元素共鸣：愈疗之水",
+      "type": "事件牌",
+      "tags": [
+        "GCG_TAG_RESONANCE"
+      ],
+      "playCost": [
+        {
+          "type": "GCG_COST_DICE_HYDRO",
+          "count": 1
+        }
+      ],
+      "relatedCharacter": null,
+      "description": "治疗我方出战角色2点。然后，治疗所有我方后台角色1点。\n（牌组包含至少2个水元素角色，才能加入牌组）",
+      "sinceVersion": "v3.3.0"
+    },
+    {
+      "id": 331202,
+      "name": "元素共鸣：愈疗之水",
+      "type": "事件牌",
+      "tags": [
+        "GCG_TAG_RESONANCE"
+      ],
+      "playCost": [
+        {
+          "type": "GCG_COST_DICE_HYDRO",
+          "count": 1
+        }
+      ],
+      "relatedCharacter": null,
+      "description": "治疗我方出战角色2点。然后，治疗所有我方后台角色1点。\n（牌组包含至少2个水元素角色，才能加入牌组）",
+      "sinceVersion": "v3.3.0"
+    },
+    {
+      "id": 331721,
+      "name": "月兆·满辉",
+      "type": "事件牌",
+      "tags": [
+        "GCG_TAG_RESONANCE"
+      ],
+      "playCost": [],
+      "relatedCharacter": null,
+      "description": "赋予我方随机1张手牌以及牌组顶的卡牌费用降低。\n（牌组包含至少2个「挪德卡莱」角色，才能加入牌组）",
+      "sinceVersion": "v6.5.0"
+    },
+    {
+      "id": 331721,
+      "name": "月兆·满辉",
+      "type": "事件牌",
+      "tags": [
+        "GCG_TAG_RESONANCE"
+      ],
+      "playCost": [],
+      "relatedCharacter": null,
+      "description": "赋予我方随机1张手牌以及牌组顶的卡牌费用降低。\n（牌组包含至少2个「挪德卡莱」角色，才能加入牌组）",
+      "sinceVersion": "v6.5.0"
+    },
+    {
+      "id": 331807,
+      "name": "月与故乡",
+      "type": "事件牌",
+      "tags": [],
+      "playCost": [],
+      "relatedCharacter": null,
+      "description": "本回合内我方打出下张卡牌后：在下个回合开始时，创建1张所打出的卡牌加入手牌。\n（牌组包含至少2个「挪德卡莱」角色，才能加入牌组）",
+      "sinceVersion": "v6.5.0"
+    },
+    {
+      "id": 331807,
+      "name": "月与故乡",
+      "type": "事件牌",
+      "tags": [],
+      "playCost": [],
+      "relatedCharacter": null,
+      "description": "本回合内我方打出下张卡牌后：在下个回合开始时，创建1张所打出的卡牌加入手牌。\n（牌组包含至少2个「挪德卡莱」角色，才能加入牌组）",
+      "sinceVersion": "v6.5.0"
+    },
+    {
+      "id": 332001,
+      "name": "最好的伙伴！",
+      "type": "事件牌",
+      "tags": [],
+      "playCost": [
+        {
+          "type": "GCG_COST_DICE_VOID",
+          "count": 2
+        }
+      ],
+      "relatedCharacter": null,
+      "description": "生成2个万能元素。",
+      "sinceVersion": "v3.3.0"
+    },
+    {
+      "id": 332001,
+      "name": "最好的伙伴！",
+      "type": "事件牌",
+      "tags": [],
+      "playCost": [
+        {
+          "type": "GCG_COST_DICE_VOID",
+          "count": 2
+        }
+      ],
+      "relatedCharacter": null,
+      "description": "生成2个万能元素。",
+      "sinceVersion": "v3.3.0"
+    },
+    {
+      "id": 332031,
+      "name": "海中寻宝",
+      "type": "事件牌",
+      "tags": [],
+      "playCost": [
+        {
+          "type": "GCG_COST_DICE_SAME",
+          "count": 2
+        }
+      ],
+      "relatedCharacter": null,
+      "description": "生成6张海底宝藏，随机地置入我方牌库中。",
+      "sinceVersion": "v4.6.0"
+    },
+    {
+      "id": 332031,
+      "name": "海中寻宝",
+      "type": "事件牌",
+      "tags": [],
+      "playCost": [
+        {
+          "type": "GCG_COST_DICE_SAME",
+          "count": 2
+        }
+      ],
+      "relatedCharacter": null,
+      "description": "生成6张海底宝藏，随机地置入我方牌库中。",
+      "sinceVersion": "v4.6.0"
+    },
+    {
+      "id": 332032,
+      "name": "幻戏倒计时：3",
+      "type": "事件牌",
+      "tags": [],
+      "playCost": [
+        {
+          "type": "GCG_COST_DICE_SAME",
+          "count": 3
+        }
+      ],
+      "relatedCharacter": null,
+      "description": "将我方所有元素骰转换为万能元素，抓4张牌。\n此牌在手牌或牌库中被舍弃后：将1张元素骰费用比此牌少1个的「幻戏倒计时」放置到你的牌库顶。",
+      "sinceVersion": "v4.7.0"
+    },
+    {
+      "id": 332032,
+      "name": "幻戏倒计时：3",
+      "type": "事件牌",
+      "tags": [],
+      "playCost": [
+        {
+          "type": "GCG_COST_DICE_SAME",
+          "count": 3
+        }
+      ],
+      "relatedCharacter": null,
+      "description": "将我方所有元素骰转换为万能元素，抓4张牌。\n此牌在手牌或牌库中被舍弃后：将1张元素骰费用比此牌少1个的「幻戏倒计时」放置到你的牌库顶。",
+      "sinceVersion": "v4.7.0"
+    },
+    {
+      "id": 332045,
+      "name": "困困冥想术",
+      "type": "事件牌",
+      "tags": [],
+      "playCost": [
+        {
+          "type": "GCG_COST_DICE_SAME",
+          "count": 1
+        }
+      ],
+      "relatedCharacter": null,
+      "description": "从随机3张特技牌中挑选1张。\n我方下次打出不属于初始卡组的牌少花费2个元素骰。",
+      "sinceVersion": "v5.6.0"
+    },
+    {
+      "id": 332045,
+      "name": "困困冥想术",
+      "type": "事件牌",
+      "tags": [],
+      "playCost": [
+        {
+          "type": "GCG_COST_DICE_SAME",
+          "count": 1
+        }
+      ],
+      "relatedCharacter": null,
+      "description": "从随机3张特技牌中挑选1张。\n我方下次打出不属于初始卡组的牌少花费2个元素骰。",
+      "sinceVersion": "v5.6.0"
+    },
+    {
+      "id": 333015,
+      "name": "缤纷马卡龙",
+      "type": "事件牌",
+      "tags": [
+        "GCG_TAG_FOOD"
+      ],
+      "playCost": [
+        {
+          "type": "GCG_COST_DICE_VOID",
+          "count": 2
+        }
+      ],
+      "relatedCharacter": null,
+      "description": "治疗目标角色1点，该角色接下来3次受到伤害后再治疗其1点。\n（每回合每个角色最多食用1次「料理」）",
+      "sinceVersion": "v4.6.0"
+    },
+    {
+      "id": 333015,
+      "name": "缤纷马卡龙",
+      "type": "事件牌",
+      "tags": [
+        "GCG_TAG_FOOD"
+      ],
+      "playCost": [
+        {
+          "type": "GCG_COST_DICE_VOID",
+          "count": 2
+        }
+      ],
+      "relatedCharacter": null,
+      "description": "治疗目标角色1点，该角色接下来3次受到伤害后再治疗其1点。\n（每回合每个角色最多食用1次「料理」）",
+      "sinceVersion": "v4.6.0"
+    }
+  ]
+}

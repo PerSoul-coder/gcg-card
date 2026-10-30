@@ -1,0 +1,18 @@
+{
+	"id": 533016,
+	"name": "逐影猎人",
+	"cardtype": "GCG_CARD_MODIFY",
+	"cardtypetext": "装备牌",
+	"tags": [
+		"GCG_TAG_ARTIFACT",
+		"GCG_TAG_ABC"
+	],
+	"tagstext": [
+		"圣遗物",
+		"自走牌"
+	],
+	"description": "附属角色受到伤害或治疗累计6次后：攻击力+2。（获得最大生命值除外）",
+	"descriptionraw": "<color=#FFFFFFFF>附属角色受到伤害或治疗累计6次后：</color>攻击力+2。（获得最大生命值除外）",
+	"descriptionreplaced": "<color=#FFFFFFFF>附属角色受到伤害或治疗累计6次后：</color>攻击力+2。（获得最大生命值除外）",
+	"playcost": []
+}

@@ -1,0 +1,18 @@
+{
+	"id": 533017,
+	"name": "黄金剧团",
+	"cardtype": "GCG_CARD_MODIFY",
+	"cardtypetext": "装备牌",
+	"tags": [
+		"GCG_TAG_ARTIFACT",
+		"GCG_TAG_ABC"
+	],
+	"tagstext": [
+		"圣遗物",
+		"自走牌"
+	],
+	"description": "回合开始时：随机我方一个召唤物可用次数+1，攻击力与治疗效果+1。",
+	"descriptionraw": "<color=#FFFFFFFF>回合开始时：</color>随机我方一个召唤物可用次数+1，攻击力与治疗效果+1。",
+	"descriptionreplaced": "<color=#FFFFFFFF>回合开始时：</color>随机我方一个召唤物可用次数+1，攻击力与治疗效果+1。",
+	"playcost": []
+}

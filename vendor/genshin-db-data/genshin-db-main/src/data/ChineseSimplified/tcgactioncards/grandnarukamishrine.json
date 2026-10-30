@@ -1,0 +1,24 @@
+{
+	"id": 321008,
+	"name": "鸣神大社",
+	"shareid": 186,
+	"cardtype": "GCG_CARD_ASSIST",
+	"cardtypetext": "支援牌",
+	"tags": [
+		"GCG_TAG_PLACE"
+	],
+	"tagstext": [
+		"场地"
+	],
+	"description": "我方角色使用技能后：如果元素骰总数为奇数，则生成1个万能元素。（每回合2次）",
+	"descriptionraw": "<color=#FFFFFFFF>我方角色使用技能后：</color>如果元素骰总数为奇数，则生成1个$[K411]。（每回合2次）",
+	"descriptionreplaced": "<color=#FFFFFFFF>我方角色使用技能后：</color>如果元素骰总数为奇数，则生成1个<color=#FFFFFFFF>{SPRITE_PRESET#1111}万能元素</color>。（每回合2次）",
+	"storytitle": "遐世的绯染之梦",
+	"storytext": "「影向山樱常盛，一如鸣神永恒。」",
+	"playcost": [
+		{
+			"costtype": "GCG_COST_DICE_VOID",
+			"count": 3
+		}
+	]
+}

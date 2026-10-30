@@ -1,0 +1,16 @@
+{
+	"id": 520104,
+	"name": "自行·蔓生之草",
+	"cardtype": "GCG_CARD_ASSIST",
+	"cardtypetext": "支援牌",
+	"tags": [
+		"GCG_TAG_ABC"
+	],
+	"tagstext": [
+		"自走牌"
+	],
+	"description": "我方触发草元素相关反应后：下个回合开始时，获得3层草原核。（第4场战斗及之后，效果翻倍）",
+	"descriptionraw": "我方触发$[K267]后：下个回合开始时，获得3层<color=#FFFFFFFF>$[C151]</color>。（第4场战斗及之后，效果翻倍）",
+	"descriptionreplaced": "我方触发<color=#7EC236FF>{SPRITE_PRESET#2107}草元素相关反应</color>后：下个回合开始时，获得3层<color=#FFFFFFFF>草原核</color>。（第4场战斗及之后，效果翻倍）",
+	"playcost": []
+}

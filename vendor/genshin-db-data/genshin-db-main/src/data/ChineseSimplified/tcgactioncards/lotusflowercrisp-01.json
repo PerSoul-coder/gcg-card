@@ -1,0 +1,18 @@
+{
+	"id": 531008,
+	"name": "（test）莲花酥",
+	"cardtype": "GCG_CARD_EVENT",
+	"cardtypetext": "事件牌",
+	"tags": [
+		"GCG_TAG_FOOD",
+		"GCG_TAG_DISABLE"
+	],
+	"tagstext": [
+		"料理",
+		"弃用"
+	],
+	"description": "（test）目标角色在回合结束阶段受到的伤害减半。",
+	"descriptionraw": "（test）目标角色在回合结束阶段受到的伤害减半。",
+	"descriptionreplaced": "（test）目标角色在回合结束阶段受到的伤害减半。",
+	"playcost": []
+}

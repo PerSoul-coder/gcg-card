@@ -1,0 +1,18 @@
+{
+	"id": 533007,
+	"name": "（test）角斗士的凯旋",
+	"cardtype": "GCG_CARD_MODIFY",
+	"cardtypetext": "装备牌",
+	"tags": [
+		"GCG_TAG_ARTIFACT",
+		"GCG_TAG_DISABLE"
+	],
+	"tagstext": [
+		"圣遗物",
+		"弃用"
+	],
+	"description": "（test）附属角色造成物理伤害后：+1攻击力。（最多+3）。",
+	"descriptionraw": "（test）<color=#FFFFFFFF>附属角色造成物理伤害后：</color>+1攻击力。（最多+3）。",
+	"descriptionreplaced": "（test）<color=#FFFFFFFF>附属角色造成物理伤害后：</color>+1攻击力。（最多+3）。",
+	"playcost": []
+}

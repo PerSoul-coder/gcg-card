@@ -1,0 +1,16 @@
+{
+	"id": 520207,
+	"name": "深渊的呼唤",
+	"cardtype": "GCG_CARD_ASSIST",
+	"cardtypetext": "支援牌",
+	"tags": [
+		"GCG_TAG_ABC"
+	],
+	"tagstext": [
+		"自走牌"
+	],
+	"description": "回合开始时：舍弃1张手牌，随机召唤1个丘丘人。",
+	"descriptionraw": "<color=#FFFFFFFF>回合开始时：</color>$[K56]1张手牌，随机召唤1个丘丘人。",
+	"descriptionreplaced": "<color=#FFFFFFFF>回合开始时：</color><color=#FFFFFFFF>舍弃</color>1张手牌，随机召唤1个丘丘人。",
+	"playcost": []
+}

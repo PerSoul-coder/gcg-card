@@ -1,0 +1,16 @@
+{
+	"id": 520203,
+	"name": "璃月港口",
+	"cardtype": "GCG_CARD_ASSIST",
+	"cardtypetext": "支援牌",
+	"tags": [
+		"GCG_TAG_ABC"
+	],
+	"tagstext": [
+		"自走牌"
+	],
+	"description": "立刻额外挑选4次奖励。",
+	"descriptionraw": "立刻额外$[K59]4次奖励。",
+	"descriptionreplaced": "立刻额外<color=#FFFFFFFF>挑选</color>4次奖励。",
+	"playcost": []
+}

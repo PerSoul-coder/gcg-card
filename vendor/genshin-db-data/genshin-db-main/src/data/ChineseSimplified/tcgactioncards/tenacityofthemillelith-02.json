@@ -1,0 +1,18 @@
+{
+	"id": 533003,
+	"name": "千岩牢固",
+	"cardtype": "GCG_CARD_MODIFY",
+	"cardtypetext": "装备牌",
+	"tags": [
+		"GCG_TAG_ARTIFACT",
+		"GCG_TAG_ABC"
+	],
+	"tagstext": [
+		"圣遗物",
+		"自走牌"
+	],
+	"description": "回合开始时：附属角色+4护盾。",
+	"descriptionraw": "<color=#FFFFFFFF>回合开始时：</color>附属角色+4护盾。",
+	"descriptionreplaced": "<color=#FFFFFFFF>回合开始时：</color>附属角色+4护盾。",
+	"playcost": []
+}

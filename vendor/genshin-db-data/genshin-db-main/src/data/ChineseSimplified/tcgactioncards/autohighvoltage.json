@@ -1,0 +1,16 @@
+{
+	"id": 520102,
+	"name": "自行·强能之雷",
+	"cardtype": "GCG_CARD_ASSIST",
+	"cardtypetext": "支援牌",
+	"tags": [
+		"GCG_TAG_ABC"
+	],
+	"tagstext": [
+		"自走牌"
+	],
+	"description": "我方触发雷元素相关反应后：全体敌方角色附属2层持续电击。",
+	"descriptionraw": "我方触发$[K264]后：全体敌方角色附属2层<color=#FFFFFFFF>$[C144]</color>。",
+	"descriptionreplaced": "我方触发<color=#FFACFFFF>{SPRITE_PRESET#2104}雷元素相关反应</color>后：全体敌方角色附属2层<color=#FFFFFFFF>持续电击</color>。",
+	"playcost": []
+}

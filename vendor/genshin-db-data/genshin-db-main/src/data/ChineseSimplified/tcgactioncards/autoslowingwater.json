@@ -1,0 +1,16 @@
+{
+	"id": 520107,
+	"name": "自行·迟滞之水",
+	"cardtype": "GCG_CARD_ASSIST",
+	"cardtypetext": "支援牌",
+	"tags": [
+		"GCG_TAG_ABC"
+	],
+	"tagstext": [
+		"自走牌"
+	],
+	"description": "我方触发水元素相关反应后：敌方生命值最高角色受到3点穿透伤害。治疗我方生命值最低的角色3点。（第4场战斗及之后，效果翻倍）",
+	"descriptionraw": "我方触发$[K262]后：敌方生命值最高角色受到3点<color=#FFFFFFFF>$[K5]</color>。治疗我方生命值最低的角色3点。（第4场战斗及之后，效果翻倍）",
+	"descriptionreplaced": "我方触发<color=#80C0FFFF>{SPRITE_PRESET#2102}水元素相关反应</color>后：敌方生命值最高角色受到3点<color=#FFFFFFFF><color=#FFFFFFFF>穿透伤害</color></color>。治疗我方生命值最低的角色3点。（第4场战斗及之后，效果翻倍）",
+	"playcost": []
+}

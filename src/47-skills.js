@@ -1,0 +1,148 @@
+/* 七圣召唤浏览器 · 角色技能索引与技能页。
+   源码按领域拆分，由 src/sources.mjs 统一声明加载顺序；单文件版构建时按同一顺序内联。
+
+   ---------- 技能为什么要有自己的索引 ----------
+   技能不写在 entities 里，它挂在 characters[].skills 下，既没有卡面，也没有独立
+   的分享码 id。以前详情页直接 `skills.filter(s => !s.hidden)` 拼成纯文本：
+     · hidden 为 true 的技能被整段丢掉——而「准备技能」（踏潮、霆电迸发…）恰好
+       在数据里就是 hidden，玩家因此完全看不到它的效果；
+     · 技能名在正文里出现时，概念索引里只有同名的"准备中状态"，点击只能看到
+       「本角色将在下次行动时，直接使用技能：踏潮」，也就是状态牌。
+   现在把技能提成一等实体：有自己的 key（角色 id + 技能 id）、可被检索、可被正文
+   引用、有自己的页面（类型 / 费用 / 充能 / 效果 / 准备轮数 / 所属角色）。
+
+   ---------- 同一技能多条记录的处理 ----------
+   数据里同一角色下会有同名技能的多条记录（如嘉明「踏云献瑞」13164/13165 是同一
+   技能的不同阶段，描述不同）。规则：**同一角色下同名技能只出一条**，取描述最完整
+   的那条；其余阶段数记在 altCount 里（页面提示"另有 n 条阶段记录"），不再列出。 */
+
+const SKILL_TAG_ZH = {
+  GCG_SKILL_TAG_A: "普通攻击",
+  GCG_SKILL_TAG_E: "元素战技",
+  GCG_SKILL_TAG_Q: "元素爆发",
+  GCG_SKILL_TAG_PASSIVE: "被动技能",
+  GCG_SKILL_TAG_NONE: "特殊技能",
+};
+const SKILL_TAG_ORDER = ["GCG_SKILL_TAG_A", "GCG_SKILL_TAG_E", "GCG_SKILL_TAG_Q", "GCG_SKILL_TAG_PASSIVE", "GCG_SKILL_TAG_NONE"];
+
+let SKILLS = [];
+const skillByKey = new Map();      /* "角色id:技能id" → 技能 */
+const skillByName = new Map();     /* 归一化名 → 技能[] */
+const skillsOfOwner = new Map();   /* 角色 id → 技能[]（已排序、已去重） */
+
+const PREPARE_TURNS_RE = /（需准备(\d+)个行动轮）/;
+function skillDescOf(s) {
+  return String((s.description || s.rawDescription || "")).trim();
+}
+/* 效果文本里去掉「（需准备 n 个行动轮）」这行——它是节奏说明，不是效果，
+   提到徽标上更清楚，正文只留技能实际做了什么。 */
+function skillEffectText(desc) {
+  return String(desc || "").split("\n").filter(l => !PREPARE_TURNS_RE.test(l)).join("\n").trim();
+}
+function buildSkillIndex() {
+  SKILLS = [];
+  skillByKey.clear();
+  skillByName.clear();
+  skillsOfOwner.clear();
+  const seen = new Set();
+  for (const c of CHAR) {
+    const list = [];
+    for (const s of c.skills || []) {
+      if (!s || !s.name) continue;
+      const dedupeId = c.id + ":" + s.id;
+      if (seen.has(dedupeId)) continue;      /* 数据里偶有完全重复的一条 */
+      seen.add(dedupeId);
+      const desc = skillDescOf(s);
+      const altOf = list.find(x => x.name === s.name);
+      if (altOf) {                            /* 同名阶段记录：只留描述更完整的一条 */
+        altOf.altCount++;
+        if (desc.length > altOf.desc.length) { altOf.desc = desc; altOf.id = s.id; altOf.key = c.id + ":" + s.id; }
+        continue;
+      }
+      const shadow = shadowStateBySkill.get(nameKey(s.name));
+      const turns = (PREPARE_TURNS_RE.exec(desc) || [])[1];
+      list.push({
+        kind: "skill",
+        key: c.id + ":" + s.id,
+        id: s.id,
+        ownerId: c.id,
+        ownerName: c.name,
+        name: s.name,
+        englishName: s.englishName || "",
+        tag: s.type,
+        tagZh: SKILL_TAG_ZH[s.type] || "技能",
+        cost: Array.isArray(s.playCost) ? s.playCost : [],
+        desc,
+        effect: skillEffectText(desc),
+        hidden: !!s.hidden,
+        prepared: !!turns || !!shadow,
+        prepareTurns: turns ? Number(turns) : (shadow ? 1 : 0),
+        stateId: shadow ? shadow.stateId : null,
+        altCount: 0,
+      });
+    }
+    /* 排序：普攻 → 战技 → 爆发 → 被动 → 特殊；同类型保持数据原顺序 */
+    list.sort((a, b) => SKILL_TAG_ORDER.indexOf(a.tag) - SKILL_TAG_ORDER.indexOf(b.tag));
+    if (list.length) skillsOfOwner.set(c.id, list);
+    for (const s of list) {
+      SKILLS.push(s);
+      skillByKey.set(s.key, s);
+      const k = nameKey(s.name);
+      if (!skillByName.has(k)) skillByName.set(k, []);
+      skillByName.get(k).push(s);
+    }
+  }
+}
+const skillsOf = charId => skillsOfOwner.get(charId) || [];
+const skillOf = key => skillByKey.get(key) || null;
+/* 技能名检索：同一名字可能属于多个角色（同名不同角色），按角色名建索引，全部返回 */
+const skillsNamed = name => skillByName.get(nameKey(name)) || [];
+
+/* 技能费用：元素骰 + 充能。数据里两者都在 playCost 里（GCG_COST_DICE_* / GCG_COST_ENERGY），
+   所以直接复用卡牌的 costHtml，保证同一套骰子/充能图标语义。 */
+function skillCostText(s) {
+  const t = costText(s.cost);
+  return t || "无费用";
+}
+/* 技能行（角色详情里的一行）：名字 + 类型徽标 + 准备徽标 + 费用 + 效果 */
+function skillRowHtml(s) {
+  const prep = s.prepared ? `<span class="sk-tag prep" title="需准备 ${s.prepareTurns || 1} 个行动轮后才能自动使用">准备 ${s.prepareTurns || 1} 轮</span>` : "";
+  const passive = s.tag === "GCG_SKILL_TAG_PASSIVE" ? `<span class="sk-tag passive">被动</span>` : "";
+  const hidden = s.hidden && !s.prepared && s.tag !== "GCG_SKILL_TAG_PASSIVE" ? `<span class="sk-tag muted" title="游戏内不显示为按钮，但效果真实存在">隐藏</span>` : "";
+  const cost = costHtml(s.cost);
+  return `<div class="skill" data-skill="${s.key}" title="查看技能详情">
+      <div class="skhead"><b>${esc(s.name)}</b>${prep}${passive}${hidden}${cost ? `<span class="skcost">${cost}</span>` : ""}</div>
+      <div class="skdesc">${linkify(esc(s.effect || "（该技能没有文字说明）"))}</div>
+    </div>`;
+}
+function skillsHtml(charId) {
+  const list = skillsOf(charId);
+  if (!list.length) return "";
+  return `<div class="skills">${list.map(skillRowHtml).join("")}</div>`;
+}
+
+/* 技能页：与概念页同一套弹层外壳，但信息更全（费用 / 充能 / 准备 / 所属角色） */
+function renderSkillView(v) {
+  const s = skillOf(v.key);
+  if (!s) { overlayBack(); return; }
+  const cost = costHtml(s.cost);
+  const prep = s.prepared
+    ? `<span class="tagpill prep">需准备 ${s.prepareTurns || 1} 个行动轮</span>` : "";
+  const owner = `<div class="drel"><b>所属角色</b><span class="blchips"><button class="blchip" data-goto="${s.ownerId}">${esc(s.ownerName)}</button></span></div>`;
+  const state = s.stateId != null
+    ? `<div class="drel"><b>准备中状态</b><span class="blchips"><button class="blchip" data-goto="${s.stateId}" title="查看该技能准备期间挂载的状态牌">准备中 · 状态牌</button></span></div>` : "";
+  const alt = s.altCount ? `<div class="dnote">该技能在数据里有 ${s.altCount} 条同名阶段记录，此处显示描述最完整的一条。</div>` : "";
+  $("detail").innerHTML = `${navBar()}
+    <div class="dinfo"><h2>${esc(s.name)}</h2>
+    <div class="meta"><span class="tagpill">${esc(s.tagZh)}</span>${prep}${cost ? `<span class="tagpill costpill">${cost}</span>` : ""}${s.hidden && !s.prepared && s.tag !== "GCG_SKILL_TAG_PASSIVE" ? `<span class="tagpill">隐藏技能</span>` : ""}</div>
+    <div class="dtext">${linkify(esc(s.effect || "（该技能没有文字说明）"))}</div>
+    ${alt}${owner}${state}${backlinkHtml(s.name)}</div>`;
+}
+function showSkill(key) {
+  if (!skillOf(key)) return;
+  if (!overlayOpen()) overlayStack = [];
+  const top = topView();
+  if (top && top.kind === "skill" && top.key === key) return;
+  overlayStack.push({ kind: "skill", key });
+  renderOverlay();
+}
