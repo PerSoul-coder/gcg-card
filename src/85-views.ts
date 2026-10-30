@@ -1,19 +1,35 @@
-/* 七圣召唤浏览器 · 概览条与三个视图（卡面/列表/卡库）渲染。
-   源码按领域拆分，由 src/sources.mjs 统一声明加载顺序；单文件版构建时按同一顺序内联。 */
-"use strict";
+/* src/85-views.js —— 由 scripts/_convert.mjs 从旧脚本转换（迁移中间态）。 */
+import { R_STYLE, R_ZH, allReqs, deckReqsOf, depBadges, energyCost, reqElement, restrictionsOf } from "./30-deps";
+import { $ } from "./core/dom";
+import { showOdds } from "./86-odds";
+import { CAT_ORDER, clearBrowseFilters, corpusKey, hlText, loadRecent, nearNames, resultTypeLabel, searchCards, searchState, toggleSearchScope } from "./70-search";
+import { termEntries } from "./40-concepts";
+import { POOL_TYPE_ORDER, cardElement, pool, poolStats, poolVersion, verCmp } from "./45-pool";
+import { copyLimit, draft, draftAdd } from "./80-deck";
+import { dataReady } from "./20-data";
+import { openTermName, showDetail } from "./90-detail";
+import { state } from "./data/state";
+import { STORAGE_KEYS, imgFull, ELE_ZH, ELE_COLOR, ENERGY_ICON, ELE_ICONS, eleIcon, enPips } from "./core/resources";
+import { esc } from "./core/dom";
+import { TYPE_ZH, typeZhOf, isDeckable, isFieldEntity, cardArtHtml } from "./data/model";
+import { costHtml, costText } from "./30-deps";
+import { linkify } from "./40-concepts";
+import { KIND_ZH } from "./50-backlinks";
+import { HOT_WORDS, browseActive, inputHint, matchChip, scopeRow } from "./70-search";
+import { cmpBtnHtml } from "./88-compare";
 
 /* ---------- 概览条（含费用曲线 / 充能 / 限制统计） ---------- */
 function renderSummary() {
-  const typeCounts = current.order.map(t => `${t} <b>${current.groups[t].reduce((a, x) => a + x.count, 0)}</b>`).join("　·　");
-  const elesHtml = [...new Set(current.chars.map(c => c.element).filter(Boolean))]
+  const typeCounts = state.current.order.map(t => `${t} <b>${state.current.groups[t].reduce((a, x) => a + x.count, 0)}</b>`).join("　·　");
+  const elesHtml = [...new Set(state.current.chars.map(c => c.element).filter(Boolean))]
     .map(el => `${eleIcon(el)}${esc(ELE_ZH[el] || el)}`).join(" / ");
-  const vers = [...new Set([...current.chars.map(c => c.since), ...current.order.flatMap(t => current.groups[t].map(x => x.since))])].filter(Boolean).sort();
+  const vers = [...new Set([...state.current.chars.map(c => c.since), ...state.current.order.flatMap(t => state.current.groups[t].map(x => x.since))])].filter(Boolean).sort();
 
   /* 费用曲线（按张数计重）：元素骰 0~4 / 5+ */
   const buckets = Array(6).fill(0);
   let enCards = 0, enMax = 0, enTotal = 0, rCards = 0, dCards = 0;
   const rCount = {}, dCount = {};
-  for (const t of current.order) for (const x of current.groups[t]) {
+  for (const t of state.current.order) for (const x of state.current.groups[t]) {
     buckets[Math.min(x.dice, 5)] += x.count;
     if (x.energy) { enCards += x.count; enMax = Math.max(enMax, x.energy); enTotal += x.energy * x.count; }
     for (const r of x.restrictions) { rCount[r.code] = (rCount[r.code] || 0) + x.count; rCards += x.count; }
@@ -35,7 +51,7 @@ function renderSummary() {
   const rChips = reqChips("牌组限制", dCount, dCards) + reqChips("打出限制", rCount, rCards);
 
   $("summary").innerHTML = `
-    <div class="sum-chars">${current.chars.map(c => `
+    <div class="sum-chars">${state.current.chars.map(c => `
       <span class="chip"><span class="edot" style="--ec:${ELE_COLOR[c.element] || '#888'}">${ELE_ICONS[c.element] || ""}</span>${esc(c.name)}<small class="chip-en">${enPips(c.energy)}</small></span>`).join("")}
     </div>
     <div class="sum-types"><span>元素构成：<b>${elesHtml}</b></span><span>${typeCounts}</span><span>版本跨度：<b>${esc(vers.join(" ~ "))}</b></span></div>
@@ -71,12 +87,12 @@ function tileHtml(x) {
       <div class="capbar">${x.element ? eleIcon(x.element, "inline-el") : ""}${esc(x.name)}${en}${rel ? `<small>${rel}</small>` : ""}</div></div></div>`;
 }
 function renderGrid() {
-  if (!current) {
+  if (!state.current) {
     $("view-grid").innerHTML = `<div class="empty-hint">尚未解析牌组<br><small>粘贴分享码后自动解析，或点「示例」体验；也可以直接去「卡库浏览」筛选与检索卡牌</small></div>`;
     return;
   }
   $("view-grid").innerHTML = `<div class="sec-title">角色牌</div>
-    <div class="char-row">${current.chars.map(c => `
+    <div class="char-row">${state.current.chars.map(c => `
       <div class="char-card"><div class="imgbox" data-id="${c.id}">
         <img class="card-img" src="${imgFull(c.id)}" decoding="async" width="420" height="720" alt="${esc(c.name)}"
           onerror="this.onerror=null;this.outerHTML='<div class=fallback>${esc(c.name)}</div>'">
@@ -85,12 +101,17 @@ function renderGrid() {
       </div>
       <div class="cap">${esc(c.name)}<small>生命 ${c.hp} · 充能 ${c.energy} · ${esc(c.since || "")}</small></div></div>`).join("")}
     </div>` +
-    current.order.map(t => `<div class="sec-title">${t}（${current.groups[t].reduce((a, x) => a + x.count, 0)}）</div>
-      <div class="card-grid">${current.groups[t].map(tileHtml).join("")}</div>`).join("");
+    state.current.order.map(t => `<div class="sec-title">${t}（${state.current.groups[t].reduce((a, x) => a + x.count, 0)}）</div>
+      <div class="card-grid">${state.current.groups[t].map(tileHtml).join("")}</div>`).join("");
 }
 
 /* ---------- 列表视图（含限制列 + 表头排序） ---------- */
 let listFilter = "";
+
+/** 设置列表筛选词（输入框与测试都经这里，避免直接改模块内部变量）。 */
+export function setListFilter(v: string): void {
+  listFilter = v;
+}
 let listSort = { key: "count", dir: -1 };
 const sortVal = {
   count: x => x.count,
@@ -99,7 +120,7 @@ const sortVal = {
   since: x => parseFloat(String(x.since || "0").replace("v", "")) || 0,
 };
 function renderList() {
-  if (!current) {
+  if (!state.current) {
     $("view-list").innerHTML = `<div class="empty-hint">尚未解析牌组<br><small>解析分享码后，这里以表格形式展示全部卡牌与效果</small></div>`;
     return;
   }
@@ -114,7 +135,7 @@ function renderList() {
     const col = el ? (ELE_COLOR[el] || "var(--gold)") : R_STYLE[r.code];
     return `<span class="rpill" style="color:${col}" title="${esc(r.label)}">${el ? eleIcon(el, "inline-el") : ""}${esc(r.short)}</span>`;
   };
-  const rows = t => current.groups[t].filter(match)
+  const rows = t => state.current.groups[t].filter(match)
     .sort((a, b) => listSort.dir * (sortVal[listSort.key](a) < sortVal[listSort.key](b) ? -1 : sortVal[listSort.key](a) > sortVal[listSort.key](b) ? 1 : a.name.localeCompare(b.name, "zh")))
     .map(x => `<tr data-id="${x.id}">
     <td class="cnt">${x.count > 1 ? "×" + x.count : "1"}</td>
@@ -122,8 +143,8 @@ function renderList() {
     <td>${allReqs(x).map(reqPill).join("") || '<span style="color:#4a5261">—</span>'}</td>
     <td>${esc(x.related || "—")}</td><td>${esc(x.since || "—")}</td>
     <td class="desc">${linkify(esc(x.desc))}</td></tr>`).join("");
-  const sections = current.order.map(t => {
-    if (!current.groups[t].some(match)) return "";
+  const sections = state.current.order.map(t => {
+    if (!state.current.groups[t].some(match)) return "";
     return `<div class="sec-title">${t}</div><div class="table-wrap"><table>
       <tr>
         <th class="sortable" data-key="count">数量${arrow("count")}</th>
@@ -167,7 +188,7 @@ function searchTile(r) {
       <div class="tmeta">${esc(KIND_ZH[k] || "概念")} ${matchChip(r)}</div></div>`;
   }
   const isChar = r.kind === "char";
-  const raw = isChar ? charById.get(r.id) : entById.get(r.id);
+  const raw = isChar ? state.charById.get(r.id) : state.entById.get(r.id);
   const ele = isChar ? (raw.tags.find(t => t.startsWith("GCG_TAG_ELEMENT")) || "").replace("GCG_TAG_ELEMENT_", "") : cardElement(raw);
   const meta = isChar ? `${eleIcon(ele)} ${ELE_ZH[ele] || ele} · 生命 ${raw.hp} · 充能 ${raw.maxEnergy}`
     : `${ele ? eleIcon(ele) + " · " : ""}${esc(typeZhOf(raw))}${costText(raw.playCost) ? " · " + esc(costText(raw.playCost)) : ""}`;
@@ -446,7 +467,7 @@ function syncTileQty() {
   const nodes = document.querySelectorAll(".tile[data-id]");
   for (const el of nodes) {
     const id = Number(el.dataset.id);
-    const n = charById.has(id) ? 0 : (draft.cards.get(id) || 0);
+    const n = state.charById.has(id) ? 0 : (draft.cards.get(id) || 0);
     const box = el.querySelector(".imgbox");
     if (!box) continue;
     let b = box.querySelector(".qcnt");
@@ -466,6 +487,11 @@ function syncTileQty() {
 const BROWSE_EXP_KEY = STORAGE_KEYS.browseExpanded;
 let browseExpanded = false;
 try { browseExpanded = localStorage.getItem(BROWSE_EXP_KEY) === "1"; } catch (e) {}
+
+/** 展开 / 收起多维筛选（按钮点击与测试都经这里）。 */
+export function setBrowseExpanded(v: boolean): void {
+  browseExpanded = v;
+}
 /* 已激活筛选 chips（折叠态展示，点击即移除该维度） */
 function activeBrowseChips(st) {
   const chips = [];
@@ -741,12 +767,12 @@ function appendOtherTiles(list) {
 let browseTick = false;
 const hasIO = typeof IntersectionObserver === "function";
 function browseMaybeMore() {
-  if (currentView !== "browse" || searchState.q.trim()) return;
+  if (state.currentView !== "browse" || searchState.q.trim()) return;
   if (browseTick) return;
   browseTick = true;
   const run = () => {
     browseTick = false;
-    if (currentView !== "browse" || searchState.q.trim()) return;
+    if (state.currentView !== "browse" || searchState.q.trim()) return;
     if (!hasIO) { pagerFillAhead(bPager, 3000, 1); pagerFillAhead(nbPager, 2000, 1); }
     pagerSweep(bPager);
     pagerSweep(nbPager);
@@ -851,3 +877,4 @@ $("view-browse").addEventListener("change", ev => {
   if (s) { browseState.sort = s.value; renderBrowse(); syncBrowseHash(); }
 });
 
+export { renderSummary, tileHtml, renderGrid, listFilter, listSort, sortVal, renderList, hlName, searchTile, browseSearchResultsHtml, browseState, BROWSE_DIMS, BROWSE_PAGE, PAGE_KEEP, bPager, nbPager, viewH, viewTop, facetKey, passFilter, browseCmp, _browseMemo, browseStateKey, browseFilter, isBuildableEntry, showUnbuildable, setShowUnbuildable, nbOpen, browseSplit, otherGroupHtml, facetCounts, fcn, browseHash, parseBrowseHash, syncBrowseHash, browseChip, sumCells, browseTile, syncTileQty, BROWSE_EXP_KEY, browseExpanded, activeBrowseChips, browseBarHtml, browseSearchHtml, renderBrowse, renderBrowseResults, updateBrowseCount, browseVisibleIds, dirtyBrowse, makePager, measureH, pagerPage, pagerFill, pagerSentinel, pagerGrow, pagerFillAhead, pagerSweep, appendBrowseTiles, appendOtherTiles, browseTick, hasIO, browseMaybeMore, browseIO, ioPagers, observeSentinel, unobserveSentinel, toggleNbGroup, applyBrowseQuery, clearBrowseQuery };

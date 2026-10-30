@@ -75,3 +75,16 @@ export const state: AppState = {
   deckOrder: [],
   overlayStack: [],
 };
+
+/** 清空实体集合与派生索引（供「刷新数据」使用）。
+ *  这些字段此前由入口模块跨文件赋值，现在只能经这里重置。 */
+export function resetEntityState(): void {
+  state.CHAR = [];
+  state.ENT = [];
+  state.KW = [];
+  state.shareMap = {};
+  state.idToShare = {};
+  state.charById = new Map();
+  state.charByName = new Map();
+  state.entById = new Map();
+}

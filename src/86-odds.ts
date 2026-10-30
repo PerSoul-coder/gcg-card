@@ -1,6 +1,11 @@
-/* 七圣召唤浏览器 · 抽牌概率与费用曲线。
-   源码按领域拆分，由 src/sources.mjs 统一声明加载顺序；单文件版构建时按同一顺序内联。 */
-"use strict";
+/* src/86-odds.js —— 由 scripts/_convert.mjs 从旧脚本转换（迁移中间态）。 */
+import { dataReady, ensureData } from "./20-data";
+import { $ } from "./core/dom";
+import { renderOverlay, topView } from "./90-detail";
+import { state } from "./data/state";
+import { esc, setStatus, toast } from "./core/dom";
+import { costText } from "./30-deps";
+import { navBar } from "./90-detail";
 
 /* ---------- 抽牌概率模型 ----------
    行动牌是 30 张的无放回抽样池，抽牌等价于超几何分布：
@@ -36,8 +41,8 @@ function fmtPct(p) {
 function oddsDeckStats() {
   const byCost = Array(6).fill(0), byType = {}, uniq = [];
   let total = 0, diceTotal = 0;
-  if (current) {
-    for (const t of current.order) for (const x of current.groups[t]) {
+  if (state.current) {
+    for (const t of state.current.order) for (const x of state.current.groups[t]) {
       total += x.count;
       diceTotal += x.dice * x.count;
       byCost[Math.min(x.dice, 5)] += x.count;
@@ -81,7 +86,7 @@ function oddsCostBars(stats) {
 }
 function renderOddsView(v) {
   const stats = oddsDeckStats();
-  if (!current || !stats.total) {
+  if (!state.current || !stats.total) {
     $("detail").innerHTML = `${navBar()}<div class="odds-view"><div class="cmp-title">抽牌概率与费用曲线</div>
       <div class="cmp-empty">请先解析一个牌组，再查看抽牌概率。</div></div>`;
     return;
@@ -142,8 +147,8 @@ function showOdds() {
     ensureData().then(showOdds).catch(e => setStatus("数据加载失败：" + e.message, "err"));
     return;
   }
-  if (!current) { toast("请先解析一个牌组", true); return; }
-  overlayStack = [{ kind: "odds", pick: oddsState.pick }];
+  if (!state.current) { toast("请先解析一个牌组", true); return; }
+  state.overlayStack = [{ kind: "odds", pick: oddsState.pick }];
   renderOverlay();
 }
 
@@ -157,3 +162,5 @@ document.addEventListener("change", ev => {
   top.pick = oddsState.pick;
   renderOverlay();
 });
+
+export { DRAW_START, DRAW_PER_TURN, ODDS_TURNS, comb, hyperAtLeast, fmtPct, oddsDeckStats, oddsRows, oddsCostBars, renderOddsView, oddsState, showOdds };

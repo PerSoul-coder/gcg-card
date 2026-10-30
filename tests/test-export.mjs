@@ -49,10 +49,10 @@ const logic = readAppSource();
 const harness = `
 ;(async () => {
   await decodeAndRender(SAMPLE);
-  const all = current.order.flatMap(t => current.groups[t]);
-  console.log("解析结果：", current.chars.map(c => c.name).join(" / "), "| 行动牌种类", all.length, "总张数", all.reduce((a,x)=>a+x.count,0));
+  const all = state.current.order.flatMap(t => state.current.groups[t]);
+  console.log("解析结果：", state.current.chars.map(c => c.name).join(" / "), "| 行动牌种类", all.length, "总张数", all.reduce((a,x)=>a+x.count,0));
 
-  assert(current.chars.length === 3, "3 名角色");
+  assert(state.current.chars.length === 3, "3 名角色");
   assert(all.length === 19 && all.reduce((a, x) => a + x.count, 0) === 30, "19 种 / 30 张行动牌");
   assert(all.every(x => Array.isArray(x.restrictions)), "每张卡都有 restrictions 数组");
   assert(all.every(x => Array.isArray(x.deckReqs)), "每张卡都有 deckReqs 数组（牌组限制）");

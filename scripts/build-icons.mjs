@@ -44,7 +44,7 @@ const map = {};
 for (const [key, file] of FILES) map[key] = normalize(file);
 
 const js = `/* 自动生成：build-icons.mjs —— 七元素官方矢量图标（填充色已归一为 currentColor）。请勿手改。 */
-window.ELEMENT_ICONS_SVG = ${JSON.stringify(map, null, 2)};
+export const ELEMENT_ICONS_SVG = ${JSON.stringify(map, null, 2)};
 `;
 writeFileSync(OUT, js);
 console.log("输出：gi-data/element-icons.js");

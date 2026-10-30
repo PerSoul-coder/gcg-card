@@ -55,7 +55,7 @@ const localStorageStub = {
 const logic = readAppSource();
 const conceptsExtra = JSON.parse(
   fs.readFileSync(path.join(here, "gi-data/concepts-extra.js"), "utf8")
-    .replace(/^window\.CONCEPTS_EXTRA = /, "").replace(/;\s*$/, "")
+    .replace(/^export const CONCEPTS_EXTRA = /, "").replace(/;\s*$/, "")
 );
 
 const harness = `
@@ -63,8 +63,8 @@ const harness = `
   await decodeAndRender(SAMPLE, { noHash: true });
 
   /* ===== 1. 卡面视图入口：翻页上下文 = 牌组内顺序 ===== */
-  currentView = "grid";
-  const deckIds = deckOrder.slice();
+  state.currentView = "grid";
+  const deckIds = state.deckOrder.slice();
   assert(deckIds.length === 22, "牌组顺序索引：" + deckIds.length + " 项（3 角色 + 19 行动牌）");
   overlayClose();
   showDetail(deckIds[3]);
@@ -78,7 +78,7 @@ const harness = `
   assert(topView().id === deckIds[3] && topView().idx === 3, "上一张：回到原卡");
   overlayClose();
   showDetail(deckIds[0]);
-  assert(overlayStack.length === 1 && topView().idx === 0, "第一张：idx=0（上一张按钮禁用）");
+  assert(state.overlayStack.length === 1 && topView().idx === 0, "第一张：idx=0（上一张按钮禁用）");
   modalStep(-1);
   assert(topView().idx === 0, "边界：第一张再上一张无效，不越界");
 
@@ -87,21 +87,21 @@ const harness = `
 
   /* ===== 3. 卡库浏览入口：翻页上下文 = 当前可见列表 ===== */
   overlayClose();
-  currentView = "browse";
+  state.currentView = "browse";
   Object.assign(browseState, { type: "", el: "", cost: "", energy: "", tag: "", ver: "", sort: "name", dir: 1 });
   const browseIds = browseVisibleIds();
   showDetail(browseIds[7]);
   assert(topView().ids.length === browseIds.length && topView().idx === 7,
     "卡库入口：翻页上下文 = 当前可见列表（" + browseIds.length + " 张，位置 8）");
-  assert(!browseIds.some(id => isTestCard(entById.get(id) || {})), "卡库翻页列表不含测试卡");
+  assert(!browseIds.some(id => isTestCard(state.entById.get(id) || {})), "卡库翻页列表不含测试卡");
   /* 默认视图只列可构筑的牌：不可构筑的实体/变体收在折叠分组里，不参与翻页 */
-  assert(browseIds.every(id => (entById.get(id) || charById.get(id) || {}).shareId != null),
+  assert(browseIds.every(id => (state.entById.get(id) || state.charById.get(id) || {}).shareId != null),
     "卡库折叠态：翻页列表只含可构筑条目");
   assert(browseIds.length < pool.length, "卡库折叠态：可见列表小于全库（" + browseIds.length + "/" + pool.length + "）");
 
   /* ===== 4. 卡库检索态：翻页上下文 = 命中列表（仅卡牌/角色） ===== */
   overlayClose();
-  currentView = "browse";
+  state.currentView = "browse";
   searchState.q = "芙宁娜";
   searchState.results = [
     { kind: "card", id: deckIds[3] }, { kind: "char", id: deckIds[0] },
@@ -116,10 +116,10 @@ const harness = `
 
   /* ===== 5. 回归：从卡库打开过详情后，卡面视图仍能翻页（旧实现被永久压成单张） ===== */
   overlayClose();
-  currentView = "browse";
+  state.currentView = "browse";
   showDetail(browseIds[3]);
   overlayClose();
-  currentView = "grid";
+  state.currentView = "grid";
   showDetail(deckIds[6]);
   assert(topView().ids.length === deckIds.length,
     "回归：卡库开过详情后，卡面视图翻页上下文不被污染（" + topView().ids.length + " 项）");
@@ -134,31 +134,31 @@ const harness = `
   overlayClose();
   showDetail(deckIds[2]);
   showDetail(deckIds[9]);
-  assert(overlayStack.length === 2 && topView().id === deckIds[9] && topView().ids.length === deckIds.length,
+  assert(state.overlayStack.length === 2 && topView().id === deckIds[9] && topView().ids.length === deckIds.length,
     "关联跳转同列表：压栈且保留翻页上下文");
   overlayBack();
-  assert(overlayStack.length === 1 && topView().id === deckIds[2], "返回：回到上一张卡牌");
+  assert(state.overlayStack.length === 1 && topView().id === deckIds[2], "返回：回到上一张卡牌");
   showDetail(deckIds[2]);
-  assert(overlayStack.length === 1, "重复打开同一张：不重复压栈");
+  assert(state.overlayStack.length === 1, "重复打开同一张：不重复压栈");
 
   /* ===== 8. 概念下钻：卡牌详情 → 概念 → 更深概念 → 逐层返回 ===== */
   overlayClose();
   showDetail(deckIds[0]);
   showTermModal("出战角色");
-  assert(overlayStack.length === 2 && topView().kind === "term", "卡牌详情 → 概念页：压栈");
+  assert(state.overlayStack.length === 2 && topView().kind === "term", "卡牌详情 → 概念页：压栈");
   showTermModal("手牌");
-  assert(overlayStack.length === 3, "概念页 → 更深概念：继续压栈");
+  assert(state.overlayStack.length === 3, "概念页 → 更深概念：继续压栈");
   const termHtmlOut = String($("detail").innerHTML);
   assert(termHtmlOut.includes("navbtns") && termHtmlOut.includes("tm-depth"), "概念页：含顶栏与下钻层数指示");
   overlayBack();
   overlayBack();
-  assert(overlayStack.length === 1 && topView().kind === "detail", "逐层返回：回到来源卡牌详情");
+  assert(state.overlayStack.length === 1 && topView().kind === "detail", "逐层返回：回到来源卡牌详情");
   overlayBack();
-  assert(overlayStack.length === 0 && !$("overlay").classList.contains("show"), "栈空：关闭弹层");
+  assert(state.overlayStack.length === 0 && !$("overlay").classList.contains("show"), "栈空：关闭弹层");
 
   /* ===== 9. 空概念名兜底：不打开空页面 ===== */
   showTermModal("这个术语不存在xyz");
-  assert(overlayStack.length === 0 && !$("overlay").classList.contains("show"), "未收录的概念名：不打开弹层");
+  assert(state.overlayStack.length === 0 && !$("overlay").classList.contains("show"), "未收录的概念名：不打开弹层");
 
   /* ===== 10. 多卡对比：选择上限、差异行、仅看差异 ===== */
   overlayClose();
@@ -174,7 +174,7 @@ const harness = `
   toggleCompare(cmpIds[0]);
   assert(compareState.ids.length === 3, "再次点击：移出对比");
   showCompare();
-  assert(topView().kind === "compare" && overlayStack.length === 1, "打开对比面板：压入单层视图");
+  assert(topView().kind === "compare" && state.overlayStack.length === 1, "打开对比面板：压入单层视图");
   const cmpHtml = String($("detail").innerHTML);
   assert(cmpHtml.includes("cmp-table") && cmpHtml.includes("仅看差异"), "对比面板：表格 + 仅看差异开关");
   const cmpRows = compareRows(cmpIds.slice(1));
@@ -212,7 +212,7 @@ const harness = `
   assert(String($("detail").innerHTML).includes("打开卡牌对比面板"),
     "详情顶栏：已选 2 张时出现对比面板入口");
   showCompare();
-  assert(overlayStack.length === 2 && topView().kind === "compare",
+  assert(state.overlayStack.length === 2 && topView().kind === "compare",
     "从详情打开对比：压栈保留来源详情");
   overlayBack();
   assert(topView().kind === "detail" && topView().id === deckIds[0], "对比返回：回到来源详情");
@@ -244,24 +244,24 @@ const harness = `
     "同码对比：无新增 / 移除 / 变化");
   const base = parseShareIds(SAMPLE);
   const used = new Set([...base.charIds, ...base.cardIds]);
-  const altCard = ENT.find(e => idToShare[e.id] != null && !used.has(e.id) && !isTestCard(e));
+  const altCard = state.ENT.find(e => state.idToShare[e.id] != null && !used.has(e.id) && !isTestCard(e));
   const altCardIds = decodeRaw(SAMPLE).slice();
   /* 必须替换「只带 1 张」的行动牌：替换 2 张中的一张只会变成数量变化，不是移除 */
-  const singleSlot = altCardIds.findIndex((sid, i) => i >= 3 && base.countMap.get(shareMap[sid]) === 1);
+  const singleSlot = altCardIds.findIndex((sid, i) => i >= 3 && base.countMap.get(state.shareMap[sid]) === 1);
   assert(singleSlot >= 3, "换牌用例：找到仅 1 张的行动牌槽位");
-  altCardIds[singleSlot] = idToShare[altCard.id];
+  altCardIds[singleSlot] = state.idToShare[altCard.id];
   const altCode = encodeRaw(altCardIds);
   const cardDiff = diffDecks(SAMPLE, altCode);
   assert(cardDiff.added.length === 1 && cardDiff.removed.length === 1 && cardDiff.changed.length === 0,
     "换一张行动牌：新增 1 种 / 移除 1 种");
-  const altChar = CHAR.find(c => idToShare[c.id] != null && !base.charIds.includes(c.id) && !isTestCard(c));
+  const altChar = state.CHAR.find(c => state.idToShare[c.id] != null && !base.charIds.includes(c.id) && !isTestCard(c));
   const altCharIds = decodeRaw(SAMPLE).slice();
-  altCharIds[2] = idToShare[altChar.id];
+  altCharIds[2] = state.idToShare[altChar.id];
   const charCode = encodeRaw(altCharIds);
   const charDiff = diffDecks(SAMPLE, charCode);
   assert(charDiff.charAdded.length === 1 && charDiff.charRemoved.length === 1,
     "换角色：角色差异按名字统计");
-  overlayStack = [{ kind: "deckdiff", a: SAMPLE, b: altCode, res: cardDiff, err: "", showSame: false }];
+  state.overlayStack = [{ kind: "deckdiff", a: SAMPLE, b: altCode, res: cardDiff, err: "", showSame: false }];
   renderOverlay();
   const dd = String($("detail").innerHTML);
   assert(dd.includes("牌组差异对比") && dd.includes("行动牌差异") && dd.includes("费用曲线"),
@@ -279,7 +279,7 @@ const harness = `
     "超几何：抽满必中、不抽不中");
   const p5 = hyperAtLeast(30, 2, 5, 1), p7 = hyperAtLeast(30, 2, 7, 1), p9 = hyperAtLeast(30, 2, 9, 1);
   assert(p5 > 0 && p5 < 1 && p7 > p5 && p9 > p7, "超几何：概率随抽牌数单调上升");
-  overlayStack = [{ kind: "odds", pick: stats.uniq[0].id }];
+  state.overlayStack = [{ kind: "odds", pick: stats.uniq[0].id }];
   renderOverlay();
   const od = String($("detail").innerHTML);
   assert(od.includes("费用曲线") && od.includes("起手 5 张") && od.includes("至少 1 张"),

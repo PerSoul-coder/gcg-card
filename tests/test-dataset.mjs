@@ -16,7 +16,7 @@ for (const cat of ["characters", "entities", "keywords"])
   DATA[cat] = JSON.parse(fs.readFileSync(path.join(here, `gi-data/${cat}.json`), "utf8")).data;
 const conceptsExtra = JSON.parse(
   fs.readFileSync(path.join(here, "gi-data/concepts-extra.js"), "utf8")
-    .replace(/^window\.CONCEPTS_EXTRA = /, "").replace(/;\s*$/, ""),
+    .replace(/^export const CONCEPTS_EXTRA = /, "").replace(/;\s*$/, ""),
 );
 
 let fails = 0;
@@ -97,15 +97,15 @@ const harness = `
   assert(hits2.some(r => r.name === "转转冲击"), "检索「转转冲击」命中");
 
   /* ===== 3. 技能页有牌面（用所属卡牌作视觉锚点） ===== */
-  overlayStack = [];
+  state.overlayStack = [];
   showSkill(yueSheng.key);
   const skHtml = String(document.getElementById("detail").innerHTML || "");
   assert(skHtml.includes('class="dimg"') && skHtml.includes("/image/113154"), "技能页渲染所属卡牌牌面");
   assert(skHtml.includes("所属卡牌"), "技能页标注「所属卡牌」而不是「所属角色」");
-  overlayStack = [];
+  state.overlayStack = [];
 
   /* ===== 4. 角色简介不产生术语链接 ===== */
-  const furina = CHAR.find(c => c.name === "芙宁娜") || CHAR[0];
+  const furina = state.CHAR.find(c => c.name === "芙宁娜") || state.CHAR[0];
   showDetail(furina.id);
   const detailHtml = String(document.getElementById("detail").innerHTML || "");
   const story = (detailHtml.match(/<div class="dtext dstory">([\\s\\S]*?)<\\/div>/) || [])[1] || "";

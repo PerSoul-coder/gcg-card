@@ -1,6 +1,17 @@
-/* 七圣召唤浏览器 · 数据加载：内置快照 → 本地缓存 → 现网，超时重试与单 flight。
-   源码按领域拆分，由 src/sources.mjs 统一声明加载顺序；单文件版构建时按同一顺序内联。 */
-"use strict";
+/* src/20-data.js —— 由 scripts/_convert.mjs 从旧脚本转换（迁移中间态）。 */
+import { loadDataset } from "./07-dataset";
+import { buildSkillIndex } from "./47-skills";
+import { buildTermIndex } from "./40-concepts";
+import { buildPool } from "./45-pool";
+import { buildBacklinks } from "./50-backlinks";
+import { pruneDraft, renderDraft } from "./80-deck";
+import { renderDataInfo } from "./99-main";
+import { state } from "./data/state";
+import { API, LANG, CACHE_TTL_MS, FETCH_TIMEOUT_MS, cacheKey } from "./core/resources";
+import { setStatus } from "./core/dom";
+import { buildShadowStates } from "./data/model";
+import { pool } from "./45-pool";
+import { backlinks } from "./50-backlinks";
 
 /* ---------- 数据加载（内置快照 / localStorage 缓存 / 现网，三级来源 + 超时重试 + 单 flight） ----------
    来源优先级：本地缓存 → 内置快照（仅单文件版有）→ 现网。
@@ -62,11 +73,19 @@ async function fetchCategory(cat, { forceNetwork = false } = {}) {
   throw new Error(`数据获取失败 ${cat}: ${lastErr && lastErr.message}`);
 }
 
-/* 拉取层入口：保证 CHAR/ENT/KW 与派生索引就绪。
+/* 拉取层入口：保证 state.CHAR/state.ENT/state.KW 与派生索引就绪。
    单 flight：并发调用（解析/切视图/深链同时触发）只发一次请求，失败不缓存、
    下次调用可重试；「刷新数据」通过重置 dataFlight 强制重新拉取。 */
 let dataReady = false;
 let dataFlight = null;
+
+/** 重置加载状态（供「刷新数据」使用）。
+ *  以前由入口直接给这两个模块变量赋值——ESM 下这种跨模块写入不再允许，
+ *  也就顺带把"谁可以改加载状态"收回到拥有者手里。 */
+export function resetDataState(): void {
+  dataReady = false;
+  dataFlight = null;
+}
 function ensureData(forceNetwork = false) {
   if (dataReady && !forceNetwork) return Promise.resolve();
   if (!dataFlight) {
@@ -86,18 +105,18 @@ async function loadData(forceNetwork = false) {
   ]);
   if (res[0].status !== "fulfilled" || res[1].status !== "fulfilled")
     throw new Error("卡牌数据获取失败，请检查网络后重试");
-  CHAR = res[0].value; ENT = res[1].value;
-  KW = res[2].status === "fulfilled" ? res[2].value : [];
+  state.CHAR = res[0].value; state.ENT = res[1].value;
+  state.KW = res[2].status === "fulfilled" ? res[2].value : [];
   /* 统一数据集：构建期归一化的记录（技能含装备牌特技、出边、可链接标记）。
      失败不阻塞主流程——旧索引仍可工作，页面不会因数据包缺失白屏。 */
   await loadDataset();
-  for (const c of [...CHAR, ...ENT]) if (c.shareId != null) {
-    shareMap[c.shareId] = c.id;
-    if (!(c.id in idToShare)) idToShare[c.id] = c.shareId;
+  for (const c of [...state.CHAR, ...state.ENT]) if (c.shareId != null) {
+    state.shareMap[c.shareId] = c.id;
+    if (!(c.id in state.idToShare)) state.idToShare[c.id] = c.shareId;
   }
-  charById = new Map(CHAR.map(c => [c.id, c]));
-  charByName = new Map(CHAR.map(c => [c.name, c]));
-  entById = new Map(ENT.map(e => [e.id, e]));
+  state.charById = new Map(state.CHAR.map(c => [c.id, c]));
+  state.charByName = new Map(state.CHAR.map(c => [c.name, c]));
+  state.entById = new Map(state.ENT.map(e => [e.id, e]));
   buildShadowStates();   /* 准备状态影子：必须先于概念索引（重名的状态要让位给技能） */
   buildSkillIndex();     /* 技能索引：概念索引要用它注册「技能」条目 */
   buildTermIndex();
@@ -108,3 +127,4 @@ async function loadData(forceNetwork = false) {
   dataReady = true;
 }
 
+export { BUILTIN_DATA, dataOrigins, ORIGIN_ZH, readCache, writeCache, fetchJson, fetchCategory, dataReady, dataFlight, ensureData, loadData };

@@ -1,6 +1,23 @@
-/* 七圣召唤浏览器 · 事件绑定、视图切换、数据信息/刷新与启动路由。
-   源码按领域拆分，由 src/sources.mjs 统一声明加载顺序；单文件版构建时按同一顺序内联。 */
-"use strict";
+/* src/99-main.js —— 由 scripts/_convert.mjs 从旧脚本转换（迁移中间态）。 */
+import { decodeAndRender, looksLikeCode, renderHistory, resolveInput } from "./60-parse";
+import { $ } from "./core/dom";
+import { closeSuggest, moveSuggest, pushRecent, resetSuggestTimer, scheduleSuggest, searchState, selectSuggest, sugState } from "./70-search";
+import { browseState, parseBrowseHash, renderBrowse, renderBrowseResults, renderGrid, renderList, setShowUnbuildable, syncBrowseHash } from "./85-views";
+import { ORIGIN_ZH, dataOrigins, ensureData, resetDataState } from "./20-data";
+import { pool, poolStats, resetPool } from "./45-pool";
+import { resetConceptIndex } from "./40-concepts";
+import { resetBacklinks } from "./50-backlinks";
+import { SKILLS, resetSkillIndex } from "./47-skills";
+import { beginRenameDeck, deleteDeckById, draftClear, draftEncode, draftLoadCurrent, draftRemoveCard, draftRemoveChar, draftSetCount, duplicateDeck, loadDraft, newDeck, renderDraft, renderDraftPanel, syncFromActive } from "./80-deck";
+import { overlayBack, overlayOpen, showDetail } from "./90-detail";
+import { resetEntityState, state } from "./data/state";
+import { SAMPLE, STORAGE_KEYS } from "./core/resources";
+import { setStatus, toast, copyText } from "./core/dom";
+import { shadowStateIds, shadowStateBySkill } from "./data/model";
+import { dataReady, writeCache } from "./20-data";
+import { EXTRA_CONCEPTS } from "./40-concepts";
+import { backlinks } from "./50-backlinks";
+import { refreshSuggest } from "./70-search";
 
 /* ---------- 事件绑定 ---------- */
 /* 顶部输入框只做牌组分享码解析；卡牌检索入口在「卡库浏览」内 */
@@ -35,7 +52,7 @@ const VIEW_KEY = STORAGE_KEYS.view;
 const VIEW_RENDER = { grid: renderGrid, list: renderList, browse: renderBrowse };
 function switchView(name) {
   if (!VIEW_RENDER[name]) name = "grid";
-  currentView = name;
+  state.currentView = name;
   document.querySelectorAll(".tab").forEach(x => x.classList.toggle("active", x.dataset.view === name));
   document.querySelectorAll(".view").forEach(v => v.classList.toggle("active", v.id === "view-" + name));
   try { localStorage.setItem(VIEW_KEY, name); } catch (e) {}
@@ -43,7 +60,7 @@ function switchView(name) {
   /* 牌组摘要是「卡面视图」的头部信息，切到卡库/列表时收起：
      否则解析过牌组之后，整块摘要会一直压在标签栏上方（手机上约占半屏） */
   const sum = $("summary");
-  if (sum) sum.style.display = (name === "grid" && typeof current !== "undefined" && current) ? "block" : "none";
+  if (sum) sum.style.display = (name === "grid" && typeof state.current !== "undefined" && state.current) ? "block" : "none";
   /* 卡库依赖全量数据：未加载则先拉取，就绪后再渲染 */
   if (!dataReady && name === "browse") {
     ensureData().then(render).catch(e => setStatus("数据加载失败：" + e.message, "err"));
@@ -60,9 +77,9 @@ $("view-browse").addEventListener("input", ev => {
   searchState.filter = "";
   renderBrowseResults();
   syncBrowseHash();
-  clearTimeout(sugTimer);
+  resetSuggestTimer();
   if (!searchState.q.trim()) { closeSuggest(); return; }
-  sugTimer = setTimeout(refreshSuggest, 200);
+  scheduleSuggest();
 });
 $("view-browse").addEventListener("focusin", ev => {
   if (ev.target.id === "browseSearch" && ev.target.value.trim()) refreshSuggest();
@@ -103,7 +120,7 @@ function focusBrowseSearch() {
     ensureData().then(() => { switchView("browse"); const i = $("browseSearch"); if (i) i.focus(); }).catch(() => {});
     return;
   }
-  if (currentView !== "browse") switchView("browse");
+  if (state.currentView !== "browse") switchView("browse");
   const input = $("browseSearch");
   if (input) input.focus();
 }
@@ -117,29 +134,28 @@ function renderDataInfo() {
   /* 来源如实展示：内置快照 / 本地缓存 / 现网，混合来源按实际出现的组合列出 */
   const origin = [...dataOrigins].map(k => ORIGIN_ZH[k] || k).join(" + ") || "—";
   const imgNote = dataOrigins.has("builtin") && !dataOrigins.has("network") ? "　|　卡面图需联网" : "";
-  el.innerHTML = `数据源：piovium 官方静态数据 v5 · CHS　|　${CHAR.length} 角色 · ${pool.filter(x => x.kind === "card").length} 卡牌 · ${SKILLS.length} 技能 · ${KW.length} 术语 + ${Object.keys(EXTRA_CONCEPTS).length} 规则概念${testNote}${shadowNote}　|　${origin}${imgNote}`;
+  el.innerHTML = `数据源：piovium 官方静态数据 v5 · CHS　|　${state.CHAR.length} 角色 · ${pool.filter(x => x.kind === "card").length} 卡牌 · ${SKILLS.length} 技能 · ${state.KW.length} 术语 + ${Object.keys(EXTRA_CONCEPTS).length} 规则概念${testNote}${shadowNote}　|　${origin}${imgNote}`;
 }
 $("btnRefresh").addEventListener("click", async () => {
   /* 不预先清缓存：网络不可用时旧缓存 / 内置快照还能兜住，不至于整页失去数据。
      拉取成功后 writeCache 会自然覆盖旧值。 */
-  dataReady = false;
-  dataFlight = null;   /* 重置单 flight，强制 ensureData 真正重新拉取 */
-  CHAR = []; ENT = []; KW = []; shareMap = {}; idToShare = {};
-  charById = new Map(); charByName = new Map(); entById = new Map(); termIndex = new Map(); termRe = null;
-  pool = []; backlinks = new Map(); poolStats = { total: 0, buildable: 0, testFiltered: 0, shadowFiltered: 0, byType: {}, byEl: {}, byTag: {}, versions: [] };
-  SKILLS = []; skillByKey.clear(); skillByName.clear(); skillsOfOwner.clear();
-  shadowStateIds.clear(); shadowStateBySkill.clear();
+  resetDataState();      /* 重置单 flight，强制 ensureData 真正重新拉取 */
+  resetEntityState();    /* 实体集合与 id/分享码索引 */
+  resetConceptIndex();   /* 概念索引与术语正则 */
+  resetPool();           /* 卡池与统计 */
+  resetBacklinks();      /* 反链 */
+  resetSkillIndex();     /* 技能索引（含装备牌特技） */
   setStatus(`<span class="spin"></span>正在重新拉取数据…`);
   try {
     await ensureData(true);
-    (VIEW_RENDER[currentView] || renderGrid)();
+    (VIEW_RENDER[state.currentView] || renderGrid)();
     renderDataInfo();
     toast("数据已刷新");
   } catch (e) {
     /* 刷新失败 → 回退到本地可用数据（内置快照或缓存），保证页面仍然可用 */
     try {
       await ensureData(false);
-      (VIEW_RENDER[currentView] || renderGrid)();
+      (VIEW_RENDER[state.currentView] || renderGrid)();
       setStatus("刷新失败，已回退到本地数据：" + e.message, "err");
     } catch (e2) {
       setStatus("刷新失败：" + e.message + "；本地也没有可用数据", "err");
@@ -159,25 +175,14 @@ document.addEventListener("click", ev => {
     newDeck(); syncFromActive(); renderDraft(); renderDraftPanel(); toast("已新建空牌组");
   }
   else if (b.dataset.dkren != null) {
-    deckRenameId = Number(b.dataset.dkren); renderDraftPanel();
-    const inp = $("draftPanel").querySelector(".dk-rename");
-    if (inp) { inp.focus(); inp.select(); }
+    beginRenameDeck(Number(b.dataset.dkren));
   }
   else if (b.dataset.dkcpy != null) {
-    const src = decks.find(d => d.id === Number(b.dataset.dkcpy));
-    if (src) {
-      const d = newDeck(src.name + " 副本");
-      d.chars = [...src.chars];
-      d.cards = src.cards.map(([id, c]) => [id, c]);
-      syncFromActive(); renderDraft(); renderDraftPanel(); toast("已复制为新牌组");
-    }
+    if (duplicateDeck(Number(b.dataset.dkcpy))) toast("已复制为新牌组");
   }
   else if (b.dataset.dkdel != null) {
-    const id = Number(b.dataset.dkdel);
-    decks = decks.filter(d => d.id !== id);
-    if (!decks.length) newDeck();
-    else if (activeDeckId === id) activeDeckId = decks[0].id;
-    saveDecks(); syncFromActive(); renderDraft(); renderDraftPanel(); toast("牌组已删除");
+    deleteDeckById(Number(b.dataset.dkdel));
+    toast("牌组已删除");
   }
   else if (b.id === "draftGen") {
     try {
@@ -225,7 +230,7 @@ function routeHash() {
     return (async () => {
       try {
         await ensureData();
-        if (charById.has(id) || entById.has(id)) showDetail(id);
+        if (state.charById.has(id) || state.entById.has(id)) showDetail(id);
         else setStatus("链接中的卡牌 id 不存在或已失效", "err");
       } catch (e) { setStatus("加载失败：" + e.message, "err"); }
     })();
@@ -286,3 +291,5 @@ try {
 } catch (e) {
   setStatus("初始化失败：" + e.message + "。请刷新重试", "err");
 }
+
+export { updateBtnLabel, VIEW_KEY, VIEW_RENDER, switchView, focusBrowseSearch, renderDataInfo, routeHash, restoreView };

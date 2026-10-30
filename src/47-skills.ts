@@ -1,20 +1,14 @@
-/* 七圣召唤浏览器 · 角色技能索引与技能页。
-   源码按领域拆分，由 src/sources.mjs 统一声明加载顺序；单文件版构建时按同一顺序内联。
-
-   ---------- 技能为什么要有自己的索引 ----------
-   技能不写在 entities 里，它挂在 characters[].skills 下，既没有卡面，也没有独立
-   的分享码 id。以前详情页直接 `skills.filter(s => !s.hidden)` 拼成纯文本：
-     · hidden 为 true 的技能被整段丢掉——而「准备技能」（踏潮、霆电迸发…）恰好
-       在数据里就是 hidden，玩家因此完全看不到它的效果；
-     · 技能名在正文里出现时，概念索引里只有同名的"准备中状态"，点击只能看到
-       「本角色将在下次行动时，直接使用技能：踏潮」，也就是状态牌。
-   现在把技能提成一等实体：有自己的 key（角色 id + 技能 id）、可被检索、可被正文
-   引用、有自己的页面（类型 / 费用 / 充能 / 效果 / 准备轮数 / 所属角色）。
-
-   ---------- 同一技能多条记录的处理 ----------
-   数据里同一角色下会有同名技能的多条记录（如嘉明「踏云献瑞」13164/13165 是同一
-   技能的不同阶段，描述不同）。规则：**同一角色下同名技能只出一条**，取描述最完整
-   的那条；其余阶段数记在 altCount 里（页面提示"另有 n 条阶段记录"），不再列出。 */
+/* src/47-skills.js —— 由 scripts/_convert.mjs 从旧脚本转换（迁移中间态）。 */
+import { dsReady, dsSkills } from "./07-dataset";
+import { $ } from "./core/dom";
+import { costHtml, costText } from "./30-deps";
+import { overlayBack, overlayOpen, renderOverlay, topView } from "./90-detail";
+import { state } from "./data/state";
+import { tagZh } from "./core/resources";
+import { esc } from "./core/dom";
+import { nameKey, shadowStateBySkill, cardArtHtml } from "./data/model";
+import { linkify } from "./40-concepts";
+import { backlinkHtml, navBar } from "./90-detail";
 
 const SKILL_TAG_ZH = {
   GCG_SKILL_TAG_A: "普通攻击",
@@ -29,6 +23,14 @@ let SKILLS = [];
 const skillByKey = new Map();      /* "角色id:技能id" → 技能 */
 const skillByName = new Map();     /* 归一化名 → 技能[] */
 const skillsOfOwner = new Map();   /* 角色 id → 技能[]（已排序、已去重） */
+
+/** 清空技能索引（供「刷新数据」使用）。索引的全部内部结构留在本模块。 */
+export function resetSkillIndex(): void {
+  SKILLS = [];
+  skillByKey.clear();
+  skillByName.clear();
+  skillsOfOwner.clear();
+}
 
 const PREPARE_TURNS_RE = /（需准备(\d+)个行动轮）/;
 function skillDescOf(s) {
@@ -91,7 +93,7 @@ function buildSkillIndex() {
   skillsOfOwner.clear();
   if (typeof dsReady === "function" && dsReady()) { buildSkillIndexFromDataset(); return; }
   const seen = new Set();
-  for (const c of CHAR) {
+  for (const c of state.CHAR) {
     const list = [];
     for (const s of c.skills || []) {
       if (!s || !s.name) continue;
@@ -199,9 +201,11 @@ function renderSkillView(v) {
 }
 function showSkill(key) {
   if (!skillOf(key)) return;
-  if (!overlayOpen()) overlayStack = [];
+  if (!overlayOpen()) state.overlayStack = [];
   const top = topView();
   if (top && top.kind === "skill" && top.key === key) return;
-  overlayStack.push({ kind: "skill", key });
+  state.overlayStack.push({ kind: "skill", key });
   renderOverlay();
 }
+
+export { SKILL_TAG_ZH, SKILL_TAG_ORDER, SKILLS, skillByKey, skillByName, skillsOfOwner, PREPARE_TURNS_RE, skillDescOf, skillEffectText, buildSkillIndexFromDataset, buildSkillIndex, skillsOf, skillsOfCard, skillOf, skillsNamed, skillCostText, skillRowHtml, skillsHtml, skillsHtmlCard, renderSkillView, showSkill };

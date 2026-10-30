@@ -53,14 +53,14 @@ const logic = readAppSource();
 /* 补充概念库（genshin-db 静态快照）——从 JS 包装中取 JSON 注入作用域 */
 const conceptsExtra = JSON.parse(
   fs.readFileSync(path.join(here, "gi-data/concepts-extra.js"), "utf8")
-    .replace(/^window\.CONCEPTS_EXTRA = /, "").replace(/;\s*$/, "")
+    .replace(/^export const CONCEPTS_EXTRA = /, "").replace(/;\s*$/, "")
 );
 const harness = `
 ;(async () => {
   await decodeAndRender(SAMPLE);
   const k0 = n => termEntries(n)[0] && termEntries(n)[0].kind;
   const d0 = n => (termEntries(n)[0] && termEntries(n)[0].desc) || "";
-  assert(KW.length === 149, "术语表加载：149 条");
+  assert(state.KW.length === 149, "术语表加载：149 条");
   assert(termIndex.size > 1000, "概念索引规模：" + termIndex.size + "（卡牌+角色+术语）");
   assert(k0("战斗行动") === "keyword", "术语命中：战斗行动 → keyword");
   assert(k0("静水流涌之辉") === "card", "卡牌命中：静水流涌之辉 → card");
@@ -77,7 +77,7 @@ const harness = `
   const modalHtml = $("view-grid").innerHTML; // 触发过渲染
   const detailStore = document.getElementById("detail");
   // 直接开一次详情，验证 dtext 含 term
-  showDetail(current.chars[0].id);
+  showDetail(state.current.chars[0].id);
   const rendered = String(detailStore.innerHTML || "");
   assert(rendered.includes('class="term"'), "详情弹层描述已 linkify（卡牌描述或技能文本命中概念）");
 
@@ -136,10 +136,10 @@ const harness = `
   assert(termEntries("丝柯克")[0].id === 1116 && termEntries("杜林")[0].id === 1317,
     "丝柯克/杜林 → 主版本（1116/1317，非 66xx 变体）");
   /* 补充库卡牌不与 piovium 同名卡重复占位（同种类排除的跨源形态） */
-  const piovCardNames = new Set(ENT.map(e => e.name));
+  const piovCardNames = new Set(state.ENT.map(e => e.name));
   for (const [n, i] of Object.entries(EXTRA_CONCEPTS)) {
     if (i.kind !== "card" && i.kind !== "character") continue;
-    if (!piovCardNames.has(n) && !new Set(CHAR.map(c => c.name)).has(n)) continue;
+    if (!piovCardNames.has(n) && !new Set(state.CHAR.map(c => c.name)).has(n)) continue;
     const kinds = termEntries(n).map(e => GROUP[e.kind] || e.kind);
     assert(new Set(kinds).size === kinds.length, "跨源同种类排除：" + n + "（" + kinds.join("+") + "）");
   }
@@ -177,22 +177,22 @@ const harness = `
     "仅名称与页头一致时才省略，避免误删异名条目");
 
   /* ===== 弹层视图栈：概念层层下钻，返回逐层回到来源卡牌 ===== */
-  overlayStack = [];
+  state.overlayStack = [];
   showDetail(termEntries("静水流涌之辉")[0].id);
-  assert(overlayStack.length === 1 && topView().kind === "detail", "详情：压入第一层视图");
+  assert(state.overlayStack.length === 1 && topView().kind === "detail", "详情：压入第一层视图");
   showTermModal("出战角色");
-  assert(overlayStack.length === 2 && topView().kind === "term" && topView().name === "出战角色",
+  assert(state.overlayStack.length === 2 && topView().kind === "term" && topView().name === "出战角色",
     "卡牌详情点术语 → 压入概念层（任意入口一致）");
   showTermModal("切换角色");
-  assert(overlayStack.length === 3 && topView().name === "切换角色", "概念页内再点术语：继续下钻");
+  assert(state.overlayStack.length === 3 && topView().name === "切换角色", "概念页内再点术语：继续下钻");
   showTermModal("切换角色");
-  assert(overlayStack.length === 3, "重复点击同一术语：不重复压栈");
+  assert(state.overlayStack.length === 3, "重复点击同一术语：不重复压栈");
   overlayBack();
-  assert(overlayStack.length === 2 && topView().name === "出战角色", "返回：弹出顶层概念");
+  assert(state.overlayStack.length === 2 && topView().name === "出战角色", "返回：弹出顶层概念");
   overlayBack();
-  assert(overlayStack.length === 1 && topView().kind === "detail", "返回：回到来源卡牌详情");
+  assert(state.overlayStack.length === 1 && topView().kind === "detail", "返回：回到来源卡牌详情");
   overlayBack();
-  assert(overlayStack.length === 0 && !$("overlay").classList.contains("show"), "再返回：栈空 → 关闭弹层");
+  assert(state.overlayStack.length === 0 && !$("overlay").classList.contains("show"), "再返回：栈空 → 关闭弹层");
   assert(termEntries("切换角色").length > 0, "下钻目标术语存在（切换角色）");
 
   /* 边界：短名"幻戏"是长名"幻戏倒计时：3"的子串 —— 长名必须整体命中 */
@@ -236,7 +236,7 @@ const harness = `
 
   /* 占位符：可见文本零泄漏（残留仅存在于 hidden 引擎技能与未加工的 rawDescription） */
   let visLeak = 0;
-  for (const x of [...CHAR, ...ENT]) {
+  for (const x of [...state.CHAR, ...state.ENT]) {
     if (x.description && /D__KEY__|\$\[[KS]\d+\]/.test(x.description)) visLeak++;
     for (const s of x.skills || []) if (!s.hidden && s.description && /D__KEY__|\$\[[KS]\d+\]/.test(s.description)) visLeak++;
   }

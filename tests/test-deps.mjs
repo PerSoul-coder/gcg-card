@@ -52,13 +52,13 @@ const localStorageStub = {
 const logic = readAppSource();
 const conceptsExtra = JSON.parse(
   fs.readFileSync(path.join(here, "gi-data/concepts-extra.js"), "utf8")
-    .replace(/^window\.CONCEPTS_EXTRA = /, "").replace(/;\s*$/, "")
+    .replace(/^export const CONCEPTS_EXTRA = /, "").replace(/;\s*$/, "")
 );
 
 const harness = `
 ;(async () => {
   await ensureData();
-  const byName = n => ENT.find(e => e.name === n);
+  const byName = n => state.ENT.find(e => e.name === n);
 
   /* ===== 1. deckReqsOf：三类牌组限制解析 ===== */
   const ganyuTalent = byName("唯此一心");
@@ -90,7 +90,7 @@ const harness = `
 
   /* 全库卫生 + 覆盖计数（154 需角色 / 14 需元素 / 11 需地区阵营） */
   let leaked = 0, nChar = 0, nEl = 0, nTag = 0;
-  for (const e of ENT) for (const r of deckReqsOf(e)) {
+  for (const e of state.ENT) for (const r of deckReqsOf(e)) {
     if (/[#{]|REALNAME/.test(r.label + r.short)) leaked++;
     if (r.code === "deckChar") nChar++;
     else if (r.code === "deckEl") nEl++;
@@ -100,7 +100,7 @@ const harness = `
   assert(nChar === 154 && nEl === 14 && nTag === 11,
     "覆盖计数：" + nChar + " 张需角色 / " + nEl + " 张需元素 / " + nTag + " 张需地区阵营");
 
-  const plain = ENT.find(e => e.shareId != null && ["GCG_CARD_MODIFY", "GCG_CARD_EVENT"].includes(e.type) && deckReqsOf(e).length === 0);
+  const plain = state.ENT.find(e => e.shareId != null && ["GCG_CARD_MODIFY", "GCG_CARD_EVENT"].includes(e.type) && deckReqsOf(e).length === 0);
   assert(plain && deckReqsOf(plain).length === 0, "普通卡（" + plain.name + "）无牌组限制");
 
   /* ===== 2. deckReqMet 校验语义 ===== */
@@ -174,8 +174,8 @@ const harness = `
   assert(testNames.every(n => !pool.some(x => x.name === n)), "测试卡全部不进卡池");
   assert(!searchCards("test").some(r => r.kind === "card" && testNames.includes(r.name)), "检索 test 不出测试卡");
   assert(!searchCards("测试").some(r => r.kind === "card" && r.name.includes("测试")), "检索「测试」不出测试卡");
-  assert(testNames.every(n => ENT.some(e => e.name === n)), "测试卡仍在原始数据中（详情深链可查）");
-  const testId = ENT.find(e => e.name === "（test）测试用").id;
+  assert(testNames.every(n => state.ENT.some(e => e.name === n)), "测试卡仍在原始数据中（详情深链可查）");
+  const testId = state.ENT.find(e => e.name === "（test）测试用").id;
   showDetail(testId);
   assert(String($("detail").innerHTML).includes("测试用"), "测试卡详情深链仍可渲染");
   draftClear();
@@ -209,7 +209,7 @@ const harness = `
   draftClear();
   draftAdd(1101); draftAdd(1102); draftAdd(1301);
   draftAdd(211011); draftAdd(331101);
-  const fill = ENT.filter(e => e.shareId != null && ["GCG_CARD_MODIFY", "GCG_CARD_EVENT", "GCG_CARD_ASSIST", "GCG_CARD_SUPPORT"].includes(e.type)
+  const fill = state.ENT.filter(e => e.shareId != null && ["GCG_CARD_MODIFY", "GCG_CARD_EVENT", "GCG_CARD_ASSIST", "GCG_CARD_SUPPORT"].includes(e.type)
     && deckReqsOf(e).length === 0 && !(e.tags || []).includes("GCG_TAG_LEGEND"));
   for (const e of fill) {
     while (draftTotal() < 30 && (draft.cards.get(e.id) || 0) < 2) draftAdd(e.id);
@@ -224,7 +224,7 @@ const harness = `
   renderHistory();
   const histHtml = String($("histPanel").innerHTML);
   assert(histHtml.includes("eico hist-el") && !histHtml.includes('class="dot"'), "历史面板：角色元素改用矢量图标");
-  const grp = current.order.flatMap(t => current.groups[t]);
+  const grp = state.current.order.flatMap(t => state.current.groups[t]);
   assert(grp.find(x => x.id === 211011)?.deckReqs?.length === 1, "解析：当前牌组卡片携带 deckReqs");
   renderList();
   const listElHtml = String($("view-list").innerHTML);
@@ -237,11 +237,11 @@ const harness = `
   renderSummary();
   assert(String($("summary").innerHTML).includes("牌组限制"), "概览条：依赖统计按「牌组限制」分组");
   /* 概览统计点击 → 列表过滤（data-filter 传 R_ZH 文本，match 命中依赖类别） */
-  listFilter = R_ZH.deckChar;
+  setListFilter(R_ZH.deckChar);
   renderList();
   const listHtml = String($("view-list").innerHTML);
   assert(listHtml.includes("唯此一心") && !listHtml.includes("魔导绪论"), "概览限制统计 → 列表按「牌组·角色」过滤生效");
-  listFilter = "";
+  setListFilter("");
   const exp = buildExport();
   assert(exp.actionCards.every(c => Array.isArray(c.deckRequirements)), "导出 JSON：每张卡都有 deckRequirements 字段");
   assert(exp.actionCards.some(c => c.deckRequirements.some(r => r.code === "deckChar" && r.characterId === 1101)),

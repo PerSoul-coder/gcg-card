@@ -17,7 +17,7 @@ import { createRequire } from "node:module";
 
 const here = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const require = createRequire(import.meta.url);
-const { pinyin } = require(path.join(here, ".build-tools/node_modules/pinyin-pro"));
+const { pinyin } = require("pinyin-pro");
 
 const readJson = p => JSON.parse(fs.readFileSync(path.join(here, p), "utf8"));
 const readData = p => readJson(p).data || [];
@@ -26,7 +26,7 @@ const entities = readData("gi-data/entities.json");
 const keywords = readData("gi-data/keywords.json");
 const conceptsExtra = JSON.parse(
   fs.readFileSync(path.join(here, "gi-data/concepts-extra.js"), "utf8")
-    .replace(/^window\.CONCEPTS_EXTRA = /, "").replace(/;\s*$/, ""),
+    .replace(/^export const CONCEPTS_EXTRA = /, "").replace(/;\s*$/, ""),
 );
 
 /* 人工校订：pinyin-pro 对个别专名按常用义读音（如 重云 → zhòng yún） */
@@ -70,7 +70,7 @@ const charsOut = {};
 for (const [ch, m] of charVotes) charsOut[ch] = [...m.entries()].sort((a, b) => b[1] - a[1])[0][0];
 
 const payload = { v: 1, names: namesOut, chars: charsOut };
-const text = "window.PINYIN_DATA = " + JSON.stringify(payload) + ";\n";
+const text = "export const PINYIN_DATA = " + JSON.stringify(payload) + ";\n";
 fs.writeFileSync(path.join(here, "gi-data/pinyin.js"), text, "utf8");
 
 console.log(`名字 ${Object.keys(namesOut).length} 条，逐字兜底 ${Object.keys(charsOut).length} 字`);

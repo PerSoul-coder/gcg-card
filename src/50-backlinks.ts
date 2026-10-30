@@ -1,11 +1,24 @@
-/* 七圣召唤浏览器 · 反链索引与术语正文渲染。
-   源码按领域拆分，由 src/sources.mjs 统一声明加载顺序；单文件版构建时按同一顺序内联。 */
-"use strict";
+/* src/50-backlinks.js —— 由 scripts/_convert.mjs 从旧脚本转换（迁移中间态）。 */
+import { DATASET, dsByKey, dsReady } from "./07-dataset";
+import { termRe } from "./40-concepts";
+import { POOL_TYPE_ORDER } from "./45-pool";
+import { state } from "./data/state";
+import { esc } from "./core/dom";
+import { cardArtHtml } from "./data/model";
+import { costText } from "./30-deps";
+import { linkifyExcept } from "./40-concepts";
+import { pool } from "./45-pool";
+import { tip } from "./90-detail";
 
 /* ---------- 反链索引：概念名 → 引用它的卡牌/角色 ----------
    卡文与技能文本里出现的其他卡牌、术语，反向收集为"被引用"清单，
    详情页可顺藤摸瓜。扫描复用 termRe（与链接高亮同一套词表，不重复造轮子）。 */
 let backlinks = new Map();
+
+/** 清空反链索引（供「刷新数据」使用）。 */
+export function resetBacklinks(): void {
+  backlinks = new Map();
+}
 function buildBacklinks() {
   backlinks.clear();
   /* 统一数据集：出边在构建期算好，只来自可链接文本（卡牌效果 / 技能效果 / 规则），
@@ -40,9 +53,9 @@ function buildBacklinks() {
       return m;
     });
   };
-  for (const e of ENT) if (POOL_TYPE_ORDER.includes(e.type)) scan(e.description, e.id);
+  for (const e of state.ENT) if (POOL_TYPE_ORDER.includes(e.type)) scan(e.description, e.id);
   /* 角色简介是叙事文本，不作为概念引用来源（只在技能效果里收集） */
-  for (const c of CHAR) for (const s of c.skills || []) scan(s.description || s.rawDescription, c.id);
+  for (const c of state.CHAR) for (const s of c.skills || []) scan(s.description || s.rawDescription, c.id);
 }
 const KIND_ZH = { card: "卡牌", char: "角色", skill: "技能", keyword: "术语", rule: "规则", "rule-term": "规则术语", status: "状态效果", summon: "召唤物", enemy: "敌方牌", cardref: "卡牌", charref: "角色" };
 function termBodyHtml(info, big, showKind, hideName) {
@@ -85,3 +98,4 @@ function termHtml(entries, big = false, hideName = false) {
   return list.map(info => termBodyHtml(info, big, list.length > 1, hideName)).join("");
 }
 
+export { backlinks, buildBacklinks, KIND_ZH, termBodyHtml, termHtml };

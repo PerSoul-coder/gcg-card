@@ -1,6 +1,15 @@
-/* 七圣召唤浏览器 · 分享码 → 牌组解析流程与输入路由。
-   源码按领域拆分，由 src/sources.mjs 统一声明加载顺序；单文件版构建时按同一顺序内联。 */
-"use strict";
+/* src/60-parse.js —— 由 scripts/_convert.mjs 从旧脚本转换（迁移中间态）。 */
+import { decodeRaw } from "./10-codec";
+import { $ } from "./core/dom";
+import { ensureData } from "./20-data";
+import { cardElement } from "./45-pool";
+import { deckReqsOf, diceCost, energyCost, restrictionsOf } from "./30-deps";
+import { renderGrid, renderList, renderSummary } from "./85-views";
+import { state } from "./data/state";
+import { STORAGE_KEYS, tagZh, eleIcon } from "./core/resources";
+import { esc, setStatus } from "./core/dom";
+import { TYPE_ZH } from "./data/model";
+import { pool } from "./45-pool";
 
 /* ---------- 历史 ---------- */
 function loadHistory() { try { return JSON.parse(localStorage.getItem(STORAGE_KEYS.history) || "[]"); } catch { return []; } }
@@ -25,7 +34,7 @@ function parseShareIds(code) {
   const src = String(code || "").trim();
   const shareIds = decodeRaw(src);
   const ids = shareIds.map(s => {
-    const id = shareMap[s];
+    const id = state.shareMap[s];
     if (!id) throw new Error(`未知的分享 id ${s}，分享码可能有误或数据版本不匹配`);
     return id;
   });
@@ -46,14 +55,14 @@ async function decodeAndRender(code, opts = {}) {
     const { charIds, cardIds, countMap } = parseShareIds(code);
     const groups = {};
     for (const [id, count] of countMap) {
-      const e = entById.get(id);
+      const e = state.entById.get(id);
       if (!e) throw new Error(`未知卡牌 id ${id}`);
       const type = TYPE_ZH[e.type] || e.type;
       (groups[type] ??= []).push({
         id, count, name: e.name, type, typeRaw: e.type, element: cardElement(e),
         tags: e.tags.map(tagZh).filter(Boolean), tagsRaw: e.tags,
         playCost: e.playCost, dice: diceCost(e.playCost), energy: energyCost(e.playCost),
-        related: e.relatedCharacterId ? charById.get(e.relatedCharacterId)?.name : null,
+        related: e.relatedCharacterId ? state.charById.get(e.relatedCharacterId)?.name : null,
         relatedId: e.relatedCharacterId ?? null,
         restrictions: restrictionsOf(e), deckReqs: deckReqsOf(e),
         desc: (e.description || "").trim(), since: e.sinceVersion,
@@ -62,26 +71,26 @@ async function decodeAndRender(code, opts = {}) {
     const known = ["装备牌", "支援牌", "事件牌", "援助牌"];
     const order = known.filter(t => groups[t]).concat(Object.keys(groups).filter(t => !known.includes(t)));
 
-    current = {
+    state.current = {
       code, charIds, cardIds,
       chars: charIds.map(id => {
-        const c = charById.get(id);
+        const c = state.charById.get(id);
         if (!c) throw new Error(`未知角色 id ${id}`);
         return { id, name: c.name, hp: c.hp, energy: c.maxEnergy, since: c.sinceVersion,
           element: (c.tags.find(t => t.startsWith("GCG_TAG_ELEMENT")) || "").replace("GCG_TAG_ELEMENT_", "") };
       }),
       groups, order,
     };
-    deckOrder = [...current.chars.map(c => c.id),
-      ...order.flatMap(t => current.groups[t].map(x => x.id))];
+    state.deckOrder = [...state.current.chars.map(c => c.id),
+      ...order.flatMap(t => state.current.groups[t].map(x => x.id))];
 
     renderSummary(); renderGrid(); renderList();
     /* 摘要只属于「卡面视图」：在卡库/列表里解析牌组不应把整块摘要顶到标签栏上方 */
-    $("summary").style.display = currentView === "grid" ? "block" : "none";
+    $("summary").style.display = state.currentView === "grid" ? "block" : "none";
     ["btnCopyCode", "btnExport"].forEach(b => $(b).disabled = false);
     setStatus(`解析成功：3 名角色 + ${cardIds.length} 张行动牌（去重 ${countMap.size} 种）`, "ok");
     if (!opts.noHash) history.replaceState(null, "", "#" + code);
-    if (!opts.noHistory) pushHistory({ code, chars: current.chars.map(c => ({ name: c.name, el: c.element })) });
+    if (!opts.noHistory) pushHistory({ code, chars: state.current.chars.map(c => ({ name: c.name, el: c.element })) });
   } catch (e) {
     setStatus(`解析失败：${e.message}`, "err");
   } finally {
@@ -106,3 +115,4 @@ async function resolveInput(text) {
   await decodeAndRender(t);
 }
 
+export { loadHistory, pushHistory, renderHistory, parseShareIds, decodeAndRender, CODE_RE, looksLikeCode, resolveInput };

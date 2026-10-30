@@ -71,11 +71,7 @@
 <div id="toasts"></div>
 <div id="overlay"><div class="detail" id="detail"></div></div>
 
-<!-- 资源脚本：拼音索引 / 补充概念库 / 官方七元素矢量图标（顺序由 scripts/sources.mjs 声明） -->
-<script src="gi-data/pinyin.js?v=26"></script>
-<script src="gi-data/concepts-extra.js?v=26"></script>
-<script src="gi-data/element-icons.js?v=26"></script>
-
+<!-- 拼音索引 / 概念库 / 元素图标已作为 ESM 模块打进 dist/app.js，不再单独加载 -->
 <!-- app-sources:start（构建脚本会把这一段整体替换为内联的应用脚本） -->
 <!-- TypeScript 源由 scripts/build-app.mjs 打包为单文件 dist/app.js；
      开发时改完源码需重新构建（npm run build:app）。 -->

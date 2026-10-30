@@ -54,11 +54,11 @@ const localStorageStub = {
 const logic = readAppSource();
 const conceptsExtra = JSON.parse(
   fs.readFileSync(path.join(here, "gi-data/concepts-extra.js"), "utf8")
-    .replace(/^window\.CONCEPTS_EXTRA = /, "").replace(/;\s*$/, "")
+    .replace(/^export const CONCEPTS_EXTRA = /, "").replace(/;\s*$/, "")
 );
 const pinyinData = JSON.parse(
   fs.readFileSync(path.join(here, "gi-data/pinyin.js"), "utf8")
-    .replace(/^window\.PINYIN_DATA = /, "").replace(/;\s*$/, "")
+    .replace(/^export const PINYIN_DATA = /, "").replace(/;\s*$/, "")
 );
 
 const harness = `
@@ -76,7 +76,7 @@ const harness = `
   assert(looksLikeCode("") === false, "识别：空串 → false");
 
   await decodeAndRender(SAMPLE);
-  assert(current && current.chars.length === 3 && current.order.length, "示例牌组解析成功（3 角色 + 行动牌分组）");
+  assert(state.current && state.current.chars.length === 3 && state.current.order.length, "示例牌组解析成功（3 角色 + 行动牌分组）");
   assert(draft.chars.includes(1711) && (draft.cards.get(212111) || 0) === 2, "数据就绪后有效草稿条目被保留（pruneDraft 不过滤有效 id）");
   draft.cards.set(99999999, 1); pruneDraft();
   assert(!draft.cards.has(99999999), "pruneDraft 清除失效 id（数据版本更新场景）");
@@ -177,25 +177,25 @@ const harness = `
 
   /* ===== 3. 草稿 → 生成分享码（与原码逐字节一致） ===== */
   draftClear();
-  for (const c of current.chars) draftAdd(c.id);
-  for (const t of current.order) for (const x of current.groups[t]) for (let i = 0; i < x.count; i++) draftAdd(x.id);
+  for (const c of state.current.chars) draftAdd(c.id);
+  for (const t of state.current.order) for (const x of state.current.groups[t]) for (let i = 0; i < x.count; i++) draftAdd(x.id);
   assert(draft.chars.length === 3 && draftTotal() === 30, "草稿装满：3 角色 + 30 张行动牌");
   /* 草稿按加入顺序编码，与原码顺序未必一致——断言语义等价（解码后多重集相同） */
   const code = draftEncode();
   const norm = ids => JSON.stringify([...ids].sort((a, b) => a - b));
   assert(norm(decodeRaw(code)) === norm(decodeRaw(SAMPLE)), "草稿生成的牌组与原牌组语义等价（解码多重集一致）");
-  /* 复制分享码走原始顺序，必须逐字节还原（此时 current 仍为 SAMPLE 顺序） */
+  /* 复制分享码走原始顺序，必须逐字节还原（此时 state.current 仍为 SAMPLE 顺序） */
   assert(encodeCurrent() === SAMPLE, "复制分享码按原始顺序重建，逐字节还原");
   /* 草稿码可被查看器自身完整解析（行为验证） */
   await decodeAndRender(code);
-  assert(current && current.chars.length === 3 && current.order.reduce((a, t) => a + current.groups[t].reduce((b, x) => b + x.count, 0), 0) === 30,
+  assert(state.current && state.current.chars.length === 3 && state.current.order.reduce((a, t) => a + state.current.groups[t].reduce((b, x) => b + x.count, 0), 0) === 30,
     "草稿分享码可被完整解析回牌组（3 角色 + 30 张）");
   /* 解析草稿码后再编码，同样逐字节还原（草稿顺序被完整保留） */
   assert(encodeCurrent() === code, "再编码保序：草稿顺序也被逐字节保留");
 
   /* ===== 4. 构筑规则校验 ===== */
   draftClear();
-  const legend = ENT.find(e => (e.tags || []).includes("GCG_TAG_LEGEND") && e.shareId != null);
+  const legend = state.ENT.find(e => (e.tags || []).includes("GCG_TAG_LEGEND") && e.shareId != null);
   if (legend) {
     draftAdd(legend.id); draftAdd(legend.id);
     assert((draft.cards.get(legend.id) || 0) === 1, "秘传牌整套限 1 张（第二次加入被拒）");
@@ -204,14 +204,14 @@ const harness = `
   draftClear();
   /* 只取无构筑门槛的行动牌（天赋/共鸣/地区牌依赖特定角色，这里不引入），
      否则「加入牌组」会按牌组限制拒绝，装不满 30 张 */
-  const freeCards = ENT.filter(e => ["GCG_CARD_MODIFY","GCG_CARD_SUPPORT","GCG_CARD_EVENT","GCG_CARD_ASSIST"].includes(e.type)
+  const freeCards = state.ENT.filter(e => ["GCG_CARD_MODIFY","GCG_CARD_SUPPORT","GCG_CARD_EVENT","GCG_CARD_ASSIST"].includes(e.type)
     && e.shareId != null && deckReqsOf(e).length === 0 && !(e.tags || []).includes("GCG_TAG_LEGEND"));
   const pool = freeCards.slice(0, 16);
   for (const e of pool) { draftAdd(e.id); draftAdd(e.id); }
   assert(draftTotal() === 30, "行动牌满 30 张后拒绝更多加入");
 
   draftClear();
-  const charPool = CHAR.filter(c => c.shareId != null).slice(0, 4);
+  const charPool = state.CHAR.filter(c => c.shareId != null).slice(0, 4);
   for (const c of charPool) draftAdd(c.id);
   assert(draft.chars.length === 3, "角色满 3 名后拒绝更多加入");
 
@@ -244,7 +244,7 @@ const harness = `
   /* 阶段一先收敛卡池：只留事件牌，再在同一子集内检索 */
   browseState.type = "GCG_CARD_EVENT";
   renderBrowseResults();
-  assert(searchState.results.every(r => r.kind === "concept" || entById.get(r.id)?.type === "GCG_CARD_EVENT"),
+  assert(searchState.results.every(r => r.kind === "concept" || state.entById.get(r.id)?.type === "GCG_CARD_EVENT"),
     "双阶段：检索结果全部落在卡库筛选出的子集内");
   assert(searchState.results.length <= fullHits, "双阶段：筛选后命中数不超过全库检索");
   assert(browseState.type === "GCG_CARD_EVENT" && searchState.q === "芙宁娜", "筛选与检索各自持有状态，互不重置");
@@ -257,7 +257,7 @@ const harness = `
   assert(browseState.type === "", "清除卡库筛选：维度归零");
 
   /* ===== 7. 空牌组时的视图保护 ===== */
-  current = null;
+  state.current = null;
   renderGrid(); renderList();
   assert(String($("view-grid").innerHTML).includes("尚未解析牌组"), "无牌组时卡面视图显示引导而非崩溃");
   assert(String($("view-list").innerHTML).includes("尚未解析牌组"), "无牌组时列表视图显示引导而非崩溃");

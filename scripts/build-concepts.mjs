@@ -205,7 +205,7 @@ console.log("\n补充条目已写入 gi-data/concepts-extra.json:", Object.keys(
 
 /* 同步产出浏览器直载的 JS 包装：file:// 下 fetch 本地 JSON 受 CORS 限制，
    经典 <script src> 不受限——查看器保持双击即开 */
-fs.writeFileSync(path.join(BASE, "gi-data/concepts-extra.js"), "window.CONCEPTS_EXTRA = " + JSON.stringify(supplement) + ";\n", "utf8");
+fs.writeFileSync(path.join(BASE, "gi-data/concepts-extra.js"), "export const CONCEPTS_EXTRA = " + JSON.stringify(supplement) + ";\n", "utf8");
 console.log("已写入 gi-data/concepts-extra.js（查看器 <script> 直载）");
 
 const byKind = {};

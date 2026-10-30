@@ -1,6 +1,25 @@
-/* 七圣召唤浏览器 · 详情弹层、弹层导航、帮助面板与概念交互。
-   源码按领域拆分，由 src/sources.mjs 统一声明加载顺序；单文件版构建时按同一顺序内联。 */
-"use strict";
+/* src/90-detail.js —— 由 scripts/_convert.mjs 从旧脚本转换（迁移中间态）。 */
+import { KIND_ZH, backlinks } from "./50-backlinks";
+import { $ } from "./core/dom";
+import { copyLimit, draft, draftAdd, draftRemoveCard, draftRemoveChar } from "./80-deck";
+import { browseVisibleIds } from "./85-views";
+import { renderSkillView, showSkill, skillOf } from "./47-skills";
+import { compareState, renderCompareView, renderDeckDiffView } from "./88-compare";
+import { renderOddsView } from "./86-odds";
+import { cardElement, charElement } from "./45-pool";
+import { R_STYLE, deckReqsOf, reqElement, restrictionsOf } from "./30-deps";
+import { termEntries } from "./40-concepts";
+import { state } from "./data/state";
+import { ELE_ZH, ELE_COLOR, tagZh, eleIcon, enPips } from "./core/resources";
+import { esc, toast, copyText } from "./core/dom";
+import { typeZhOf, isFieldEntity, isShadowState, cardArtHtml } from "./data/model";
+import { BUILTIN_DATA } from "./20-data";
+import { costHtml } from "./30-deps";
+import { linkify } from "./40-concepts";
+import { pool, poolStats } from "./45-pool";
+import { skillsHtml, skillsHtmlCard } from "./47-skills";
+import { termHtml } from "./50-backlinks";
+import { COMPARE_MAX } from "./88-compare";
 
 /* ---------- 详情弹层（含限制、关联与反链导航） ---------- */
 /* 反链 chips：引用该概念的其他卡牌/角色，点击跳转详情。
@@ -11,11 +30,11 @@ function backlinkHtml(name, selfId) {
   const b = backlinks.get(name);
   if (!b || !b.size) return "";
   /* 准备状态影子不进"被引用"：它只是技能自己的运行时标记，列出来会与技能同名同义 */
-  const ids = [...b].filter(x => x !== selfId && !isShadowState(entById.get(x)));
+  const ids = [...b].filter(x => x !== selfId && !isShadowState(state.entById.get(x)));
   if (!ids.length) return "";
   const byName = new Map();      /* 卡片显示名 → { id, n } */
   for (const id of ids) {
-    const t = charById.get(id) || entById.get(id);
+    const t = state.charById.get(id) || state.entById.get(id);
     if (!t) continue;
     const cur = byName.get(t.name);
     if (!cur) byName.set(t.name, { id, n: 1, deckable: t.shareId != null });
@@ -34,12 +53,12 @@ function backlinkHtml(name, selfId) {
 }
 /* 角色天赋牌 chips（卡牌详情中排除自身，避免自指） */
 function charTalentChips(charId, excludeId) {
-  const list = ENT.filter(x => x.relatedCharacterId === charId && (x.tags || []).includes("GCG_TAG_TALENT"));
+  const list = state.ENT.filter(x => x.relatedCharacterId === charId && (x.tags || []).includes("GCG_TAG_TALENT"));
   if (!list.length) return "";
   return `<div class="drel"><b>天赋牌</b><span class="blchips">` + list.map(x =>
     `<button class="blchip${x.id === excludeId ? " self" : ""}" data-goto="${x.id}" title="${esc(x.name)}${x.id === excludeId ? "（当前卡牌）" : ""}">${esc(x.name)}</button>`).join("") + `</span></div>`;
 }
-function draftHas(id) { return charById.has(id) ? draft.chars.includes(id) : draft.cards.has(id); }
+function draftHas(id) { return state.charById.has(id) ? draft.chars.includes(id) : draft.cards.has(id); }
 /* 详情页的主行动：加入牌组。
    同名卡可以放 2 张（秘传 1 张，见 80-deck 的 copyLimit），所以这里不能做成
    「加入 / 移出」二选一——那只允许加 1 张。已加入时按钮写「再加一张 ×1/2」，
@@ -64,7 +83,7 @@ function deckActionHtml(id, joinable, c) {
    返回（‹ / Esc）逐层弹出：概念 → 来源概念 → … → 来源卡牌 → 关闭弹层。
    所有入口（卡面 / 列表 / 卡库 / 检索 / 深链 / 反链 chip / 术语链接）都走
    showDetail / showTermModal 这一条路径，因此翻页与下钻在任意界面表现一致。 */
-function topView() { return overlayStack.length ? overlayStack[overlayStack.length - 1] : null; }
+function topView() { return state.overlayStack.length ? state.overlayStack[state.overlayStack.length - 1] : null; }
 const overlayOpen = () => $("overlay").classList.contains("show");
 
 /* 弹层的开关统一走这里：显示/隐藏 + 锁定背景滚动。
@@ -92,11 +111,11 @@ function setOverlayOpen(open) {
    牌组 → 牌组内顺序。（旧实现把"牌组顺序"和"导航上下文"混成一个 modalList，
    从卡库/检索打开详情时会被压成单张，此后再从卡面视图打开详情也仍是单张。） */
 function pagerContextFor(id) {
-  if (currentView === "browse") {
+  if (state.currentView === "browse") {
     const ids = browseVisibleIds();
     if (ids.includes(id)) return ids;
   }
-  return deckOrder.includes(id) ? deckOrder : [id];
+  return state.deckOrder.includes(id) ? state.deckOrder : [id];
 }
 function detailView(id, ids) {
   const list = ids && ids.length ? ids.slice() : [id];
@@ -138,16 +157,16 @@ function showDetail(id, ids) {
   id = Number(id);
   const top = topView();
   if (overlayOpen() && top && top.kind === "detail" && top.id === id) return;
-  if (!overlayOpen()) overlayStack = [];
-  overlayStack.push(detailView(id, ids || pagerContextFor(id)));
+  if (!overlayOpen()) state.overlayStack = [];
+  state.overlayStack.push(detailView(id, ids || pagerContextFor(id)));
   renderOverlay();
 }
 function overlayBack() {
-  overlayStack.pop();
-  if (!overlayStack.length) { setOverlayOpen(false); return; }
+  state.overlayStack.pop();
+  if (!state.overlayStack.length) { setOverlayOpen(false); return; }
   renderOverlay();
 }
-function overlayClose() { overlayStack = []; setOverlayOpen(false); }
+function overlayClose() { state.overlayStack = []; setOverlayOpen(false); }
 /* 翻页：同一列表内前后跳 */
 function modalStep(d) {
   const top = topView();
@@ -168,12 +187,12 @@ function viewLabel(v) {
   if (v.kind === "compare") return "卡牌对比";
   if (v.kind === "deckdiff") return "牌组对比";
   if (v.kind === "odds") return "抽牌概率";
-  const c = charById.get(v.id), e = entById.get(v.id);
+  const c = state.charById.get(v.id), e = state.entById.get(v.id);
   return (c && c.name) || (e && e.name) || "上一页";
 }
 /* 弹层顶栏：返回（仅栈深 > 1 时出现）+ 自定义按钮组 + 关闭 */
 function navBar(extra = "") {
-  const prev = overlayStack.length > 1 ? overlayStack[overlayStack.length - 2] : null;
+  const prev = state.overlayStack.length > 1 ? state.overlayStack[state.overlayStack.length - 2] : null;
   const back = prev
     ? `<button class="lbtn tm-back" title="返回「${esc(viewLabel(prev))}」" onclick="overlayBack()">‹ ${esc(viewLabel(prev))}</button>` : "";
   return `<div class="navbtns">${back}${extra}
@@ -190,7 +209,7 @@ function pagerHtml(v) {
 }
 function renderDetailView(v) {
   const id = v.id;
-  const c = charById.get(id), e = entById.get(id);
+  const c = state.charById.get(id), e = state.entById.get(id);
   /* 只有带分享码 id 的条目能进牌组：对局实体（状态/召唤物/附加状态）与历史变体
      都不可构筑，给它们显示「加入牌组」只会点出一个失败的 toast */
   const joinTarget = c || e;
@@ -234,10 +253,10 @@ function renderDetailView(v) {
       ${rs.length ? `<div class="rgroup rgroup-play"><div class="rhead"><b>打出限制</b><span class="rghint">对局中生效</span></div>${rs.map(reqRow).join("")}</div>` : ""}
     </div>` : "";
     const relChip = e.relatedCharacterId != null
-      ? `<div class="drel"><b>关联角色</b><span class="blchips"><button class="blchip" data-goto="${e.relatedCharacterId}">${eEl ? eleIcon(eEl) : ""}${esc(charById.get(e.relatedCharacterId)?.name || e.relatedCharacterId)}</button></span></div>` : "";
+      ? `<div class="drel"><b>关联角色</b><span class="blchips"><button class="blchip" data-goto="${e.relatedCharacterId}">${eEl ? eleIcon(eEl) : ""}${esc(state.charById.get(e.relatedCharacterId)?.name || e.relatedCharacterId)}</button></span></div>` : "";
     html = `${nav}<div class="dimg">${cardArtHtml(id, { kind: "detail", alt: e.name })}</div>
       <div class="dinfo"><h2>${esc(e.name)}</h2>
-      <div class="meta"><span class="tagpill">${esc(typeZhOf(e))}</span>${eEl ? `<span class="tagpill">${eleIcon(eEl)}${esc(ELE_ZH[eEl] || eEl)}</span>` : ""}${costHtml(e.playCost)}${tags.map(t => `<span class="tagpill">${esc(t)}</span>`).join("")}${e.relatedCharacterId ? `<span class="tagpill">关联：${esc(charById.get(e.relatedCharacterId)?.name || e.relatedCharacterId)}</span>` : ""}<span class="tagpill">${esc(e.sinceVersion || "")}</span></div>
+      <div class="meta"><span class="tagpill">${esc(typeZhOf(e))}</span>${eEl ? `<span class="tagpill">${eleIcon(eEl)}${esc(ELE_ZH[eEl] || eEl)}</span>` : ""}${costHtml(e.playCost)}${tags.map(t => `<span class="tagpill">${esc(t)}</span>`).join("")}${e.relatedCharacterId ? `<span class="tagpill">关联：${esc(state.charById.get(e.relatedCharacterId)?.name || e.relatedCharacterId)}</span>` : ""}<span class="tagpill">${esc(e.sinceVersion || "")}</span></div>
       ${isFieldEntity(e) ? `<div class="dnote">对局实体：由技能或卡牌效果在对局中生成，不可加入牌组。</div>` : ""}
       ${reqBlock}
       <div class="dtext">${linkify(esc((e.description || "").trim()))}</div>
@@ -256,7 +275,7 @@ window.draftToggleModal = () => {
   const top = topView();
   if (!top || top.kind !== "detail") return;
   const id = top.id;
-  if (charById.has(id)) {
+  if (state.charById.has(id)) {
     /* 角色是唯一的（3 个槽，同一角色不重复），所以角色仍按开关处理 */
     if (draft.chars.includes(id)) draftRemoveChar(id); else draftAdd(id);
   } else {
@@ -269,7 +288,7 @@ window.draftToggleModal = () => {
 window.draftRemoveFromDetail = () => {
   const top = topView();
   if (!top || top.kind !== "detail") return;
-  if (charById.has(top.id)) draftRemoveChar(top.id); else draftRemoveCard(top.id);
+  if (state.charById.has(top.id)) draftRemoveChar(top.id); else draftRemoveCard(top.id);
   renderOverlay();
 };
 /* 反链跳转：详情/术语弹层内的「被引用」chips */
@@ -282,7 +301,7 @@ document.addEventListener("click", ev => {
 
 /* ---------- 帮助面板（快捷键与说明，复用详情弹层容器） ---------- */
 function showHelp() {
-  overlayStack = [];   /* 帮助不是视图栈的一层：先清栈，关闭时不会退回旧页面 */
+  state.overlayStack = [];   /* 帮助不是视图栈的一层：先清栈，关闭时不会退回旧页面 */
   $("detail").innerHTML = `<div class="navbtns"><button title="关闭 (Esc)" onclick="overlayClose()">✕</button></div>
     <div class="dinfo"><h2>快捷键与说明</h2>
     <div class="dtext">
@@ -325,7 +344,7 @@ Ctrl+P　打印当前列表视图
    · 点击任意术语 → 进入概念页（若该名字只对应唯一一个卡牌/角色身份，则直接开详情）；
    · 概念页里的术语链接继续压栈 → 沿概念链下钻；返回钮 / Esc 逐层退回来源卡牌。
    早期实现有两种点击行为（卡文里就地展开、概念页里下钻），所以「深钻」只在部分
-   界面生效；现在统一走 overlayStack，任意入口（卡文、卡名、检索、被引用）表现一致。 */
+   界面生效；现在统一走 state.overlayStack，任意入口（卡文、卡名、检索、被引用）表现一致。 */
 const tip = document.createElement("div");
 tip.id = "tip";
 document.body.appendChild(tip);
@@ -376,7 +395,7 @@ function renderTermView(v) {
   const name = v.name;
   const entries = termEntries(name);
   if (!entries.length) { overlayBack(); return; }
-  const depth = overlayStack.filter(x => x.kind === "term").length;
+  const depth = state.overlayStack.filter(x => x.kind === "term").length;
   const depthTag = depth > 1 ? `<span class="tm-depth" title="概念下钻层级">${depth} 层</span>` : "";
   $("detail").innerHTML = `${navBar(depthTag)}
     <div class="dinfo"><h2>${esc(name)}</h2>
@@ -389,8 +408,8 @@ function showTermModal(name) {
   if (!termEntries(name).length) return;
   const top = topView();
   if (top && top.kind === "term" && top.name === name) return;
-  if (!overlayOpen()) overlayStack = [];
-  overlayStack.push({ kind: "term", name });
+  if (!overlayOpen()) state.overlayStack = [];
+  state.overlayStack.push({ kind: "term", name });
   renderOverlay();
 }
 /* 概念点击路由（纯函数）：唯一身份（卡牌 / 角色）→ 直接开详情；
@@ -442,3 +461,4 @@ document.addEventListener("keydown", ev => {
   if (el) showDetail(Number(el.dataset.id));
 }));
 
+export { backlinkHtml, charTalentChips, draftHas, deckActionHtml, topView, overlayOpen, setOverlayOpen, pagerContextFor, detailView, renderedView, renderOverlay, showDetail, overlayBack, overlayClose, modalStep, viewLabel, navBar, pagerHtml, renderDetailView, showHelp, tip, canHover, tipTerm, hideTip, renderTermView, showTermModal, termRoute, openTermName };

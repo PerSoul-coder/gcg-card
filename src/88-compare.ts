@@ -1,19 +1,31 @@
-/* 七圣召唤浏览器 · 卡牌对比与牌组差异。
-   源码按领域拆分，由 src/sources.mjs 统一声明加载顺序；单文件版构建时按同一顺序内联。 */
-"use strict";
+/* src/88-compare.js —— 由 scripts/_convert.mjs 从旧脚本转换（迁移中间态）。 */
+import { cardElement, charElement, pool } from "./45-pool";
+import { $ } from "./core/dom";
+import { costText, deckReqsOf, diceCost, energyCost, restrictionsOf } from "./30-deps";
+import { linkify } from "./40-concepts";
+import { overlayBack, overlayOpen, renderOverlay, topView } from "./90-detail";
+import { draftEncode } from "./80-deck";
+import { parseShareIds } from "./60-parse";
+import { dataReady, ensureData } from "./20-data";
+import { state } from "./data/state";
+import { ELE_ZH, tagZh, eleIcon } from "./core/resources";
+import { esc, setStatus, toast } from "./core/dom";
+import { TYPE_ZH, typeZhOf, cardArtHtml } from "./data/model";
+import { decks } from "./80-deck";
+import { navBar, tip } from "./90-detail";
 
 /* ---------- 多卡对比：选择态 ----------
    对比是"跨视图的临时选择"，独立于牌组草稿与检索状态：
    · 卡库 / 检索结果里的卡块点「⇄」加入，最多 4 张；
    · 选择不写入 localStorage，刷新即清空，避免与牌组数据混淆；
-   · 对比面板压入 overlayStack，可继续点卡名查看详情，返回时回到对比。 */
+   · 对比面板压入 state.overlayStack，可继续点卡名查看详情，返回时回到对比。 */
 const COMPARE_MAX = 4;
 const compareState = { ids: [] };
 /* 面板偏好只存内存：仅看差异记住上次选择，相似卡区块每次重新展开 */
 const comparePrefs = { onlyDiff: false };
 
 function compareName(id) {
-  return charById.get(id)?.name || entById.get(id)?.name || `#${id}`;
+  return state.charById.get(id)?.name || state.entById.get(id)?.name || `#${id}`;
 }
 function cmpBtnHtml(id) {
   const on = compareState.ids.includes(Number(id));
@@ -21,7 +33,7 @@ function cmpBtnHtml(id) {
 }
 function toggleCompare(id) {
   id = Number(id);
-  if (!charById.has(id) && !entById.has(id)) return;
+  if (!state.charById.has(id) && !state.entById.has(id)) return;
   const i = compareState.ids.indexOf(id);
   if (i >= 0) compareState.ids.splice(i, 1);
   else if (compareState.ids.length >= COMPARE_MAX) { toast(`最多同时对比 ${COMPARE_MAX} 张卡牌`, true); return; }
@@ -42,7 +54,7 @@ function renderCompareBar() {
   const bar = $("compareBar");
   if (!bar) return;
   const body = document.body;
-  const ids = compareState.ids.filter(id => charById.has(id) || entById.has(id));
+  const ids = compareState.ids.filter(id => state.charById.has(id) || state.entById.has(id));
   if (!ids.length) {
     bar.classList.remove("show"); bar.innerHTML = "";
     if (body && body.classList) body.classList.remove("cmp-on");
@@ -63,7 +75,7 @@ function fieldVal(html, text) {
   return { html: html || "—", text: String(text ?? "").replace(/\s+/g, "") };
 }
 function compareFields(id) {
-  const c = charById.get(id), e = entById.get(id);
+  const c = state.charById.get(id), e = state.entById.get(id);
   if (!c && !e) return null;
   const isChar = !!c;
   const raw = c || e;
@@ -74,7 +86,7 @@ function compareFields(id) {
   const energy = isChar ? `上限 ${c.maxEnergy}` : (energyCost(e.playCost) ? `费用 ${energyCost(e.playCost)}` : "—");
   const hp = isChar ? String(c.hp) : "—";
   const rel = !isChar && e.relatedCharacterId != null
-    ? (charById.get(e.relatedCharacterId)?.name || String(e.relatedCharacterId)) : "—";
+    ? (state.charById.get(e.relatedCharacterId)?.name || String(e.relatedCharacterId)) : "—";
   const dreq = !isChar ? (deckReqsOf(e).map(r => r.short).join("、") || "—") : "—";
   const play = !isChar ? (restrictionsOf(e).map(r => r.short).join("、") || "—") : "—";
   let effectHtml, effectText;
@@ -153,14 +165,14 @@ function similarCards(id, limit = 3) {
   return out.sort((a, b) => b.score - a.score || a.name.localeCompare(b.name, "zh")).slice(0, limit);
 }
 function inCurrentDeck(id) {
-  return !!current && (current.charIds.includes(id) || current.cardIds.includes(id));
+  return !!state.current && (state.current.charIds.includes(id) || state.current.cardIds.includes(id));
 }
 /* 把对比中的一张卡换成候选卡：同步浮动对比栏与已打开的对比视图 */
 function swapCompare(fromId, toId) {
   fromId = Number(fromId); toId = Number(toId);
   const i = compareState.ids.indexOf(fromId);
   if (i < 0) return false;
-  if (!charById.has(toId) && !entById.has(toId)) return false;
+  if (!state.charById.has(toId) && !state.entById.has(toId)) return false;
   if (compareState.ids.includes(toId)) return false;
   compareState.ids[i] = toId;
   const top = topView();
@@ -225,28 +237,28 @@ function renderCompareView(v) {
     </div>`;
 }
 function showCompare() {
-  const ids = compareState.ids.filter(id => charById.has(id) || entById.has(id));
+  const ids = compareState.ids.filter(id => state.charById.has(id) || state.entById.has(id));
   if (ids.length < 2) { toast("至少选择 2 张卡牌才能对比", true); return; }
   const view = { kind: "compare", ids: [...ids], onlyDiff: comparePrefs.onlyDiff, showSim: false };
   const top = topView();
   if (overlayOpen() && top) {
     /* 从详情打开时压栈：返回键回到那张卡，而不是把详情上下文丢掉 */
     if (top.kind === "compare") { top.ids = view.ids; top.showSim = false; }
-    else overlayStack.push(view);
-  } else overlayStack = [view];
+    else state.overlayStack.push(view);
+  } else state.overlayStack = [view];
   renderOverlay();
 }
 
 /* ---------- 牌组差异：解码复用 + 纯差异模型 ---------- */
 function deckCodeNow() {
-  if (current && current.code) return current.code;
+  if (state.current && state.current.code) return state.current.code;
   try { return draftEncode(); }
   catch (e) { toast(e.message, true); return ""; }
 }
 function deckDist(d) {
   const cost = Array(6).fill(0), type = {};
   for (const [id, n] of d.countMap) {
-    const e = entById.get(id);
+    const e = state.entById.get(id);
     if (!e) continue;
     cost[Math.min(diceCost(e.playCost), 5)] += n;
     const t = typeZhOf(e);
@@ -258,14 +270,14 @@ function deckDist(d) {
    行动牌按 id 汇总数量；added / removed / changed / same 都是行数组。 */
 function diffDecks(codeA, codeB) {
   const A = parseShareIds(codeA), B = parseShareIds(codeB);
-  const charName = id => charById.get(id)?.name || `#${id}`;
+  const charName = id => state.charById.get(id)?.name || `#${id}`;
   const aNames = new Set(A.charIds.map(charName));
   const bNames = new Set(B.charIds.map(charName));
   const charAdded = B.charIds.filter(id => !aNames.has(charName(id)));
   const charRemoved = A.charIds.filter(id => !bNames.has(charName(id)));
   const ids = new Set([...A.countMap.keys(), ...B.countMap.keys()]);
   const rows = [...ids].map(id => {
-    const e = entById.get(id);
+    const e = state.entById.get(id);
     const a = A.countMap.get(id) || 0, b = B.countMap.get(id) || 0;
     return { id, name: e?.name || `#${id}`, type: TYPE_ZH[e?.type] || e?.type || "", a, b, delta: b - a };
   }).sort((x, y) => (x.type.localeCompare(y.type, "zh") || x.name.localeCompare(y.name, "zh")));
@@ -280,7 +292,7 @@ function diffDecks(codeA, codeB) {
 }
 function deckHeadHtml(tag, d) {
   const chars = d.charIds.map(id => {
-    const c = charById.get(id);
+    const c = state.charById.get(id);
     return c ? `<span class="dd-chip">${eleIcon(charElement(c))}${esc(c.name)}</span>` : "";
   }).join("");
   return `<div class="dd-deck"><b>牌组 ${tag}</b><span class="dd-chars">${chars}</span>
@@ -412,8 +424,8 @@ function showDeckDiff() {
     ensureData().then(showDeckDiff).catch(e => setStatus("数据加载失败：" + e.message, "err"));
     return;
   }
-  if (!deckDiffState.a && current?.code) deckDiffState.a = current.code;
-  overlayStack = [{ kind: "deckdiff", ...deckDiffState }];
+  if (!deckDiffState.a && state.current?.code) deckDiffState.a = state.current.code;
+  state.overlayStack = [{ kind: "deckdiff", ...deckDiffState }];
   renderOverlay();
   focusDeckDiffInput();
 }
@@ -536,3 +548,5 @@ document.addEventListener("keydown", ev => {
   runDeckDiff(top);
   renderOverlay();
 });
+
+export { COMPARE_MAX, compareState, comparePrefs, compareName, cmpBtnHtml, toggleCompare, syncCompareUI, renderCompareBar, fieldVal, compareFields, COMPARE_LABELS, compareData, compareRows, simMeta, simScore, similarCards, inCurrentDeck, swapCompare, renderSimilarSection, renderCompareView, showCompare, deckCodeNow, deckDist, diffDecks, deckHeadHtml, distTable, renderDeckDiffRes, deckDiffState, saveDeckDiff, runDeckDiff, swapDeckDiff, clearDeckDiff, renderDeckDiffView, focusDeckDiffInput, showDeckDiff };

@@ -217,7 +217,7 @@ type Record = {
 - `buildDatasetIndex()`：建立 `byKey` / `byKind` / `byDomain` / `byName`（norm/cosmetic）。
 - 兼容投影：P0 仍保留 `CHAR` / `ENT` / `KW` 供未迁移模块；技能、概念、反链、牌面已切到统一记录，P1 完成唯一化。
 
-加载顺序：`00-resources` → `05-core` → `07-dataset` → `10-codec` → …；同时更新 `src/sources.mjs` 与 `deck-viewer.html` 的 `<script>`。
+模块组织：源码为标准 ESM，依赖由各模块的 `import` 表达；`src/main.ts` 只固定顶层副作用次序。浏览器产物由 esbuild 打成单个 IIFE（`dist/app.js`），因为单 HTML 需要内联脚本且要能在 `file://` 下运行。测试执行同一份产物，通过 `src/test-api.ts` 的导出面访问内部符号——全局暴露只存在于测试进程。
 
 ---
 

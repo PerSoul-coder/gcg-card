@@ -1,7 +1,7 @@
-/* 七圣召唤浏览器 · 依赖模型：牌组限制 / 打出限制、费用拆分。
-   源码按领域拆分，由 src/sources.mjs 统一声明加载顺序；单文件版构建时按同一顺序内联。 */
-"use strict";
-
+/* src/30-deps.js —— 由 scripts/_convert.mjs 从旧脚本转换（迁移中间态）。 */
+import { state } from "./data/state";
+import { ELE_COLOR, WEAPON_ZH, COST_ZH, tagZh, NATION_CODE, CAMP_CODE, ELE_CODE, ENERGY_ICON } from "./core/resources";
+import { esc, toast } from "./core/dom";
 /* ---------- 测试卡过滤 ----------
    明显是测试用途的实体不进卡库/检索（详情深链 #card=id 仍可按 id 访问）。
    判据（对全库 1347 张实体零误报）：名称括号片段含 ASCII 字母——命中
@@ -46,14 +46,14 @@ function deckReqsOf(e) {
   const R = [];
   /* 具体角色：结构化 id 优先；id 缺失（新卡暂无角色数据）时退回描述正则 */
   if (e.relatedCharacterId != null) {
-    const n = charById.get(e.relatedCharacterId)?.name || "";
+    const n = state.charById.get(e.relatedCharacterId)?.name || "";
     if (n) R.push({ code: "deckChar", name: n, charId: e.relatedCharacterId,
       short: `牌组·${n}`, label: `牌组限制：牌组中需包含角色「${n}」才能加入` });
   } else {
     const m = (e.description || "").match(/牌组中包含([^，。]{2,12}?)，才能加入牌组/);
     if (m && !/[#{\[]/.test(m[1])) {
       const n = m[1].trim();
-      R.push({ code: "deckChar", name: n, charId: charByName.get(n)?.id ?? null,
+      R.push({ code: "deckChar", name: n, charId: state.charByName.get(n)?.id ?? null,
         short: `牌组·${n}`, label: `牌组限制：牌组中需包含角色「${n}」才能加入` });
     }
   }
@@ -97,15 +97,15 @@ function reqElement(r) {
    角色不在角色库中（新卡暂无数据）时无法校验，放行——避免误拦。 */
 function deckReqMet(req, chars) {
   if (req.code === "deckChar") {
-    const want = req.name || charById.get(req.charId)?.name || "";
-    if (!want || !charByName.has(want)) return true;
-    return chars.some(id => id === req.charId || charById.get(id)?.name === want);
+    const want = req.name || state.charById.get(req.charId)?.name || "";
+    if (!want || !state.charByName.has(want)) return true;
+    return chars.some(id => id === req.charId || state.charById.get(id)?.name === want);
   }
   if (req.code === "deckEl" || req.code === "deckTag") {
     const n = req.n || 2;
     let hit = 0;
     for (const id of chars) {
-      const c = charById.get(id);
+      const c = state.charById.get(id);
       if (!c) continue;
       if (req.code === "deckEl") { if ((c.tags || []).includes(req.tag)) hit++; }
       else if ((c.tags || []).includes(req.tag)) hit++;
@@ -120,7 +120,7 @@ function reqGapText(req, chars) {
     return `需要牌组中包含角色「${req.name}」（当前未包含）`;
   if (req.code === "deckEl" || req.code === "deckTag") {
     let hit = 0;
-    for (const id of chars) { const c = charById.get(id); if (c && (c.tags || []).includes(req.tag)) hit++; }
+    for (const id of chars) { const c = state.charById.get(id); if (c && (c.tags || []).includes(req.tag)) hit++; }
     const what = req.code === "deckEl" ? `${req.name}元素` : `「${req.name}」`;
     return `需要牌组中包含至少 ${req.n || 2} 名${what}角色（当前 ${hit}）`;
   }
@@ -133,7 +133,7 @@ function restrictionsOf(e) {
   if (tags.includes("GCG_TAG_LEGEND"))
     R.push({ code: "legend", short: "秘传·限1", label: "秘传牌：整套牌组只能放入 1 张（含同名卡）" });
   if (tags.includes("GCG_TAG_TALENT") && e.relatedCharacterId != null) {
-    const n = charById.get(e.relatedCharacterId)?.name || e.relatedCharacterId;
+    const n = state.charById.get(e.relatedCharacterId)?.name || e.relatedCharacterId;
     R.push({ code: "talent", short: "须在场", label: `天赋牌：仅当 ${n} 在场时才能打出` });
   }
   if (tags.includes("GCG_TAG_WEAPON")) {
@@ -160,3 +160,4 @@ const R_ZH = { legend: "秘传", talent: "天赋·须在场", weapon: "武器限
 const depBadge = r => `<span class="rbadge" style="border-color:${r.code === "deckEl" ? (ELE_COLOR[r.name] || "var(--gold)") : R_STYLE[r.code]};color:${r.code === "deckEl" ? (ELE_COLOR[r.name] || "var(--gold)") : R_STYLE[r.code]}" title="${esc(r.label)}">${esc(r.short)}</span>`;
 const depBadges = reqs => reqs.map(depBadge).join("");
 
+export { TEST_CARD_RE, isTestCard, diceCost, energyCost, costHtml, costText, deckReqsOf, reqElement, deckReqMet, reqGapText, restrictionsOf, allReqs, R_STYLE, R_ZH, depBadge, depBadges };

@@ -19,7 +19,6 @@ import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { gzipSync } from "node:zlib";
 import { spawnSync } from "node:child_process";
-import { ASSET_SOURCES } from "./sources.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const read = p => readFileSync(resolve(ROOT, p), "utf8");
@@ -56,9 +55,8 @@ function assertInlinable(code, kind) {
 
 let html = read("deck-viewer.html");
 const css = assertInlinable(read("deck-viewer.css"), "style");
-/* 资源脚本 + 应用包：资源顺序来自 scripts/sources.mjs；
-   应用包是 build-app.mjs 的产物（TS 入口 + 尚未迁移的旧脚本），构建端不再维护第二份清单 */
-const assets = ASSET_SOURCES.map(p => [p, assertInlinable(read(p), "script")]);
+/* 应用包：资源（拼音索引 / 概念库 / 元素图标）已是 ESM 模块，被打进同一个包，
+   这里只需内联 dist/app.js，不再单独处理资源脚本 */
 const app = assertInlinable(read("dist/app.js"), "script");
 
 /* ---------- 1. 样式内联 ---------- */
@@ -66,14 +64,7 @@ const cssTag = /<link\s+rel="stylesheet"\s+href="deck-viewer\.css[^"]*"\s*>/;
 if (!cssTag.test(html)) throw new Error("未找到指向 deck-viewer.css 的 <link> 标签");
 html = html.replace(cssTag, () => `<style>\n${css}\n</style>`);
 
-/* ---------- 2. 资源脚本内联（拼音 / 概念库 / 元素图标） ---------- */
-for (const [p, code] of assets) {
-  const tag = new RegExp(`<script\\s+src="${p.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}[^"]*"\\s*><\\/script>`);
-  if (!tag.test(html)) throw new Error(`未找到 ${p} 的 <script> 标签`);
-  html = html.replace(tag, () => `<script>\n${code}\n</script>`);
-}
-
-/* ---------- 4. 数据快照 + 应用脚本 ---------- */
+/* ---------- 2. 数据快照 + 应用脚本 ---------- */
 let payload = "";
 const counts = [];
 /* 统一数据集（gzip）：两种模式都内联。浏览器原生 DecompressionStream 不支持 brotli，

@@ -73,29 +73,30 @@ python -m http.server 8080
 .
 ├─ deck-viewer.html          多文件开发入口
 ├─ deck-viewer.css           全局样式
-├─ src/                      应用源码（TypeScript 优先，迁移进行中）
+├─ src/                      应用源码（TypeScript，标准 ESM 依赖图）
+│  ├─ main.ts                应用入口（显式列模块，仅用于固定顶层副作用次序）
+│  ├─ test-api.ts            测试专用导出面（不进浏览器产物）
 │  ├─ types.ts               统一数据集类型契约（构建期 / 运行时 / 测试共用）
 │  ├─ core/resources.ts      资源集中管理：数据源、图片地址、元素元数据与图标、存储键
 │  ├─ core/dom.ts            DOM 查询、转义、提示条、剪贴板
 │  ├─ data/state.ts          应用级可变状态（收敛为一个 state 对象）
 │  ├─ data/model.ts          数据模型：类型分类 / 名字归一化 / 影子关系 / 卡面兜底（唯一定义处）
-│  ├─ bridge.ts              迁移期临时接线（迁完即删）
-│  ├─ 07-dataset.js          统一数据集的加载 / Brotli 解码 / 索引（构建期归一化，运行时只读）
-│  ├─ 10-codec.js            分享码编解码
-│  ├─ 20-data.js             数据加载：内置快照 → 本地缓存 → 现网
-│  ├─ 30-deps.js             牌组限制 / 打出限制 / 费用拆分
-│  ├─ 40-concepts.js         概念索引与术语链接化
-│  ├─ 45-pool.js             全量卡池与版本索引
-│  ├─ 47-skills.js           角色技能索引与技能页（费用 / 准备轮数 / 所属角色）
-│  ├─ 50-backlinks.js        反链索引
-│  ├─ 60-parse.js            分享码 → 牌组解析与输入路由
-│  ├─ 70-search.js           卡库检索、打分排序与输入建议
-│  ├─ 80-deck.js             多牌组存储与牌组面板
-│  ├─ 85-views.js            概览条与三个视图（卡面 / 列表 / 卡库）
-│  ├─ 86-odds.js             抽牌概率（超几何）与费用曲线
-│  ├─ 88-compare.js          多卡对比、相似卡替换与两套牌组差异
-│  ├─ 90-detail.js           详情弹层、导航与概念交互
-│  ├─ 95-export.js           文本 / Markdown / JSON / CSV 导出
+│  ├─ 07-dataset.ts          统一数据集的加载 / Brotli 解码 / 索引（构建期归一化，运行时只读）
+│  ├─ 10-codec.ts            分享码编解码
+│  ├─ 20-data.ts             数据加载：内置快照 → 本地缓存 → 现网
+│  ├─ 30-deps.ts             牌组限制 / 打出限制 / 费用拆分
+│  ├─ 40-concepts.ts         概念索引与术语链接化
+│  ├─ 45-pool.ts             全量卡池与版本索引
+│  ├─ 47-skills.ts           角色技能索引与技能页（费用 / 准备轮数 / 所属角色）
+│  ├─ 50-backlinks.ts        反链索引
+│  ├─ 60-parse.ts            分享码 → 牌组解析与输入路由
+│  ├─ 70-search.ts           卡库检索、打分排序与输入建议
+│  ├─ 80-deck.ts             多牌组存储与牌组面板
+│  ├─ 85-views.ts            概览条与三个视图（卡面 / 列表 / 卡库）
+│  ├─ 86-odds.ts             抽牌概率（超几何）与费用曲线
+│  ├─ 88-compare.ts          多卡对比、相似卡替换与两套牌组差异
+│  ├─ 90-detail.ts           详情弹层、导航与概念交互
+│  ├─ 95-export.ts           文本 / Markdown / JSON / CSV 导出
 │  └─ 99-main.js             事件绑定、视图切换与启动路由
 ├─ gi-data/                  运行时数据与生成资源
 │  ├─ dataset.json           统一数据集（归一化记录，调试 / 单文件内联 / Node 测试兜底）
@@ -225,8 +226,10 @@ node tests/test-search.mjs
 ## 资源与数据约定
 
 - 所有外部地址、图片地址、存储键、元素元数据与图标入口集中在 `src/core/resources.ts`；业务模块只 import 常量。
-- 构建期源码清单只在 `scripts/sources.mjs` 声明：`APP_ENTRY` 是 TypeScript 入口，`LEGACY_SOURCES` 是尚未迁移的旧脚本（每迁一个删一行），`ASSET_SOURCES` 是资源脚本。构建脚本与测试加载器都读这一处。
-- 新增模块时：TS 模块直接 import，无需登记顺序；仍在 `LEGACY_SOURCES` 的旧脚本按数组顺序拼接，新增须追加到末尾。
+- 源码是标准 ESM：模块之间靠 `import` / `export` 连接，没有全局变量、没有加载顺序清单。新增模块直接 import，不需要在别处登记。
+- `src/main.ts` 只负责按既定次序引入模块，用来固定顶层副作用（事件注册、索引构建）的相对顺序；它不承载依赖关系。
+- 浏览器产物由 `scripts/build-app.mjs` 打成单个 IIFE（`dist/app.js`），因为 `<script type="module">` 在 `file://` 下受 CORS 限制、也无法内联进单 HTML。打包格式不影响源码形态。
+- 拼音索引 / 补充概念库 / 元素图标都是 ESM 模块（由 `scripts/build-*.mjs` 生成 `export const`），随应用包一起内联，不再单独用 `<script>` 加载。
 - 七元素图标由官方矢量归一化而来：去掉硬编码宽高、填充色统一替换为 `currentColor`，界面按元素色着色，亮 / 暗上下文自动适配。
 - 资源更新后统一调整 `deck-viewer.html` 里的 `?v=` 版本戳，强制浏览器重新拉取。
 

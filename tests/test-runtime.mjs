@@ -10,7 +10,7 @@ for (const cat of ["characters", "entities", "keywords"])
   DATA[cat] = JSON.parse(fs.readFileSync(path.join(here, `gi-data/${cat}.json`), "utf8")).data;
 const conceptsExtra = JSON.parse(
   fs.readFileSync(path.join(here, "gi-data/concepts-extra.js"), "utf8")
-    .replace(/^window\.CONCEPTS_EXTRA = /, "").replace(/;\s*$/, ""));
+    .replace(/^export const CONCEPTS_EXTRA = /, "").replace(/;\s*$/, ""));
 
 let fails = 0;
 const assert = (cond, msg) => { if (cond) console.log("  ok:", msg); else { console.error("  FAIL:", msg); fails++; } };
@@ -116,7 +116,7 @@ const harness = `
     return { ok: true, json: async () => ({ data: DATA[cat] }) };
   };
   for (const c of ["characters", "entities", "keywords"]) store.delete("gi-viewer-CHS-latest-" + c);
-  dataReady = false; dataFlight = null;
+  resetDataState();
   await Promise.all([ensureData(), ensureData(), ensureData()]);
   assert(fetchCtl.log.length === 3, "单 flight：3 个并发 ensureData 只发起 3 次请求（实际 " + fetchCtl.log.length + "）");
   assert(dataReady === true, "加载成功后 dataReady 置位");
@@ -131,7 +131,7 @@ const harness = `
   fetchCtl.impl = async () => { throw new Error("又断了"); };
   /* 清掉缓存，否则 fetchCategory 命中缓存直接返回、根本不会发请求 */
   for (const c of ["characters", "entities", "keywords"]) store.delete("gi-viewer-CHS-latest-" + c);
-  dataReady = false; dataFlight = null;
+  resetDataState();
   let e1 = null, e2 = null;
   await ensureData().catch(e => { e1 = e; });
   await ensureData().catch(e => { e2 = e; });
@@ -146,7 +146,7 @@ const harness = `
     return { ok: true, json: async () => ({ data: DATA[cat] }) };
   };
   for (const c of ["characters", "entities", "keywords"]) store.delete("gi-viewer-CHS-latest-" + c);
-  dataReady = false; dataFlight = null;
+  resetDataState();
   await ensureData();
   assert(dataReady === true, "恢复：重新加载成功");
 

@@ -1,7 +1,4 @@
-/* 七圣召唤浏览器 · 分享码编解码（移植自 sharing.ts，AGPL-3.0）。
-   源码按领域拆分，由 src/sources.mjs 统一声明加载顺序；单文件版构建时按同一顺序内联。 */
-"use strict";
-
+/* src/10-codec.js —— 由 scripts/_convert.mjs 从旧脚本转换（迁移中间态）。 */
 /* ---------- 解码（移植自 sharing.ts decodeRaw） ---------- */
 function decodeRaw(src) {
   const bin = atob(src.replace(/\s+/g, ""));
@@ -42,3 +39,5 @@ function encodeRaw(arr) {
   }
   throw new Error("未能生成避开屏蔽词的分享码");
 }
+
+export { decodeRaw, BLOCK_WORDS, BLOCK_RE, encodeRaw };

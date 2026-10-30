@@ -1,6 +1,10 @@
-/* 七圣召唤浏览器 · 概念索引：补充库合并、术语匹配与链接化。
-   源码按领域拆分，由 src/sources.mjs 统一声明加载顺序；单文件版构建时按同一顺序内联。 */
-"use strict";
+/* src/40-concepts.js —— 由 scripts/_convert.mjs 从旧脚本转换（迁移中间态）。 */
+import { SKILLS } from "./47-skills";
+import { CONCEPTS_EXTRA } from "../gi-data/concepts-extra.js";
+import { state } from "./data/state";
+import { imgFull } from "./core/resources";
+import { esc } from "./core/dom";
+import { typeZhOf, nameKey, cosmeticKey, isShadowState, hasCardFace } from "./data/model";
 
 /* ---------- 补充概念库 & 文本补丁（genshin-db 静态快照） ----------
    来源：theBowja/genshin-db（解析自游戏官方配置），由 build-concepts.mjs 生成。
@@ -9,7 +13,7 @@
    · genshin-db = 释义层（静态快照）：官方规则、术语、状态效果、召唤物、历史版本卡牌。
    合并先到先得：piovium 已有的名字永远优先，补充库只填空——piovium 日后新增的卡
    会自动接管对应概念，此处无需改动。 */
-const EXTRA_CONCEPTS = (typeof CONCEPTS_EXTRA !== "undefined" && CONCEPTS_EXTRA) || {};
+const EXTRA_CONCEPTS = CONCEPTS_EXTRA || {};
 /* 补充库中的卡牌/角色没有 piovium id → 降级为只读引用（cardref/charref）：
    点击走概念弹层展示名称与描述，绝不跳转到不存在的详情 */
 const EXTRA_KIND_MAP = { card: "cardref", character: "charref" };
@@ -77,6 +81,12 @@ function kwMirrorsEntity(k, entityDesc, entityByKey) {
   return descMirrors(k.description, ed);
 }
 let termIndex = new Map(), termRe = null;
+
+/** 清空概念索引（供「刷新数据」使用）。索引的归属留在本模块。 */
+export function resetConceptIndex(): void {
+  termIndex = new Map();
+  termRe = null;
+}
 function addTerm(name, entry) {
   if (!name || name.length < 2) return;
   const list = termIndex.get(name);
@@ -98,22 +108,22 @@ function buildTermIndex() {
   };
   /* 准备状态影子不进身份表：它的名字属于技能本身（否则「技能：踏潮」会先命中
      同名状态牌，技能效果永远看不到） */
-  for (const e of ENT) if (e.name && !isShadowState(e)) {
+  for (const e of state.ENT) if (e.name && !isShadowState(e)) {
     if (!entityDesc.has(e.name)) entityDesc.set(e.name, e.description || "");
     const k = nameKey(e.name), cur = entityByKey.get(k);
     if (!cur || betterEntity(e, cur.obj)) entityByKey.set(k, { kind: "card", obj: e });
   }
-  for (const c of CHAR) if (c.name) {
+  for (const c of state.CHAR) if (c.name) {
     if (!entityDesc.has(c.name)) entityDesc.set(c.name, c.storyText || "");
     const k = nameKey(c.name), cur = entityByKey.get(k);
     if (!cur || betterEntity(c, cur.obj)) entityByKey.set(k, { kind: "char", obj: c });
   }
-  for (const e of ENT) if (e.name && e.name.length >= 2 && !isShadowState(e))
+  for (const e of state.ENT) if (e.name && e.name.length >= 2 && !isShadowState(e))
     addTerm(e.name, { src: 0, kind: "card", id: e.id, name: e.name, shareId: e.shareId,
       type: typeZhOf(e), playCost: e.playCost,
       desc: (e.description || "").trim(), image: hasCardFace(e) ? imgFull(e.id) : "",
       artId: hasCardFace(e) ? e.id : null });
-  for (const c of CHAR) if (c.name && c.name.length >= 2)
+  for (const c of state.CHAR) if (c.name && c.name.length >= 2)
     addTerm(c.name, { src: 0, kind: "char", id: c.id, name: c.name, shareId: c.shareId,
       hp: c.hp, energy: c.maxEnergy, desc: (c.storyText || "").trim(), image: imgFull(c.id), artId: c.id });
   /* 角色技能：卡牌/角色的身份优先于技能名（同名时以牌面为准），
@@ -130,7 +140,7 @@ function buildTermIndex() {
       artId: s.art && s.art.ref != null ? s.art.ref : null,
       prepared: s.prepared, prepareTurns: s.prepareTurns, desc: s.effect || s.desc });
   }
-  for (const k of KW) {
+  for (const k of state.KW) {
     if (!(k.name && k.name.length >= 2)) continue;
     if (kwMirrorsEntity(k, entityDesc, entityByKey)) continue;
     const entry = { src: 0, kind: "keyword", name: k.name, desc: (k.description || "").trim() };
@@ -185,11 +195,11 @@ const escapeRe = s => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
    · 每行注册全名（含元素后缀）；
    · 同基名的多行归并出基名词条（结晶 / 扩散）——卡文写作"结晶反应""扩散反应"，
      基名缺失时长名匹配不中，只会命中同名卡牌条目（结晶→场地牌），术语释义丢失。
-     归并按元素后缀去重：KW 顺序保证玩家版（-211~-217）在前，敌方版同后缀行不重复收录。 */
+     归并按元素后缀去重：state.KW 顺序保证玩家版（-211~-217）在前，敌方版同后缀行不重复收录。 */
 const REACTION_LINE_RE = /^([^：\n]{2,12})：([\s\S]+)$/;
 function buildReactionTerms() {
   const byBase = new Map();   /* base → Map<元素后缀, 文本> */
-  for (const k of KW) {
+  for (const k of state.KW) {
     if (!/元素相关反应$/.test(k.name) || !k.description) continue;
     for (const line of k.description.split("\n")) {
       const m = line.match(REACTION_LINE_RE);
@@ -230,3 +240,5 @@ function linkifyExcept(escaped, except) {
   const span = `<span class="term" data-term="${target}">${target}</span>`;
   return linkify(escaped).split(span).join(target);
 }
+
+export { EXTRA_CONCEPTS, EXTRA_KIND_MAP, ENTITY_KINDS, KIND_GROUP, KIND_ORDER, kindGroup, entryBetter, normTermDesc, descMirrors, levRatio, kwMirrorsEntity, termIndex, termRe, addTerm, buildTermIndex, termEntries, escapeRe, REACTION_LINE_RE, buildReactionTerms, linkify, linkifyExcept };

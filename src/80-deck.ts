@@ -1,6 +1,15 @@
-/* 七圣召唤浏览器 · 多牌组存储、草稿门面与牌组管理面板。
-   源码按领域拆分，由 src/sources.mjs 统一声明加载顺序；单文件版构建时按同一顺序内联。 */
-"use strict";
+/* src/80-deck.js —— 由 scripts/_convert.mjs 从旧脚本转换（迁移中间态）。 */
+import { costText, deckReqMet, deckReqsOf } from "./30-deps";
+import { $ } from "./core/dom";
+import { decodeRaw, encodeRaw } from "./10-codec";
+import { syncTileQty } from "./85-views";
+import { cardElement, charElement } from "./45-pool";
+import { state } from "./data/state";
+import { STORAGE_KEYS, imgFull, eleIcon } from "./core/resources";
+import { esc, toast } from "./core/dom";
+import { TYPE_ZH } from "./data/model";
+import { reqGapText } from "./30-deps";
+import { pool } from "./45-pool";
 
 /* ---------- 牌组：多牌组存储 + 草稿门面 ----------
    decks: [{id, name, chars:[], cards:[[id,count]], updatedAt}]，持久化于 localStorage。
@@ -24,6 +33,43 @@ function newDeck(name) {
   /* id 带序号后缀：同一毫秒连建多个牌组也不会碰撞 */
   const d = { id: Date.now() * 1000 + (deckSeq++ % 1000), name: name || `牌组 ${decks.length + 1}`, chars: [], cards: [], updatedAt: Date.now() };
   decks.unshift(d); activeDeckId = d.id; return d;
+}
+
+/* ---------- 牌组的增删改（原先散落在入口的点击处理里） ----------
+   这些操作要读写 decks / activeDeckId / deckRenameId 三个模块内部状态，
+   放在入口会迫使状态对外暴露；收回到这里，入口只负责分发意图。 */
+
+/** 切换活动牌组，并把内容同步到 draft 门面。 */
+export function selectDeck(id) {
+  activeDeckId = id;
+  syncFromActive();
+}
+
+/** 进入重命名态并聚焦输入框。 */
+export function beginRenameDeck(id) {
+  deckRenameId = id;
+  renderDraftPanel();
+  const inp = $("draftPanel").querySelector(".dk-rename");
+  if (inp) { inp.focus(); inp.select(); }
+}
+
+/** 复制牌组：角色数组与卡牌计数都是深拷贝，改副本不影响原牌组。 */
+export function duplicateDeck(id) {
+  const src = decks.find(d => d.id === id);
+  if (!src) return false;
+  const d = newDeck(src.name + " 副本");
+  d.chars = [...src.chars];
+  d.cards = src.cards.map(([cardId, c]) => [cardId, c]);
+  syncFromActive(); renderDraft(); renderDraftPanel();
+  return true;
+}
+
+/** 删除牌组；删到空时自动补一个空牌组，避免界面失去活动牌组。 */
+export function deleteDeckById(id) {
+  decks = decks.filter(d => d.id !== id);
+  if (!decks.length) newDeck();
+  else if (activeDeckId === id) activeDeckId = decks[0].id;
+  saveDecks(); syncFromActive(); renderDraft(); renderDraftPanel();
 }
 /* 活动牌组 → draft 门面 */
 function syncFromActive() {
@@ -60,8 +106,8 @@ function loadDraft() {
 }
 /* 数据就绪后清理失效 id（数据版本更新导致旧卡不存在） */
 function pruneDraft() {
-  draft.chars = draft.chars.filter(id => charById.has(id));
-  draft.cards = new Map([...draft.cards].filter(([id, v]) => entById.has(id) && v > 0));
+  draft.chars = draft.chars.filter(id => state.charById.has(id));
+  draft.cards = new Map([...draft.cards].filter(([id, v]) => state.entById.has(id) && v > 0));
   saveDraft();
 }
 function draftTotal() { let n = 0; for (const v of draft.cards.values()) n += v; return n; }
@@ -70,20 +116,20 @@ function draftTotal() { let n = 0; for (const v of draft.cards.values()) n += v;
    改一处漏两处时就会出现「管理面板能加到 2、详情只能加 1」这类不一致。 */
 const COPY_LIMIT = 2, LEGEND_COPY_LIMIT = 1;
 function copyLimit(idOrEnt) {
-  const e = typeof idOrEnt === "object" ? idOrEnt : entById.get(idOrEnt);
+  const e = typeof idOrEnt === "object" ? idOrEnt : state.entById.get(idOrEnt);
   return (e && (e.tags || []).includes("GCG_TAG_LEGEND")) ? LEGEND_COPY_LIMIT : COPY_LIMIT;
 }
 function draftAdd(id) {
   let msg = "已加入当前牌组";
-  if (charById.has(id)) {
-    if (idToShare[id] == null) { toast("该角色版本不可加入构筑", true); return; }
+  if (state.charById.has(id)) {
+    if (state.idToShare[id] == null) { toast("该角色版本不可加入构筑", true); return; }
     if (draft.chars.includes(id)) { toast("该角色已在牌组中"); return; }
     if (draft.chars.length >= 3) { toast("角色槽已满（3 名）", true); return; }
     draft.chars.push(id);
-    msg = `已加入角色「${charById.get(id).name}」（${draft.chars.length}/3）`;
-  } else if (entById.has(id)) {
-    if (idToShare[id] == null) { toast("该版本不可加入构筑", true); return; }
-    const e = entById.get(id);
+    msg = `已加入角色「${state.charById.get(id).name}」（${draft.chars.length}/3）`;
+  } else if (state.entById.has(id)) {
+    if (state.idToShare[id] == null) { toast("该版本不可加入构筑", true); return; }
+    const e = state.entById.get(id);
     /* 牌组构筑门槛：不满足「才能加入牌组」的条件时拒绝加入（与官方选卡一致），
        并说明缺什么——先提示而不是让用户生成分享码时才发现 */
     const bad = deckReqsOf(e).find(r => !deckReqMet(r, draft.chars));
@@ -105,7 +151,7 @@ function draftRemoveChar(id) { draft.chars = draft.chars.filter(x => x !== id); 
 function draftRemoveCard(id) { draft.cards.delete(id); saveDraft(); renderDraft(); }
 function draftSetCount(id, d) {
   const cur = draft.cards.get(id) || 0, next = cur + d;
-  const e = entById.get(id);
+  const e = state.entById.get(id);
   const max = copyLimit(e);
   if (next <= 0) draftRemoveCard(id);
   else if (next > max) return;
@@ -119,9 +165,9 @@ function draftSetCount(id, d) {
 }
 function draftClear() { draft.chars = []; draft.cards.clear(); saveDraft(); renderDraft(); toast("当前牌组已清空"); }
 function draftLoadCurrent() {
-  if (!current) { toast("请先解析一个牌组", true); return; }
-  draft.chars = [...current.charIds];
-  draft.cards = new Map(current.order.flatMap(t => current.groups[t].map(x => [x.id, x.count])));
+  if (!state.current) { toast("请先解析一个牌组", true); return; }
+  draft.chars = [...state.current.charIds];
+  draft.cards = new Map(state.current.order.flatMap(t => state.current.groups[t].map(x => [x.id, x.count])));
   saveDraft(); renderDraft(); renderDraftPanel(); toast("已载入当前牌组");
 }
 /* 构筑规则校验：生成分享码的硬性检查，也是管理面板里的实时提示 */
@@ -132,12 +178,12 @@ function deckProblems() {
   const legendCount = [...draft.cards].filter(([id]) => copyLimit(id) === 1).reduce((a, [, c]) => a + c, 0);
   if (legendCount > 1) errs.push(`秘传牌整套限 1 张（当前 ${legendCount}）`);
   const over = [...draft.cards].filter(([id, c]) => c > copyLimit(id));
-  if (over.length) errs.push(`${over.length} 种卡牌超过同名上限（${over.map(([id]) => entById.get(id)?.name || id).join("、")}）`);
+  if (over.length) errs.push(`${over.length} 种卡牌超过同名上限（${over.map(([id]) => state.entById.get(id)?.name || id).join("、")}）`);
   /* 牌组限制（才能加入牌组的门槛）：当前 3 名角色是否满足每张卡的构筑依赖。
      同一缺口归并成一条，避免整齐的共鸣套刷出十几行重复提示。 */
   const byReq = new Map();
   for (const [id] of draft.cards) {
-    const e = entById.get(id);
+    const e = state.entById.get(id);
     if (!e) continue;
     for (const r of deckReqsOf(e)) {
       if (deckReqMet(r, draft.chars)) continue;
@@ -156,8 +202,8 @@ function draftEncode() {
   if (errs.length) throw new Error(errs[0]);
   const ids = [...draft.chars, ...[...draft.cards].flatMap(([id, c]) => Array(c).fill(id))];
   const shareIds = ids.map(id => {
-    const s = idToShare[id];
-    if (s == null) throw new Error(`「${(charById.get(id) || entById.get(id)).name}」无分享 id，不可生成分享码`);
+    const s = state.idToShare[id];
+    if (s == null) throw new Error(`「${(state.charById.get(id) || state.entById.get(id)).name}」无分享 id，不可生成分享码`);
     return s;
   });
   const code = encodeRaw(shareIds);
@@ -187,7 +233,7 @@ function renderDraftPanel() {
   const slot = i => {
     const id = draft.chars[i];
     if (id == null) return `<div class="dslot empty"><span>空角色槽</span></div>`;
-    const c = charById.get(id);
+    const c = state.charById.get(id);
     if (!c) return `<div class="dslot empty"><span>失效角色</span></div>`;
     const el = charElement(c);
     return `<div class="dslot"><img src="${imgFull(id)}" loading="lazy" decoding="async" alt="">
@@ -197,7 +243,7 @@ function renderDraftPanel() {
   const deckList = decks.map(d => {
     const n = d.cards.reduce((s, [, c]) => s + c, 0);
     const avatars = d.chars.slice(0, 3).map(id => {
-      const c = charById.get(id);
+      const c = state.charById.get(id);
       return c ? `<img class="dk-av" src="${imgFull(id)}" alt="" title="${esc(c.name)}" loading="lazy">` : "";
     }).join("");
     const name = deckRenameId === d.id
@@ -214,7 +260,7 @@ function renderDraftPanel() {
   }).join("");
   const byType = {};
   for (const [id, count] of draft.cards) {
-    const e = entById.get(id);
+    const e = state.entById.get(id);
     if (!e) continue;
     (byType[TYPE_ZH[e.type]] ??= []).push({ id, count, name: e.name, cost: costText(e.playCost), el: cardElement(e) });
   }
@@ -267,3 +313,4 @@ document.addEventListener("click", ev => {
   syncFromActive(); renderDraft(); renderDraftPanel();
 });
 
+export { draft, decks, activeDeckId, deckRenameId, loadDecks, saveDecks, activeDeck, deckSeq, newDeck, syncFromActive, saveDraft, loadDraft, pruneDraft, draftTotal, COPY_LIMIT, LEGEND_COPY_LIMIT, copyLimit, draftAdd, draftRemoveChar, draftRemoveCard, draftSetCount, draftClear, draftLoadCurrent, deckProblems, draftEncode, renderDraft, renderDraftPanel, commitDeckRename };

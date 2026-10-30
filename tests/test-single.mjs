@@ -5,7 +5,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { readAppSource } from "./test-lib.mjs";
-import { ASSET_SOURCES } from "../scripts/sources.mjs";
+
 
 const here = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const OUT = path.join(here, "dist", "七圣召唤-卡牌与牌组浏览器.html");
@@ -50,26 +50,23 @@ if (m) {
 
 /* ===== 3. 脚本顺序与内容 ===== */
 const iStyle = html.indexOf("<style>");
-const iConcepts = html.indexOf("window.CONCEPTS_EXTRA = {");
 const iData = html.indexOf('id="builtin-data"');
 const iHook = html.indexOf("window.BUILTIN_DATA = JSON.parse");
 const iApp = html.indexOf("function decodeRaw(src)");
-assert(iStyle > 0 && iConcepts > iStyle, "概念库脚本在样式之后内联");
-assert(iData > 0 && iData > iConcepts, "数据块位于概念库之后");
+assert(iStyle > 0 && iData > iStyle, "样式在数据块之前内联");
 assert(iHook > iData && iHook < iApp, "数据解析钩子位于数据块之后、应用之前（否则 BUILTIN_DATA 不可见）");
 assert(iApp > 0, "应用脚本已内联");
 
-const appSrc = readAppSource({ withAssets: false });
+/* 资源（拼音索引 / 补充概念库 / 元素图标）已是 ESM 模块，随应用包一起内联 */
+const appSrc = fs.readFileSync(path.join(here, "dist/app.js"), "utf8");
 const cssSrc = fs.readFileSync(path.join(here, "deck-viewer.css"), "utf8");
 /* 整段逐字比对：只比前缀会让「产物落后于源码」静默通过 */
 const appBlock = `<script>\n${appSrc}\n</script>`;
-assert(html.includes(appBlock), "内联的应用脚本与源文件逐字一致（整段比对）");
+assert(html.includes(appBlock), "内联的应用脚本与打包产物逐字一致（整段比对）");
 assert(html.includes(`<style>\n${cssSrc}\n</style>`), "内联的样式与源文件逐字一致（整段比对）");
-assert(html.includes("window.ELEMENT_ICONS_SVG"), "官方七元素矢量图标已内联");
-for (const p of ASSET_SOURCES) {
-  const code = fs.readFileSync(path.join(here, p), "utf8");
-  assert(html.includes(`<script>\n${code}\n</script>`), `资源脚本完整内联：${p}`);
-}
+assert(html.includes("ELEMENT_ICONS_SVG"), "官方七元素矢量图标已随应用包内联");
+assert(html.includes("CONCEPTS_EXTRA"), "补充概念库已随应用包内联");
+assert(html.includes("PINYIN_DATA"), "拼音索引已随应用包内联");
 
 /* ===== 4. 体积与构建信息 ===== */
 /* 主文件 = 原始三份快照（约 2.2MB）+ Brotli 数据集 base64（约 0.3MB）+ 脚本样式。

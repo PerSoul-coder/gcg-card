@@ -55,14 +55,14 @@ const fetchStub = async url => {
 };
 const conceptsExtra = JSON.parse(
   fs.readFileSync(path.join(here, "gi-data/concepts-extra.js"), "utf8")
-    .replace(/^window\.CONCEPTS_EXTRA = /, "").replace(/;\s*$/, "")
+    .replace(/^export const CONCEPTS_EXTRA = /, "").replace(/;\s*$/, "")
 );
 
 const logic = readAppSource();
 const harness = `
 ;(async () => {
   await ensureData();
-  const ent = id => entById.get(id);
+  const ent = id => state.entById.get(id);
 
   /* ===== 1. 类型分类：唯一来源 ===== */
   const zh = id => typeZhOf(ent(id));
@@ -77,7 +77,7 @@ const harness = `
   assert(TYPE_ZH.GCG_CARD_STATE === "状态牌" && TYPE_ZH.GCG_CARD_SUMMON === "召唤物", "状态牌 / 召唤物译名保持不变");
 
   /* ===== 2. 准备技能：可查看、且指向技能而不是同名状态 ===== */
-  const beidou = CHAR.find(c => c.name === "北斗");
+  const beidou = state.CHAR.find(c => c.name === "北斗");
   const taChao = skillsOf(beidou.id).find(s => s.name === "踏潮");
   assert(!!taChao, "北斗「踏潮」进入技能索引");
   assert(taChao.hidden === true && taChao.prepared === true, "踏潮是隐藏的准备技能（hidden + prepared）");
@@ -91,7 +91,7 @@ const harness = `
   assert(poolStats.shadowFiltered === shadowStateIds.size && poolStats.shadowFiltered > 0,
     "准备状态计数：" + poolStats.shadowFiltered);
 
-  const leiying = CHAR.find(c => c.name === "愚人众·雷萤术士");
+  const leiying = state.CHAR.find(c => c.name === "愚人众·雷萤术士");
   const ting = termEntries("霆电迸发");
   assert(ting.length === 1 && ting[0].kind === "skill", "霆电迸发 → 唯一技能条目");
   assert(/造成2点雷元素伤害/.test(ting[0].desc), "霆电迸发效果：造成2点雷元素伤害");
@@ -114,17 +114,17 @@ const harness = `
   assert(!/【/.test(detailHtml), "技能标题不再用【】包裹（改为徽标 + 行块）");
 
   /* ===== 5. 技能页：压栈 / 费用 / 所属角色 / 准备状态 ===== */
-  overlayStack = [];
+  state.overlayStack = [];
   showSkill(taChao.key);
-  assert(overlayStack.length === 1 && topView().kind === "skill" && topView().key === taChao.key,
+  assert(state.overlayStack.length === 1 && topView().kind === "skill" && topView().key === taChao.key,
     "showSkill 压入技能层");
   const skHtml = String(document.getElementById("detail").innerHTML || "");
   assert(skHtml.includes("踏潮") && skHtml.includes("需准备 1 个行动轮"), "技能页：名称 + 准备轮数徽标");
   assert(skHtml.includes("data-goto=\\"114055\\""), "技能页：通往准备中状态的入口");
   assert(skHtml.includes("data-goto=\\"1405\\""), "技能页：所属角色入口（北斗 1405）");
   showSkill(taChao.key);
-  assert(overlayStack.length === 1, "重复点同一技能不重复压栈");
-  overlayStack = [];
+  assert(state.overlayStack.length === 1, "重复点同一技能不重复压栈");
+  state.overlayStack = [];
 
   /* ===== 6. 卡面兜底：无牌面实体输出同比例卡壳 + 状态图标 ===== */
   const art = cardArtHtml(113135, { kind: "detail" });
@@ -145,11 +145,11 @@ const harness = `
   assert(st.includes('width="128"') && st.includes('height="128"'), "图标写死 128×128，避免撑开卡壳");
   /* 类型 → 卡壳配色键：四类对局实体各自可辨 */
   const kindOf = id => (cardArtHtml(id).match(/data-kind="([^"]*)"/) || [])[1];
-  const sampleOf = t => (ENT.find(e => e.type === t && !hasCardFace(e)) || {}).id;
+  const sampleOf = t => (state.ENT.find(e => e.type === t && !hasCardFace(e)) || {}).id;
   assert(kindOf(100) === "state", "状态牌 → state");
   assert(kindOf(sampleOf("GCG_CARD_ATTACHMENT")) === "attach", "附加状态 → attach");
   assert(kindOf(sampleOf("GCG_CARD_ONSTAGE")) === "team", "队伍状态 → team");
-  const summon = ENT.find(e => e.type === "GCG_CARD_SUMMON");
+  const summon = state.ENT.find(e => e.type === "GCG_CARD_SUMMON");
   assert(!!summon && cardArtHtml(summon.id).includes("<img"), "召唤物有真牌面，走牌面分支：" + (summon ? summon.name : "无样例"));
   /* 已知缺图的 4 个 id 都不发请求 */
   const noIcon = [113135, 116074, 303215, 303246].filter(id => cardArtHtml(id).includes("/image/"));
@@ -159,7 +159,7 @@ const harness = `
   const zyHtml = String(document.getElementById("detail").innerHTML || "");
   assert(zyHtml.includes("noart") && !zyHtml.includes("/image/113135"), "详情页同样不请求缺失的卡面");
   assert(zyHtml.includes("对局实体：由技能或卡牌效果在对局中生成"), "详情页说明该实体不可加入牌组");
-  overlayStack = [];
+  state.overlayStack = [];
 
   /* ===== 7. 概念并列顺序：机制术语在技能之前 ===== */
   const hx = termEntries("幻戏").map(e => e.kind);

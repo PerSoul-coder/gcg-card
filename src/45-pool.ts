@@ -1,6 +1,8 @@
-/* 七圣召唤浏览器 · 全量卡池与版本索引（卡库/检索的数据基础）。
-   源码按领域拆分，由 src/sources.mjs 统一声明加载顺序；单文件版构建时按同一顺序内联。 */
-"use strict";
+/* src/45-pool.js —— 由 scripts/_convert.mjs 从旧脚本转换（迁移中间态）。 */
+import { deckReqsOf, diceCost, energyCost, isTestCard, reqElement, restrictionsOf } from "./30-deps";
+import { state } from "./data/state";
+import { tagZh } from "./core/resources";
+import { TYPE_ORDER, typeZhOf, isDeckable, domainOfEntity, isShadowState, hasCardFace } from "./data/model";
 
 /* ---------- 全量卡池（卡库浏览的数据基础） ----------
    收录角色牌 + 全部实体卡（装备/事件/援助/场地/状态/召唤物/附加状态）。
@@ -15,17 +17,30 @@ let pool = [];
 /* 卡池版本：每次重建 +1。卡库的筛选结果 / 分面计数按「筛选状态 + 版本」记忆，
    数据刷新后旧缓存自动失效，不用逐个调用处手工清。 */
 let poolVersion = 0;
-let poolStats = { total: 0, buildable: 0, testFiltered: 0, byType: {}, byEl: {}, byTag: {}, versions: [] };
+
+/** 使卡池派生的记忆缓存失效。重建卡池时自增；
+ *  对外暴露成函数，避免外部直接改计数（测试验证失效路径也走这里）。 */
+export function invalidatePoolMemo(): void {
+  poolVersion += 1;
+}
+let poolStats = { total: 0, buildable: 0, testFiltered: 0, shadowFiltered: 0, byType: {}, byEl: {}, byTag: {}, versions: [] };
+
+/** 清空卡池与统计（供「刷新数据」使用）。 */
+export function resetPool(): void {
+  pool = [];
+  poolVersion = 0;
+  poolStats = { total: 0, buildable: 0, testFiltered: 0, shadowFiltered: 0, byType: {}, byEl: {}, byTag: {}, versions: [] };
+}
 const charElement = c => (c.tags.find(t => t.startsWith("GCG_TAG_ELEMENT")) || "").replace("GCG_TAG_ELEMENT_", "");
 /* 卡牌所属元素：天赋牌随关联角色；元素共鸣等牌取牌组限制里的元素门槛 */
 function cardElement(e, rel, dreqs) {
-  const c = rel || (e && e.relatedCharacterId != null ? charById.get(e.relatedCharacterId) : null);
+  const c = rel || (e && e.relatedCharacterId != null ? state.charById.get(e.relatedCharacterId) : null);
   if (c) return charElement(c);
   return reqElement((dreqs || deckReqsOf(e)).find(r => r.code === "deckEl"));
 }
 function buildPool() {
   pool = [];
-  for (const c of CHAR) pool.push({
+  for (const c of state.CHAR) pool.push({
     kind: "char", id: c.id, name: c.name, englishName: c.englishName,
     element: charElement(c), type: "角色牌", typeRaw: "GCG_CARD_CHARACTER",
     domain: "char", deckable: true, art: true,
@@ -36,14 +51,14 @@ function buildPool() {
     descAll: [c.storyText || "", ...(c.skills || []).map(s => `${s.name || ""}${s.description || ""}`)].join("\n").toLowerCase(),
   });
   let testFiltered = 0, shadowFiltered = 0;
-  for (const e of ENT) {
+  for (const e of state.ENT) {
     if (!POOL_TYPE_ORDER.includes(e.type)) continue;
     /* 明显测试卡不进牌库（判据见 isTestCard；详情深链仍可查） */
     if (isTestCard(e)) { testFiltered++; continue; }
     /* 准备状态影子不进牌库：它与技能同名、内容只是「本角色将使用技能 X」，
        单列成一张状态牌只会和技能抢名字（技能页里以「准备中状态」入口保留） */
     if (isShadowState(e)) { shadowFiltered++; continue; }
-    const rel = e.relatedCharacterId != null ? charById.get(e.relatedCharacterId) : null;
+    const rel = e.relatedCharacterId != null ? state.charById.get(e.relatedCharacterId) : null;
     const dreqs = deckReqsOf(e);
     pool.push({
       kind: "card", id: e.id, name: e.name, englishName: e.englishName,
@@ -75,3 +90,5 @@ function buildPool() {
   };
   poolVersion++;
 }
+
+export { POOL_TYPE_ORDER, verTuple, verCmp, pool, poolVersion, poolStats, charElement, cardElement, buildPool };

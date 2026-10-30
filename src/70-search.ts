@@ -1,6 +1,10 @@
-/* 七圣召唤浏览器 · 卡牌检索、最近搜索、输入建议（combobox）。
-   源码按领域拆分，由 src/sources.mjs 统一声明加载顺序；单文件版构建时按同一顺序内联。 */
-"use strict";
+/* src/70-search.js —— 由 scripts/_convert.mjs 从旧脚本转换（迁移中间态）。 */
+import { BROWSE_DIMS, browseFilter, browseState, passFilter, renderBrowse, renderBrowseResults, syncBrowseHash } from "./85-views";
+import { $ } from "./core/dom";
+import { cardElement, charElement, pool } from "./45-pool";
+import { KIND_ZH, backlinks } from "./50-backlinks";
+import { escapeRe, termIndex } from "./40-concepts";
+import { dataReady, ensureData } from "./20-data";
 
 /* ---------- 卡牌检索（本地全量数据，无额外网络请求） ----------
    打分策略（分数越小越相关）：
@@ -58,7 +62,13 @@ const HAN_RE = /\p{Script=Han}/u;
 const normCompact = s => String(s || "").normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
 
 /* 拼音索引由 build-pinyin.mjs 构建期生成；缺失时自动退化为仅字面检索 */
-const PY_DATA = (typeof PINYIN_DATA !== "undefined" && PINYIN_DATA) || null;
+import { PINYIN_DATA } from "../gi-data/pinyin.js";
+import { state } from "./data/state";
+import { STORAGE_KEYS, eleIcon } from "./core/resources";
+import { esc, toast } from "./core/dom";
+import { typeZhOf, nameKey } from "./data/model";
+import { buildPool } from "./45-pool";
+const PY_DATA = PINYIN_DATA || null;
 const pyCache = new Map();
 function pinyinOf(name) {
   if (!PY_DATA) return null;
@@ -332,7 +342,7 @@ function nearNames(q, limit = 6) {
 const CAT_ORDER = ["角色", "装备牌", "支援牌", "事件牌", "队伍状态", "状态牌", "召唤物", "附加状态", "概念"];
 function resultTypeLabel(r) {
   if (r.kind === "char") return "角色";
-  if (r.kind === "card") return typeZhOf(entById.get(r.id));
+  if (r.kind === "card") return typeZhOf(state.entById.get(r.id));
   if (r.kind === "skill") return "技能";
   return "概念";   /* 概念类统一一档分类；具体种类由卡块自身标出 */
 }
@@ -392,6 +402,18 @@ const MATCH_ZH = { pinyin: "拼音", initials: "首字母", fuzzy: "模糊", en:
 const sugState = { open: false, items: [], idx: -1 };
 let sugTimer = 0, liveTimer = 0;
 
+/** 取消待执行的建议刷新。计时器的读写只发生在搜索模块内部。 */
+export function resetSuggestTimer(): void {
+  clearTimeout(sugTimer);
+  sugTimer = 0;
+}
+
+/** 防抖刷新搜索建议。调用方只说"该刷新了"，不再关心具体延迟与计时器。 */
+export function scheduleSuggest(delay = 200): void {
+  clearTimeout(sugTimer);
+  sugTimer = window.setTimeout(() => { void refreshSuggest(); }, delay);
+}
+
 function matchChip(r) {
   const label = MATCH_ZH[r.match];
   if (!label) return "";
@@ -401,7 +423,7 @@ function matchChip(r) {
 
 function sugKindLabel(r) {
   if (r.kind === "char") return "角色";
-  if (r.kind === "card") return typeZhOf(entById.get(r.id)) || "卡牌";
+  if (r.kind === "card") return typeZhOf(state.entById.get(r.id)) || "卡牌";
   return KIND_ZH[r.ckind] || "概念";
 }
 
@@ -420,8 +442,8 @@ function renderSuggestItems(q, items) {
     return;
   }
   box.innerHTML = items.map((r, i) => {
-    const el = r.kind === "char" ? charElement(charById.get(r.id) || { tags: [] })
-      : r.kind === "card" ? cardElement(entById.get(r.id)) : "";
+    const el = r.kind === "char" ? charElement(state.charById.get(r.id) || { tags: [] })
+      : r.kind === "card" ? cardElement(state.entById.get(r.id)) : "";
     return `
     <div class="sug-item" role="option" id="sug-opt-${i}" data-i="${i}" aria-selected="false">
       ${el ? eleIcon(el, "sug-el") : ""}
@@ -504,3 +526,4 @@ async function refreshSuggest() {
   renderSuggestItems(v, searchCards(v, { limit: 8, noDesc: true, corpus: browseFilter() }));
 }
 
+export { searchState, loadSearchScope, searchScope, saveSearchScope, browseActive, corpusKey, searchCorpus, conceptInCorpus, CARD_LIKE_KINDS, conceptEntriesOf, isConceptRow, conceptKeyOf, HAN_RE, normCompact, PY_DATA, pyCache, pinyinOf, queryCtx, segmentsOf, literalScore, englishScore, pinyinScore, subseqWindow, withinOneEdit, fuzzyScore, scoreName, compareResults, searchCards, nearNames, CAT_ORDER, resultTypeLabel, loadRecent, pushRecent, scopeRow, inputHint, toggleSearchScope, clearBrowseFilters, HOT_WORDS, MATCH_ZH, sugState, sugTimer, liveTimer, matchChip, sugKindLabel, hlText, renderSuggestItems, openSuggest, closeSuggest, moveSuggest, selectSuggest, refreshSuggest };

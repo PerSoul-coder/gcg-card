@@ -100,14 +100,10 @@ for (const [k, v] of Object.entries(ELE_ZH)) ELE_CODE[v] = "GCG_TAG_ELEMENT_" + 
 export const ENERGY_ICON =
   '<svg class="ico i-en" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 1.5C13.4 7.2 16.8 10.6 22.5 12 16.8 13.4 13.4 16.8 12 22.5 10.6 16.8 7.2 13.4 1.5 12 7.2 10.6 10.6 7.2 12 1.5Z"/><circle class="core" cx="12" cy="12" r="1.5"/></svg>';
 
-declare global {
-  interface Window {
-    ELEMENT_ICONS_SVG?: Record<string, string>;
-  }
-}
+/* 七元素图标由 build-icons.mjs 从官方矢量 SVG 生成，以 ESM 常量导出。 */
+import { ELEMENT_ICONS_SVG } from "../../gi-data/element-icons.js";
 
-const ELE_ICON_SVG: Record<string, string> =
-  (typeof window !== "undefined" && window.ELEMENT_ICONS_SVG) || {};
+const ELE_ICON_SVG: Record<string, string> = ELEMENT_ICONS_SVG || {};
 
 export const ELE_ICONS: Record<string, string> = {};
 for (const k of Object.keys(ELE_ZH)) {

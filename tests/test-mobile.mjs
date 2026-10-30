@@ -55,7 +55,8 @@ assert(/<meta name="viewport" content="width=device-width, initial-scale=1/.test
 assert(/@media \(hover: none\), \(pointer: coarse\)\s*\{[^}]*#tip\s*\{\s*display:\s*none\s*!important/.test(css),
   "CSS：粗指针/无悬停设备上禁用 #tip");
 assert(/function canHover\(\)/.test(js), "JS：canHover() 判定悬停能力");
-assert(/if \(!canHover\(\)\) \{ hideTip\(\); return; \}/.test(js),
+/* 断言结构而非逐字排版：产物经打包器重排版，分行与缩进不稳定 */
+assert(/if \(!canHover\(\)\)\s*\{\s*hideTip\(\);\s*return;\s*\}/.test(js),
   "JS：mousemove 在无悬停能力时不显示预览");
 assert(!/if \(overlayOpen\(\) \|\| !canHover\(\)\)/.test(js),
   "JS：不在弹层内禁用预览（详情里的术语仍需悬浮解释）");
