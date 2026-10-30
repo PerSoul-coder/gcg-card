@@ -192,7 +192,7 @@ function navBar(extra = "") {
       <button title="关闭 (Esc)" data-act="close">✕</button></div>`;
 }
 /* 翻页控件：同级列表不足 2 张时不出现（避免"永远禁用"的误导），多张时显示位置「3/22」 */
-function pagerHtml(v: OverlayEntry): string {
+function pagerHtml(v: Extract<OverlayEntry, { kind: "detail" }>): string {
   if (v.ids.length < 2) return "";
   return `<span class="pgbar" title="同一列表内翻页（← →）">
       <button title="上一张 (←)" ${v.idx <= 0 ? "disabled" : ""} data-act="step" data-d="-1">‹</button>
@@ -208,7 +208,7 @@ function renderDetailView(v) {
   const joinTarget = c || e;
   const joinable = !!joinTarget && joinTarget.shareId != null;
   /* 主行动（加入牌组）文字化，一眼可读；复制链接降为次级 */
-  const joinBtn = deckActionHtml(id, joinable, c);
+  const joinBtn = deckActionHtml(id, joinable, c ?? null);
   const cmpOn = compareState.ids.includes(id);
   const cmpBtn = joinable
     ? `<button class="lbtn${cmpOn ? " on" : ""}" data-cmp="${id}" data-cmp-label="对比" title="加入卡牌对比（最多 ${COMPARE_MAX} 张）">${cmpOn ? "✓ 已选" : "对比"}</button>` : "";
@@ -222,7 +222,7 @@ function renderDetailView(v) {
     const tags = (c.tags || []).filter(t => !t.startsWith("GCG_TAG_ELEMENT")).map(tagZh).filter(Boolean);
     html = `${nav}<div class="dimg">${cardArtHtml(id, { kind: "detail", alt: c.name })}</div>
       <div class="dinfo"><h2>${esc(c.name)}</h2>
-      <div class="meta">${el ? `<span class="tagpill">${eleIcon(el)}${esc(ELE_ZH[el] || el)}</span>` : ""}${tags.map(t => `<span class="tagpill">${esc(t)}</span>`).join("")}<span class="tagpill">生命 ${c.hp}</span><span class="tagpill">充能上限 ${enPips(c.maxEnergy)}</span><span class="tagpill">${esc(c.sinceVersion || "")}</span></div>
+      <div class="meta">${el ? `<span class="tagpill">${eleIcon(el)}${esc(ELE_ZH[el] || el)}</span>` : ""}${tags.map(t => `<span class="tagpill">${esc(t)}</span>`).join("")}<span class="tagpill">生命 ${c.hp}</span><span class="tagpill">充能上限 ${enPips(c.maxEnergy || 0)}</span><span class="tagpill">${esc(c.sinceVersion || "")}</span></div>
       ${c.storyText ? `<div class="dtext dstory">${esc(c.storyText.trim())}</div>` : ""}
       ${skillsHtml(id)}
       ${charTalentChips(id)}${backlinkHtml(c.name, id)}</div>`;
@@ -365,7 +365,7 @@ function canHover() {
     return !(typeof matchMedia === "function") || matchMedia("(hover: hover) and (pointer: fine)").matches;
   } catch { return true; }
 }
-let tipTerm = null;      /* 预览当前展示的术语名，用于避免重复重建 DOM */
+let tipTerm: string | null = null;      /* 预览当前展示的术语名，用于避免重复重建 DOM */
 function hideTip() { if (tip && tip.classList) { tip.classList.remove("show"); tipTerm = null; } }
 document.addEventListener("mousemove", ev => {
   /* 触摸设备没有悬停：不显示预览（触屏的"预览"由点击后的概念页承担）。
@@ -378,7 +378,7 @@ document.addEventListener("mousemove", ev => {
   if (!entries.length) { hideTip(); return; }
   /* mousemove 会连续触发：只有换了术语才重建内容，避免每次移动都重写 DOM */
   if (tipTerm !== el.dataset.term) {
-    tipTerm = el.dataset.term;
+    tipTerm = el.dataset.term || null;
     tip.innerHTML = `<div class="tip-kind">${entries.map(e => KIND_ZH[e.kind] || e.kind).join(" / ")}</div>${termHtml(entries)}`;
   }
   tip.classList.add("show");
@@ -436,8 +436,9 @@ function openTermName(name) {
   const entries = termEntries(name);
   if (!entries.length) return;
   const route = termRoute(entries);
-  if (route === "detail") showDetail(entries[0].id);
-  else if (route === "skill") showSkill(entries[0].key);
+  const first = entries[0];
+  if (route === "detail" && first.id != null) showDetail(first.id);
+  else if (route === "skill" && first.key) showSkill(first.key);
   else showTermModal(name);
 }
 /* 捕获阶段处理术语点击：避免触发行/卡片的点击（卡片 → 详情） */
@@ -461,8 +462,8 @@ $("overlay").addEventListener("click", ev => {
 /* 弹层内方向键导航；Esc 统一由全局处理器逐层关闭（见文末快捷键区） */
 document.addEventListener("keydown", ev => {
   if (!$("overlay").classList.contains("show")) return;
-  if (ev.key === "ArrowLeft") window.modalStep(-1);
-  if (ev.key === "ArrowRight") window.modalStep(1);
+  if (ev.key === "ArrowLeft") modalStep(-1);
+  if (ev.key === "ArrowRight") modalStep(1);
 });
 ["view-grid", "view-list"].forEach(v => $(v).addEventListener("click", ev => {
   const el = (ev.target as HTMLElement).closest("[data-id]");

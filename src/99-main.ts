@@ -43,7 +43,7 @@ $("btnSample").addEventListener("click", () => { $<HTMLInputElement>("codeInput"
 $("btnHistory").addEventListener("click", () => { renderHistory(); toggleHistoryPanel(); });
 $("histPanel").addEventListener("click", ev => {
   const item = (ev.target as HTMLElement).closest("[data-code]");
-  if (item) { closeHistoryPanel(); $<HTMLInputElement>("codeInput").value = item.dataset.code; updateBtnLabel(); decodeAndRender(item.dataset.code); }
+  if (item) { closeHistoryPanel(); $<HTMLInputElement>("codeInput").value = item.dataset.code || ""; updateBtnLabel(); decodeAndRender(item.dataset.code || ""); }
 });
 document.addEventListener("click", ev => {
   if (!(ev.target as HTMLElement).closest("#histPanel") && !(ev.target as HTMLElement).closest("#btnHistory")) closeHistoryPanel();
@@ -74,7 +74,7 @@ document.querySelectorAll(".tab").forEach(t => t.addEventListener("click", () =>
 /* ---------- 卡库检索框：输入即做第二阶段检索 ---------- */
 $("view-browse").addEventListener("input", ev => {
   if ((ev.target as HTMLElement).id !== "browseSearch") return;
-  searchState.q = (ev.target as HTMLElement).value;
+  searchState.q = (ev.target as HTMLInputElement).value;
   searchState.filter = "";
   renderBrowseResults();
   syncBrowseHash();
@@ -83,7 +83,7 @@ $("view-browse").addEventListener("input", ev => {
   scheduleSuggest();
 });
 $("view-browse").addEventListener("focusin", ev => {
-  if ((ev.target as HTMLElement).id === "browseSearch" && (ev.target as HTMLElement).value.trim()) refreshSuggest();
+  if ((ev.target as HTMLElement).id === "browseSearch" && (ev.target as HTMLInputElement).value.trim()) refreshSuggest();
 });
 $("view-browse").addEventListener("keydown", ev => {
   if ((ev.target as HTMLElement).id !== "browseSearch") return;
@@ -157,9 +157,9 @@ $("btnRefresh").addEventListener("click", async () => {
     try {
       await ensureData(false);
       (VIEW_RENDER[state.currentView] || renderGrid)();
-      setStatus("刷新失败，已回退到本地数据：" + e.message, "err");
+      setStatus("刷新失败，已回退到本地数据：" + (e as Error).message, "err");
     } catch (e2) {
-      setStatus("刷新失败：" + e.message + "；本地也没有可用数据", "err");
+      setStatus("刷新失败：" + (e as Error).message + "；本地也没有可用数据", "err");
     }
   }
 });
@@ -193,7 +193,7 @@ document.addEventListener("click", ev => {
       closeDraftPanel();
       decodeAndRender(code);
       toast("分享码已生成（已通过解码自校验），牌组已加载");
-    } catch (e) { toast(e.message, true); }
+    } catch (e) { toast((e as Error).message, true); }
   }
   else if (b.dataset.rmc != null) draftRemoveChar(Number(b.dataset.rmc));
   else if (b.dataset.rm != null) draftRemoveCard(Number(b.dataset.rm));
@@ -231,7 +231,7 @@ function routeHash() {
         await ensureData();
         if (state.charById.has(id) || state.entById.has(id)) showDetail(id);
         else setStatus("链接中的卡牌 id 不存在或已失效", "err");
-      } catch (e) { setStatus("加载失败：" + e.message, "err"); }
+      } catch (e) { setStatus("加载失败：" + (e as Error).message, "err"); }
     })();
   }
   if (h.startsWith("q=")) {
@@ -239,35 +239,34 @@ function routeHash() {
     searchState.q = q;
     return (async () => {
       try { await ensureData(); switchView("browse"); }
-      catch (e) { setStatus("加载失败：" + e.message, "err"); }
+      catch (e) { setStatus("加载失败：" + (e as Error).message, "err"); }
     })();
   }
   if (h.startsWith("b=")) {
     const st = parseBrowseHash(h);
     if (st) {
-      if (st.q != null) { searchState.q = st.q; delete st.q; }
       /* 开关状态跟着链接走，但不覆盖本机默认偏好（persist=false） */
-      const u = !!st.u; delete st.u;
-      setShowUnbuildable(u, false);
-      Object.assign(browseState, st);
+      const { u: uFlag, ...rest } = st;
+      setShowUnbuildable(!!uFlag, false);
+      Object.assign(browseState, rest);
     }
     return (async () => {
       try { await ensureData(); switchView("browse"); }
-      catch (e) { setStatus("加载失败：" + e.message, "err"); }
+      catch (e) { setStatus("加载失败：" + (e as Error).message, "err"); }
     })();
   }
   if (h) {   /* 分享码 */
     $<HTMLInputElement>("codeInput").value = h; updateBtnLabel();
     return (async () => {
       try { await decodeAndRender(h); restoreView(); }
-      catch (e) { setStatus("加载失败：" + e.message, "err"); }
+      catch (e) { setStatus("加载失败：" + (e as Error).message, "err"); }
     })();
   }
   /* 空 hash：加载示例牌组，并恢复上次停留的视图 */
   $<HTMLInputElement>("codeInput").value = SAMPLE; updateBtnLabel();
   return (async () => {
     try { await decodeAndRender(SAMPLE, { noHash: true }); restoreView(); }
-    catch (e) { setStatus("加载失败：" + e.message, "err"); }
+    catch (e) { setStatus("加载失败：" + (e as Error).message, "err"); }
   })();
 }
 /* 恢复上次停留的视图（hash 指定具体视图时不恢复） */
@@ -288,7 +287,7 @@ try {
   routeHash();
   window.__giBooted = true;
 } catch (e) {
-  setStatus("初始化失败：" + e.message + "。请刷新重试", "err");
+  setStatus("初始化失败：" + (e as Error).message + "。请刷新重试", "err");
 }
 
 export { updateBtnLabel, VIEW_KEY, VIEW_RENDER, switchView, focusBrowseSearch, renderDataInfo, routeHash, restoreView };

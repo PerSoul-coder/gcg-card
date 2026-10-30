@@ -2,9 +2,9 @@
 /* ---------- 解码（移植自 sharing.ts decodeRaw） ---------- */
 function decodeRaw(src) {
   const bin = atob(src.replace(/\s+/g, ""));
-  const arr = Array.from(bin, c => c.codePointAt(0));
+  const arr = Array.from(bin, c => c.codePointAt(0) ?? 0);
   if (arr.length !== 51) throw new Error(`分享码长度无效（期望 51 字节，实际 ${arr.length}）`);
-  const last = arr.pop();
+  const last = arr.pop() ?? 0;
   const reordered = [
     ...Array.from({ length: 25 }, (_, i) => (arr[2 * i] - last) & 0xff),
     ...Array.from({ length: 25 }, (_, i) => (arr[2 * i + 1] - last) & 0xff),

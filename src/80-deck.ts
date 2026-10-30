@@ -51,7 +51,7 @@ export function selectDeck(id) {
 export function beginRenameDeck(id) {
   deckRenameId = id;
   renderDraftPanel();
-  const inp = $("draftPanel").querySelector(".dk-rename");
+  const inp = $("draftPanel").querySelector(".dk-rename") as HTMLInputElement | null;
   if (inp) { inp.focus(); inp.select(); }
 }
 
@@ -98,7 +98,9 @@ function loadDraft() {
       if (d && Array.isArray(d.chars) && d.cards && typeof d.cards === "object") {
         const m = newDeck("我的牌组");
         m.chars = d.chars.filter(id => Number.isFinite(id));
-        m.cards = Object.entries(d.cards).map(([k, v]) => [Number(k), v]).filter(([, v]) => Number.isFinite(v) && v > 0);
+        m.cards = Object.entries(d.cards as Record<string, number>)
+          .map(([k, v]): [number, number] => [Number(k), Number(v)])
+          .filter(([, v]) => Number.isFinite(v) && v > 0);
       }
     } catch (e) {}
   }
@@ -128,10 +130,11 @@ function draftAdd(id) {
     if (draft.chars.includes(id)) { toast("该角色已在牌组中"); return; }
     if (draft.chars.length >= 3) { toast("角色槽已满（3 名）", true); return; }
     draft.chars.push(id);
-    msg = `已加入角色「${state.charById.get(id).name}」（${draft.chars.length}/3）`;
+    msg = `已加入角色「${state.charById.get(id)?.name || id}」（${draft.chars.length}/3）`;
   } else if (state.entById.has(id)) {
     if (state.idToShare[id] == null) { toast("该版本不可加入构筑", true); return; }
     const e = state.entById.get(id);
+    if (!e) { toast("该卡牌不在卡池中", true); return; }
     /* 牌组构筑门槛：不满足「才能加入牌组」的条件时拒绝加入（与官方选卡一致），
        并说明缺什么——先提示而不是让用户生成分享码时才发现 */
     const bad = deckReqsOf(e).find(r => !deckReqMet(r, draft.chars));
@@ -161,7 +164,7 @@ function draftSetCount(id, d) {
   else {
     /* 加量同样过构筑门槛：中途换掉角色后，旧卡不应继续加量 */
     const bad = e ? deckReqsOf(e).find(r => !deckReqMet(r, draft.chars)) : null;
-    if (bad) { toast(`「${e.name}」无法加入：${reqGapText(bad, draft.chars)}`, true); return; }
+    if (bad) { toast(`「${e?.name || id}」无法加入：${reqGapText(bad, draft.chars)}`, true); return; }
     draft.cards.set(id, next), saveDraft(), renderDraft();
   }
 }
@@ -174,7 +177,7 @@ function draftLoadCurrent() {
 }
 /* 构筑规则校验：生成分享码的硬性检查，也是管理面板里的实时提示 */
 function deckProblems() {
-  const errs = [];
+  const errs: string[] = [];
   if (draft.chars.length !== 3) errs.push(`需要 3 名角色（当前 ${draft.chars.length}）`);
   if (draftTotal() !== 30) errs.push(`需要 30 张行动牌（当前 ${draftTotal()}）`);
   const legendCount = [...draft.cards].filter(([id]) => copyLimit(id) === 1).reduce((a, [, c]) => a + c, 0);
@@ -205,7 +208,7 @@ function draftEncode() {
   const ids = [...draft.chars, ...[...draft.cards].flatMap(([id, c]) => Array(c).fill(id))];
   const shareIds = ids.map(id => {
     const s = state.idToShare[id];
-    if (s == null) throw new Error(`「${(state.charById.get(id) || state.entById.get(id)).name}」无分享 id，不可生成分享码`);
+    if (s == null) throw new Error(`「${(state.charById.get(id) || state.entById.get(id))?.name || id}」无分享 id，不可生成分享码`);
     return s;
   });
   const code = encodeRaw(shareIds);
@@ -264,7 +267,7 @@ function renderDraftPanel() {
   for (const [id, count] of draft.cards) {
     const e = state.entById.get(id);
     if (!e) continue;
-    (byType[TYPE_ZH[e.type]] ??= []).push({ id, count, name: e.name, cost: costText(e.playCost), el: cardElement(e) });
+    (byType[TYPE_ZH[e.type || ""]] ??= []).push({ id, count, name: e.name, cost: costText(e.playCost), el: cardElement(e) });
   }
   const order = ["装备牌", "支援牌", "事件牌"].filter(t => byType[t])
     .concat(Object.keys(byType).filter(t => !["装备牌", "支援牌", "事件牌"].includes(t)));
@@ -295,7 +298,7 @@ function commitDeckRename(inp) {
   saveDecks(); renderDraft(); renderDraftPanel();
 }
 $("draftPanel").addEventListener("keydown", ev => {
-  const inp = (ev.target as HTMLElement).closest("[data-dkren-input]");
+  const inp = (ev.target as HTMLElement).closest("[data-dkren-input]") as HTMLInputElement | null;
   if (!inp) return;
   if (ev.key === "Enter") { commitDeckRename(inp); inp.blur(); }
   else if (ev.key === "Escape") {

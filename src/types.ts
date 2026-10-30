@@ -368,3 +368,81 @@ export interface PoolStats {
   byTag: Record<string, number>;
   versions: string[];
 }
+
+/* ---------- 导出格式 ----------
+   导出物是给外部消费的契约（复制的 JSON / 下载的 CSV），字段一旦发出就不该随意改名。 */
+export interface ExportSkill {
+  name: string;
+  type: string | null;
+  typeZh: string;
+  cost: Array<{ type: string; count: number }>;
+  prepared: boolean;
+  prepareTurns: number;
+  description: string;
+}
+
+export interface ExportCard {
+  id: number;
+  shareId: number | null;
+  name: string;
+  typeRaw: string;
+  type: string;
+  tagsRaw: string[];
+  tags: Array<string | null>;
+  playCostRaw: unknown;
+  diceCost: number;
+  energyCost: number;
+  relatedCharacterId: number | null;
+  relatedCharacter: string | null;
+  restrictions: ReqBadge[];
+  deckRequirements: Array<{ code: string; short: string; label: string; tag: string | null; characterId: number | null; minCount: number | null }>;
+  count: number;
+  sinceVersion?: string;
+  description: string;
+  image: string;
+  category: string;
+}
+
+export interface ExportChar {
+  id: number;
+  shareId: number | null;
+  name: string;
+  englishName: string | null;
+  element: string;
+  tagsRaw: string[];
+  tags: Array<string | null>;
+  hp?: number | null;
+  maxEnergy?: number | null;
+  sinceVersion?: string;
+  skills: ExportSkill[];
+  image: string;
+}
+
+/* ---------- 概念索引条目 ----------
+   概念来自六类来源（角色 / 卡牌 / 技能 / 关键词 / 补充概念 / 术语），
+   形状是并集而非统一：术语页只展示命中的那几个字段，因此都可选。
+   mirrorCard 表示「名字与某张卡同名、但本身是叙事词」，检索时不再单列。 */
+export interface TermEntry {
+  src: number;
+  kind: string;
+  name: string;
+  desc: string;
+  mirrorCard?: boolean;
+  type?: string;
+  cost?: unknown;
+  owner?: string;
+  ownerId?: number | null;
+  prepared?: boolean;
+  prepareTurns?: number;
+  artId?: number | null;
+  shareId?: number | null;
+  hp?: number | null;
+  energy?: number | null;
+  id?: number | null;
+  key?: string;
+  playCost?: unknown;
+  /** 卡面地址（概念页缩略图）；空串表示无牌面。 */
+  image?: string;
+  ownerKind?: string;
+  ckind?: string;
+}

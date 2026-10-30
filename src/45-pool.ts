@@ -1,7 +1,8 @@
 /* src/45-pool.js —— 由 scripts/_convert.mjs 从旧脚本转换（迁移中间态）。 */
 import { deckReqsOf, diceCost, energyCost, isTestCard, reqElement, restrictionsOf } from "./30-deps";
 import { state } from "./data/state";
-import type { PoolEntry, PoolStats } from "./types";
+import type { PoolEntry, PoolStats, ReqBadge } from "./types";
+import type { RawEntity } from "./data/state";
 import { tagZh } from "./core/resources";
 import { TYPE_ORDER, typeZhOf, isDeckable, domainOfEntity, isShadowState, hasCardFace } from "./data/model";
 
@@ -34,7 +35,7 @@ export function resetPool(): void {
 }
 const charElement = c => (c.tags.find(t => t.startsWith("GCG_TAG_ELEMENT")) || "").replace("GCG_TAG_ELEMENT_", "");
 /* 卡牌所属元素：天赋牌随关联角色；元素共鸣等牌取牌组限制里的元素门槛 */
-function cardElement(e, rel = null, dreqs = null) {
+function cardElement(e: RawEntity, rel: RawEntity | null = null, dreqs: ReqBadge[] | null = null) {
   const c = rel || (e && e.relatedCharacterId != null ? state.charById.get(e.relatedCharacterId) : null);
   if (c) return charElement(c);
   return reqElement((dreqs || deckReqsOf(e)).find(r => r.code === "deckEl"));

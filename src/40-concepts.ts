@@ -2,6 +2,7 @@
 import { SKILLS } from "./47-skills";
 import { CONCEPTS_EXTRA } from "../gi-data/concepts-extra.js";
 import { state } from "./data/state";
+import type { TermEntry } from "./types";
 import { imgFull } from "./core/resources";
 import { esc } from "./core/dom";
 import { typeZhOf, nameKey, cosmeticKey, isShadowState, hasCardFace } from "./data/model";
@@ -80,14 +81,15 @@ function kwMirrorsEntity(k, entityDesc, entityByKey) {
   if (ed == null) return false;
   return descMirrors(k.description, ed);
 }
-let termIndex = new Map(), termRe = null;
+let termIndex = new Map<string, TermEntry[]>();
+let termRe: RegExp | null = null;
 
 /** 清空概念索引（供「刷新数据」使用）。索引的归属留在本模块。 */
 export function resetConceptIndex(): void {
   termIndex = new Map();
   termRe = null;
 }
-function addTerm(name, entry) {
+function addTerm(name: string, entry: TermEntry): void {
   if (!name || name.length < 2) return;
   const list = termIndex.get(name);
   if (!list) { termIndex.set(name, [entry]); return; }
@@ -143,7 +145,7 @@ function buildTermIndex() {
   for (const k of state.KW) {
     if (!(k.name && k.name.length >= 2)) continue;
     if (kwMirrorsEntity(k, entityDesc, entityByKey)) continue;
-    const entry = { src: 0, kind: "keyword", name: k.name, desc: (k.description || "").trim() };
+    const entry: TermEntry = { src: 0, kind: "keyword", name: k.name, desc: (k.description || "").trim() };
     /* 词条名就是某个角色的卡名时（如「焚尽的炽炎魔女」的形态说明），本质仍是该角色：
        检索不再单列概念；术语页与正文链接照常保留 */
     const ch = entityByKey.get(nameKey(k.name));
@@ -173,7 +175,7 @@ function buildTermIndex() {
         continue;
       }
     }
-    const entry = { src: 1, kind, name, desc: desc.trim(), type: info.type || "" };
+    const entry: TermEntry = { src: 1, kind, name, desc: desc.trim(), type: info.type || "" };
     /* 补充库把某张牌的「状态/召唤物/术语」释义按卡名收录时，本质仍是这张牌：
        标记为牌面镜像，检索不再单列概念；术语页与正文链接仍保留该条目 */
     if (hit && ENTITY_KINDS.has(kind) && nameKey(name) === nameKey(hit.obj.name)) entry.mirrorCard = true;

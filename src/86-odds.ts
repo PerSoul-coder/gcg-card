@@ -3,6 +3,7 @@ import { dataReady, ensureData } from "./20-data";
 import { $ } from "./core/dom";
 import { renderOverlay, topView } from "./90-detail";
 import { state } from "./data/state";
+import type { ParsedCard } from "./types";
 import { esc, setStatus, toast } from "./core/dom";
 import { costText } from "./30-deps";
 import { navBar } from "./90-detail";
@@ -33,13 +34,15 @@ function hyperAtLeast(N, K, n, need = 1) {
   for (let i = 0; i < need; i++) miss += comb(K, i) * comb(N - K, n - i);
   return Math.max(0, Math.min(1, 1 - miss / total));
 }
-function fmtPct(p) {
+function fmtPct(p: number): string {
   return p >= 0.9995 ? "100%" : (p * 100).toFixed(1) + "%";
 }
 
+interface OddsStats { total: number; byCost: number[]; byType: Record<string, number>; uniq: ParsedCard[]; avg: number }
+interface OddsRow { label: string; n: number; atLeast1: number; atLeast2: number | null; expect: number }
 /* 当前牌组的抽牌池统计：行动牌总数、费用分布、类型分布、去重后的卡牌列表 */
-function oddsDeckStats() {
-  const byCost = Array(6).fill(0), byType = {}, uniq = [];
+function oddsDeckStats(): OddsStats {
+  const byCost: number[] = Array(6).fill(0), byType: Record<string, number> = {}, uniq: ParsedCard[] = [];
   let total = 0, diceTotal = 0;
   if (state.current) {
     for (const t of state.current!.order) for (const x of state.current!.groups[t]) {
@@ -53,9 +56,9 @@ function oddsDeckStats() {
   return { total, byCost, byType, uniq, avg: total ? diceTotal / total : 0 };
 }
 /* 每个观察点（起手 / 第 1~4 回合后 / 全牌组）的至少 1 张、至少 2 张与期望张数 */
-function oddsRows(N, K) {
-  const seen = new Set();
-  const out = [];
+function oddsRows(N: number, K: number): OddsRow[] {
+  const seen = new Set<number>();
+  const out: OddsRow[] = [];
   const push = (label, n) => {
     n = Math.min(n, N);
     if (seen.has(n)) return;
@@ -95,7 +98,7 @@ function renderOddsView(v) {
   const rows = oddsRows(stats.total, pick.count);
   const typeKeys = Object.keys(stats.byType);
   /* 关键牌按类型分组，30 张卡的下拉不再是一长串平铺 */
-  const groups = [];
+  const groups: Array<{ type: string; items: ParsedCard[] }> = [];
   for (const x of stats.uniq) {
     let g = groups.find(v => v.type === x.type);
     if (!g) { g = { type: x.type, items: [] }; groups.push(g); }
@@ -141,7 +144,7 @@ function renderOddsView(v) {
 }
 /* 抽牌面板只反映"当前正在查看的牌组"，因此每次打开都重建单层视图；
    关键牌选择记在 oddsState 里，关掉再打开仍停在上一张。 */
-const oddsState = { pick: null };
+const oddsState: { pick: number | null } = { pick: null };
 function showOdds() {
   if (!dataReady) {
     ensureData().then(showOdds).catch(e => setStatus("数据加载失败：" + e.message, "err"));
@@ -158,7 +161,7 @@ document.addEventListener("change", ev => {
   if (!sel) return;
   const top = topView();
   if (!top || top.kind !== "odds") return;
-  oddsState.pick = Number(sel.value);
+  oddsState.pick = Number((sel as HTMLSelectElement).value);
   top.pick = oddsState.pick;
   renderOverlay();
 });

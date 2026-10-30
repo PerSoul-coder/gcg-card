@@ -22,7 +22,7 @@ import { backlinks } from "./50-backlinks";
 /* 单文件版内置快照：构建脚本在本文件之前注入 window.BUILTIN_DATA。
    多文件版没有这个全局变量，BUILTIN_DATA 为 null，行为与过去完全一致。 */
 const BUILTIN_DATA = (typeof window !== "undefined" && window.BUILTIN_DATA) || null;
-const dataOrigins = new Set();   /* 本次加载实际用到的来源，供数据信息行展示 */
+const dataOrigins = new Set<string>();   /* 本次加载实际用到的来源，供数据信息行展示 */
 const ORIGIN_ZH = { builtin: "内置快照 · 离线可用", cache: "浏览器本地缓存", network: "现网最新" };
 function readCache(cat, now = Date.now()) {
   try {

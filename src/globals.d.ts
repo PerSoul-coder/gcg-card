@@ -7,6 +7,8 @@
 declare var __DATASET_JSON: unknown;
 
 interface Window {
+  /** 启动流程是否已完整跑过一次：错误兜底据此区分「初始化就挂了」与「运行期偶发错误」。 */
+  __giBooted?: boolean;
   /** 单文件版内嵌的原始数据快照（characters / entities / keywords）。 */
   BUILTIN_DATA?: Record<string, unknown>;
   /** 单文件版内嵌的统一数据集（未压缩 JSON）。 */

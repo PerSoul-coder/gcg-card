@@ -26,7 +26,7 @@ function buildBacklinks() {
   if (typeof dsReady === "function" && dsReady() && DATASET && DATASET.records) {
     for (const r of DATASET.records) {
       if (!r.refs || !r.refs.length) continue;
-      let srcId = null;
+      let srcId: number | null = null;
       if (r.kind === "char" || r.kind === "card") srcId = Number(String(r.key).split(":")[1]);
       else if (r.kind === "skill" && r.rel && r.rel.ownerKind === "char")
         srcId = Number(String(r.rel.ownerKey).slice(5));
@@ -53,7 +53,7 @@ function buildBacklinks() {
       return m;
     });
   };
-  for (const e of state.ENT) if (POOL_TYPE_ORDER.includes(e.type)) scan(e.description, e.id);
+  for (const e of state.ENT) if (e.type && POOL_TYPE_ORDER.includes(e.type)) scan(e.description, e.id);
   /* 角色简介是叙事文本，不作为概念引用来源（只在技能效果里收集） */
   for (const c of state.CHAR) for (const s of c.skills || []) scan(s.description || s.rawDescription, c.id);
 }

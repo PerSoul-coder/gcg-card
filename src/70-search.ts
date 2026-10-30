@@ -242,7 +242,7 @@ function searchCards(q: string, opts: { scope?: SearchScope; corpus?: PoolEntry[
   const out: SearchHit[] = [];
   const descOut: SearchHit[] = [];
   const nameKeys = new Set();
-  const push = (kind: SearchHit["kind"], id: number | null, name: string, extra: Partial<SearchHit>, src?: { englishName?: string }) => {
+  const push = (kind: SearchHit["kind"], id: number | null, name: string, extra: Partial<SearchHit>, src?: { englishName?: string; description?: string }) => {
     const s = scoreName(ctx, name, src && src.englishName, sc);
     if (!s) return false;
     nameKeys.add(kind + ":" + name);
@@ -401,7 +401,7 @@ function clearBrowseFilters() {
 /* ---------- 输入建议（combobox）：输入即出候选，↑↓ 选择，Enter 检索全部 ---------- */
 const HOT_WORDS = ["感电", "护盾", "天赋", "芙宁娜", "幻戏", "秘传", "万能元素", "下落攻击"];
 const MATCH_ZH = { pinyin: "拼音", initials: "首字母", fuzzy: "模糊", en: "英文", desc: "释义", segment: "词首" };
-const sugState = { open: false, items: [], idx: -1 };
+const sugState: { open: boolean; items: SuggestHit[]; idx: number } = { open: false, items: [], idx: -1 };
 let sugTimer = 0, liveTimer = 0;
 
 /** 取消待执行的建议刷新。计时器的读写只发生在搜索模块内部。 */
@@ -444,8 +444,8 @@ function renderSuggestItems(q, items) {
     return;
   }
   box.innerHTML = items.map((r, i) => {
-    const el = r.kind === "char" ? charElement(state.charById.get(r.id) || { tags: [] })
-      : r.kind === "card" ? cardElement(state.entById.get(r.id)) : "";
+    const raw = r.id != null ? (r.kind === "char" ? state.charById.get(r.id) : state.entById.get(r.id)) : undefined;
+    const el = raw ? (r.kind === "char" ? charElement(raw) : cardElement(raw)) : "";
     return `
     <div class="sug-item" role="option" id="sug-opt-${i}" data-i="${i}" aria-selected="false">
       ${el ? eleIcon(el, "sug-el") : ""}
@@ -487,7 +487,7 @@ function moveSuggest(d) {
     const active = box.querySelector(`#sug-opt-${sugState.idx}`);
     if (active && active.scrollIntoView) active.scrollIntoView({ block: "nearest" });
   }
-  const input = $("browseSearch");
+  const input = $<HTMLInputElement>("browseSearch");
   if (input) input.setAttribute("aria-activedescendant", "sug-opt-" + sugState.idx);
 }
 
@@ -496,7 +496,7 @@ function selectSuggest(i) {
   const r = sugState.items[i];
   if (!r) return;
   const name = r.name;
-  const input = $("browseSearch");
+  const input = $<HTMLInputElement>("browseSearch");
   closeSuggest();
   if (input) input.value = name;
   searchState.q = name;
@@ -510,7 +510,7 @@ function selectSuggest(i) {
 }
 
 async function refreshSuggest() {
-  const input = $("browseSearch");
+  const input = $<HTMLInputElement>("browseSearch");
   if (!input) return;
   const v = input.value.trim();
   if (!v) { closeSuggest(); return; }

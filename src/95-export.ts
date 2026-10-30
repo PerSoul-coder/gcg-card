@@ -7,6 +7,7 @@ import { showOdds } from "./86-odds";
 import { showHelp } from "./90-detail";
 import { decodeRaw, encodeRaw } from "./10-codec";
 import { state } from "./data/state";
+import type { ExportCard, ExportChar } from "./types";
 import { API, LANG, imgFull, tagZh } from "./core/resources";
 import { toast, copyText } from "./core/dom";
 import { registerLayer } from "./core/layers";
@@ -53,27 +54,35 @@ function deckMarkdown() {
   }
   return L.join("\n");
 }
+/* 导出是给外部消费的自由形状（文本 / JSON / CSV 共用），字段随需求增删，
+   因此这里不逐个建模，只保证写入的是同一份数据。 */
 function buildExport() {
-  const cards = [];
+  const cards: ExportCard[] = [];
   for (const t of state.current!.order) for (const x of state.current!.groups[t]) {
     const e = state.entById.get(x.id);
+    if (!e) continue;   /* 牌组里出现卡池缺记录的 id（数据版本不一致）时跳过，不让整份导出失败 */
     cards.push({
       id: x.id, shareId: state.idToShare[x.id] ?? null,
-      name: x.name, typeRaw: e.type, type: x.type,
-      tagsRaw: e.tags, tags: x.tags,
+      name: x.name, typeRaw: e.type || "", type: x.type,
+      tagsRaw: e.tags || [], tags: x.tags,
       playCostRaw: e.playCost,
       diceCost: x.dice, energyCost: x.energy,
-      relatedCharacterId: e.relatedCharacterId ?? null, relatedCharacter: x.related,
+      relatedCharacterId: e.relatedCharacterId ?? null, relatedCharacter: x.related ?? null,
       restrictions: x.restrictions,
       /* 牌组限制（加入牌组需满足的角色/元素/地区依赖）与打出限制分开导出 */
-      deckRequirements: (x.deckReqs || []).map(r => ({ code: r.code, short: r.short, label: r.label, tag: r.tag || null, characterId: r.charId ?? null, minCount: r.n ?? null })),
+      deckRequirements: (x.deckReqs || []).map(r => ({
+        code: r.code, short: r.short, label: r.label,
+        tag: "tag" in r ? r.tag ?? null : null,
+        characterId: "charId" in r ? r.charId ?? null : null,
+        minCount: "n" in r ? r.n ?? null : null,
+      })),
       count: x.count, sinceVersion: x.since,
       description: (e.description || "").trim(),
       image: imgFull(x.id),
       category: t,
     });
   }
-  const chars = state.current!.chars.map(c => {
+  const chars: ExportChar[] = state.current!.chars.map(c => {
     const raw = state.charById.get(c.id);
     return {
       id: c.id, shareId: state.idToShare[c.id] ?? null,
@@ -83,15 +92,16 @@ function buildExport() {
       /* 技能与界面同源：准备技能 / 被动技能不再被 hidden 过滤掉，
          费用（元素骰 + 充能）一并导出，避免"界面上有、导出里没有" */
       skills: skillsOf(c.id).map(s => ({
-        name: s.name, type: s.type || s.tag || null, typeZh: s.tagZh,
-        cost: s.cost.map(pc => ({ type: pc.type, count: pc.count })),
+        name: s.name, type: s.tag || null, typeZh: s.tagZh,
+        cost: (s.cost as Array<{ type: string; count: number }>).map(pc => ({ type: pc.type, count: pc.count })),
         prepared: !!s.prepared, prepareTurns: s.prepareTurns || 0,
         description: s.effect || s.desc || "",
       })),
       image: imgFull(c.id),
     };
   });
-  const byType = {}, costCurve = { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0, "5+": 0 };
+  const byType: Record<string, number> = {};
+  const costCurve: Record<string, number> = { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0, "5+": 0 };
   let energyTotal = 0;
   const versions = [...new Set(cards.map(x => x.sinceVersion).concat(chars.map(c => c.sinceVersion)))].filter(Boolean).sort();
   for (const x of cards) {
@@ -117,7 +127,7 @@ function buildExport() {
 function toCSV() {
   const q = v => `"${String(v ?? "").replace(/"/g, '""').replace(/\n/g, " ")}"`;
   const head = ["类别", "数量", "名称", "类型", "费用", "元素骰", "充能", "依赖限制", "关联角色", "标签", "版本", "分享ID", "卡牌ID", "效果"];
-  const rows = [];
+  const rows: string[] = [];
   for (const t of state.current!.order) for (const x of state.current!.groups[t]) {
     rows.push([t, x.count, x.name, x.type, costText(x.playCost), x.dice, x.energy,
       allReqs(x).map(r => r.label).join("；"), x.related || "", x.tags.join("·"), x.since || "",
@@ -174,7 +184,7 @@ $("exportMenu").addEventListener("click", ev => {
     else if (act === "json-copy") { copyText(JSON.stringify(buildExport(), null, 2)); toast("结构化 JSON 已复制"); }
     else if (act === "json-dl") { download(`${fileStamp()}.json`, JSON.stringify(buildExport(), null, 2), "application/json"); toast("JSON 已下载"); }
     else if (act === "csv") { download(`${fileStamp()}.csv`, toCSV(), "text/csv;charset=utf-8"); toast("CSV 已下载（Excel 可直开）"); }
-  } catch (e) { toast("导出失败：" + e.message, true); }
+  } catch (e) { toast("导出失败：" + (e as Error).message, true); }
 });
 
 /* ---------- 分享码 ---------- */
@@ -195,7 +205,7 @@ $("btnCopyCode").addEventListener("click", async () => {
     const code = encodeCurrent();
     await navigator.clipboard.writeText(code);
     toast("分享码已复制（已通过解码自校验）");
-  } catch (e) { toast("生成失败：" + e.message, true); }
+  } catch (e) { toast("生成失败：" + (e as Error).message, true); }
 });
 
 export { download, deckText, deckMarkdown, buildExport, toCSV, fileStamp, openMenu, encodeCurrent };
