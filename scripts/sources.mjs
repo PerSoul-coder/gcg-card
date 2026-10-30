@@ -11,10 +11,8 @@ export const APP_ENTRY = "src/bridge.ts";
 export const LEGACY_SOURCES = [
   "src/07-dataset.js",
   "src/10-codec.js",
-  "src/12-model.js",
   "src/20-data.js",
   "src/30-deps.js",
-  "src/35-state.js",
   "src/40-concepts.js",
   "src/45-pool.js",
   "src/47-skills.js",

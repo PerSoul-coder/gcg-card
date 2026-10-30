@@ -13,6 +13,8 @@
 
 import * as resources from "./core/resources";
 import * as dom from "./core/dom";
+import * as model from "./data/model";
+import { state } from "./data/state";
 
 const g = globalThis as unknown as Record<string, unknown>;
 
@@ -24,7 +26,7 @@ function expose(mod: Record<string, unknown>): void {
   }
 }
 
-/** 可变状态：以访问器形式暴露，旧代码的赋值语句能落到 TS 模块的绑定上。 */
+/** 可变状态：以访问器形式暴露，旧代码的赋值语句能落到 state 对象的字段上。 */
 export function defineMutable(name: string, get: () => unknown, set: (v: unknown) => void): void {
   Object.defineProperty(globalThis, name, {
     configurable: true,
@@ -36,3 +38,20 @@ export function defineMutable(name: string, get: () => unknown, set: (v: unknown
 
 expose(resources as unknown as Record<string, unknown>);
 expose(dom as unknown as Record<string, unknown>);
+expose(model as unknown as Record<string, unknown>);
+
+/* 12 个可变状态字段：旧代码既有读取，也有整块赋值（20-data / 60-parse / 86-odds /
+   88-compare / 90-detail / 99-main），必须走访问器，不能只暴露值。 */
+const MUTABLE_KEYS = [
+  "CHAR", "ENT", "KW", "shareMap", "idToShare",
+  "charById", "charByName", "entById",
+  "current", "currentView", "deckOrder", "overlayStack",
+] as const;
+
+for (const k of MUTABLE_KEYS) {
+  defineMutable(
+    k,
+    () => state[k],
+    (v) => { (state as unknown as Record<string, unknown>)[k] = v; },
+  );
+}

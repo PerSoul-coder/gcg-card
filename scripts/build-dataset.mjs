@@ -31,30 +31,33 @@ const read = p => fs.readFileSync(path.join(ROOT, p), "utf8");
 const readJson = p => JSON.parse(read(p));
 const dataOf = j => (Array.isArray(j) ? j : (j && j.data) || []);
 
-/* ---------- 1. 取唯一分类定义（不复制 TYPE_SPEC / TAG_ZH） ---------- */
-/* resources 已迁到 TypeScript，不能在 vm 里直接跑 .ts：先打包成 IIFE（globalName 暴露为 __RES），
-   再与仍需保留的 12-model.js 拼在同一个 vm 上下文里求值。这样分类定义始终只有一份。 */
-const RESOURCES_BUNDLE = await (async () => {
+/* ---------- 1. 取唯一分类定义（不复制 TYPE_SPEC / TAG_ZH） ----------
+ * resources.ts 与 model.ts 已迁到 TypeScript，不能在 vm 里直接跑 .ts：
+ * 先用 esbuild 各自打包成 IIFE（globalName 暴露为 __RES / __MODEL），
+ * 再拼进同一个 vm 上下文求值。分类定义始终只有一份。 */
+async function bundleModule(entry, globalName) {
   const r = await esbuild.build({
-    entryPoints: [path.join(ROOT, "src/core/resources.ts")],
-    bundle: true, format: "iife", globalName: "__RES", target: ["es2022"],
+    entryPoints: [path.join(ROOT, entry)],
+    bundle: true, format: "iife", globalName, target: ["es2022"],
     write: false, logLevel: "silent",
   });
-  if (!r.outputFiles || !r.outputFiles[0]) throw new Error("resources.ts 打包失败");
+  if (!r.outputFiles || !r.outputFiles[0]) throw new Error(`${entry} 打包失败`);
   return r.outputFiles[0].text;
-})();
+}
+
+const RESOURCES_BUNDLE = await bundleModule("src/core/resources.ts", "__RES");
+const MODEL_BUNDLE = await bundleModule("src/data/model.ts", "__MODEL");
 
 function loadTaxonomy() {
-  const ctx = {
-    window: {}, console,
-    ENT: [], CHAR: [], entById: new Map(), charById: new Map(),
-    imgFull: () => "", esc: s => String(s ?? ""),
-  };
+  const ctx = { window: {}, console };
   vm.createContext(ctx);
-  const code = RESOURCES_BUNDLE + "\n" + read("src/12-model.js");
+  const code = RESOURCES_BUNDLE + "\n" + MODEL_BUNDLE;
   const expr = `;({
-    TYPE_SPEC, TYPE_ZH, TYPE_ORDER, DOMAIN_ZH, NO_ART_KIND,
-    typeZhOf, typeSpecOf, nameKey, cosmeticKey, PREPARED_STATE_RE,
+    TYPE_SPEC: __MODEL.TYPE_SPEC, TYPE_ZH: __MODEL.TYPE_ZH, TYPE_ORDER: __MODEL.TYPE_ORDER,
+    DOMAIN_ZH: __MODEL.DOMAIN_ZH, NO_ART_KIND: __MODEL.NO_ART_KIND,
+    typeZhOf: __MODEL.typeZhOf, typeSpecOf: __MODEL.typeSpecOf,
+    nameKey: __MODEL.nameKey, cosmeticKey: __MODEL.cosmeticKey,
+    PREPARED_STATE_RE: __MODEL.PREPARED_STATE_RE,
     TAG_ZH: __RES.TAG_ZH, ELE_ZH: __RES.ELE_ZH, WEAPON_ZH: __RES.WEAPON_ZH, tagZh: __RES.tagZh
   })`;
   return vm.runInContext(code + expr, ctx);
