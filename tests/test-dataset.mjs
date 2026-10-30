@@ -90,6 +90,12 @@ const harness = `
   const linked2 = linkify(esc("特技：转转冲击"));
   assert(linked2.includes('data-term="转转冲击"'), "卡文「特技：转转冲击」被标记为可点击");
 
+  /* 检索：特技不在牌库（pool）里，但必须能通过概念索引被搜到 */
+  const hits = searchCards("跃升", { limit: 20 });
+  assert(hits.some(r => r.kind === "concept" && r.name === "跃升"), "检索「跃升」返回结果（不再因不在牌库而丢失）");
+  const hits2 = searchCards("转转冲击", { limit: 20 });
+  assert(hits2.some(r => r.name === "转转冲击"), "检索「转转冲击」命中");
+
   /* ===== 3. 技能页有牌面（用所属卡牌作视觉锚点） ===== */
   overlayStack = [];
   showSkill(yueSheng.key);
