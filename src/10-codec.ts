@@ -1,4 +1,4 @@
-/* src/10-codec.js —— 由 scripts/_convert.mjs 从旧脚本转换（迁移中间态）。 */
+/* 10-codec.ts —— 分享码编解码：block 编解码的纯函数层，无 DOM、无状态。 */
 /* ---------- 解码（移植自 sharing.ts decodeRaw） ---------- */
 function decodeRaw(src) {
   const bin = atob(src.replace(/\s+/g, ""));

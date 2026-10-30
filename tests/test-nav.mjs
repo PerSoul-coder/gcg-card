@@ -1,68 +1,11 @@
 /* src/ 应用源码 · 弹层导航验证：同级翻页上下文（任意入口）+ 视图栈（概念下钻/返回） */
-import fs from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
-import { readAppSource } from "./test-lib.mjs";
+import { createTest } from "./_env.mjs";
 
-const here = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const DATA = {};
-for (const cat of ["characters", "entities", "keywords"])
-  DATA[cat] = JSON.parse(fs.readFileSync(path.join(here, `gi-data/${cat}.json`), "utf8")).data;
-
-let fails = 0;
-const assert = (cond, msg) => { if (cond) console.log("  ok:", msg); else { console.error("  FAIL:", msg); fails++; } };
-
-function makeEl(id) {
-  const store = { _id: id, children: [], innerHTML: "", style: {}, dataset: {}, value: "" };
-  const cls = new Set();
-  return new Proxy(store, {
-    get(t, k) {
-      if (k === "classList") return {
-        add: c => cls.add(c), remove: c => cls.delete(c),
-        toggle: (c, f) => { (f === undefined ? !cls.has(c) : f) ? cls.add(c) : cls.delete(c); },
-        contains: c => cls.has(c),
-      };
-      if (k === "style" || k === "dataset") return t[k];
-      if (k in t) return t[k];
-      if (k === "addEventListener" || k === "removeEventListener") return () => {};
-      if (k === "appendChild" || k === "remove" || k === "click" || k === "focus" || k === "setAttribute" || k === "scrollIntoView" || k === "insertAdjacentHTML") return () => {};
-      if (k === "closest" || k === "querySelector") return () => null;
-      if (k === "querySelectorAll") return () => [];
-      return undefined;
-    },
-    set(t, k, v) { t[k] = v; return true; },
-  });
-}
-const elCache = new Map();
-const documentStub = {
-  getElementById: id => { if (!elCache.has(id)) elCache.set(id, makeEl(id)); return elCache.get(id); },
-  createElement: () => makeEl("tmp"),
-  addEventListener: () => {},
-  querySelector: () => null,
-  querySelectorAll: () => [],
-  body: { appendChild: () => {}, dataset: {} },
-};
-const fetchStub = async url => {
-  const cat = Object.keys(DATA).find(c => url.endsWith("/" + c));
-  return { ok: true, json: async () => ({ data: cat ? DATA[cat] : [] }) };
-};
-const lsStore = new Map();
-const localStorageStub = {
-  getItem: k => (lsStore.has(k) ? lsStore.get(k) : null),
-  setItem: (k, v) => lsStore.set(k, String(v)),
-  removeItem: k => lsStore.delete(k),
-};
-const logic = readAppSource();
-const conceptsExtra = JSON.parse(
-  fs.readFileSync(path.join(here, "gi-data/concepts-extra.js"), "utf8")
-    .replace(/^export const CONCEPTS_EXTRA = /, "").replace(/;\s*$/, "")
-);
-
-/* 生产代码不向 window 挂函数：全局暴露只应发生在测试进程里（test-api） */
-assert(!/^window.[A-Za-z_$]+s*=/m.test(readAppSource()), "生产代码不向 window 挂函数");
+const t = createTest();
+const { assert } = t;
 
 const harness = `
-;(async () => {
+return (async () => {
   await decodeAndRender(SAMPLE, { noHash: true });
 
   /* ===== 1. 卡面视图入口：翻页上下文 = 牌组内顺序 ===== */
@@ -297,16 +240,8 @@ const harness = `
   assert(od.includes("data-oddspick") && od.includes("平均费用"), "抽牌面板：关键牌选择器与统计");
   overlayClose();
 
-  console.log(getFails() ? "\\n存在失败项" : "\\n全部通过");
-  process.exit(getFails() ? 1 : 0);
-})().catch(e => { console.error("执行异常:", e); process.exit(1); });
+})();
 `;
 
-await new Function(
-  "document", "window", "localStorage", "location", "history", "fetch", "navigator", "assert", "getFails", "CONCEPTS_EXTRA",
-  logic + harness,
-)(
-  documentStub, {}, localStorageStub,
-  { hash: "" }, { replaceState() {} },
-  fetchStub, { clipboard: {} }, assert, () => fails, conceptsExtra,
-);
+await t.run(harness);
+t.finish();

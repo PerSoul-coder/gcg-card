@@ -1,4 +1,4 @@
-/* src/88-compare.js —— 由 scripts/_convert.mjs 从旧脚本转换（迁移中间态）。 */
+/* 88-compare.ts —— 卡牌对比与牌组差异：并排字段、仅看差异、相似推荐。 */
 import { cardElement, charElement, pool } from "./45-pool";
 import type { DeckDiffEntry, OverlayEntry, PoolEntry } from "./types";
 import { $ } from "./core/dom";

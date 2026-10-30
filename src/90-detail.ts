@@ -1,4 +1,4 @@
-/* src/90-detail.js —— 由 scripts/_convert.mjs 从旧脚本转换（迁移中间态）。 */
+/* 90-detail.ts —— 详情弹层与浮层栈：卡牌 / 概念 / 技能页与层级导航。 */
 import { KIND_ZH, backlinks } from "./50-backlinks";
 import { $ } from "./core/dom";
 import { copyLimit, draft, draftAdd, draftRemoveCard, draftRemoveChar } from "./80-deck";

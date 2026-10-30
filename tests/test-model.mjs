@@ -4,63 +4,13 @@
    2) 队伍状态（ONSTAGE）被当成场地牌；
    3) 无卡面的实体请求图片 404（如纵阵武力统筹）；
    4) 技能费用（元素骰 + 充能）没有展示。 */
-import fs from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
-import { readAppSource } from "./test-lib.mjs";
+import { createTest } from "./_env.mjs";
 
-const here = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const DATA = {};
-for (const cat of ["characters", "entities", "keywords"])
-  DATA[cat] = JSON.parse(fs.readFileSync(path.join(here, `gi-data/${cat}.json`), "utf8")).data;
+const t = createTest();
+const { assert } = t;
 
-let fails = 0;
-const assert = (cond, msg) => { if (cond) console.log("  ok:", msg); else { console.error("  FAIL:", msg); fails++; } };
-
-function makeEl(id) {
-  const store = id ? { _id: id, children: [], innerHTML: "" } : { children: [], innerHTML: "" };
-  const cls = new Set();
-  return new Proxy(store, {
-    get(t, k) {
-      if (k === "classList") return {
-        add: c => cls.add(c), remove: c => cls.delete(c),
-        toggle: (c, f) => { (f === undefined ? !cls.has(c) : f) ? cls.add(c) : cls.delete(c); },
-        contains: c => cls.has(c),
-      };
-      if (k === "style") return {};
-      if (k === "dataset") return {};
-      if (k in t) return t[k];
-      if (["addEventListener", "removeEventListener", "appendChild", "remove", "click", "focus", "setAttribute", "scrollIntoView", "replaceWith"].includes(k)) return () => {};
-      if (k === "closest" || k === "querySelector") return () => null;
-      if (k === "querySelectorAll") return () => [];
-      if (k === "value") return "";
-      return undefined;
-    },
-    set(t, k, v) { t[k] = v; return true; },
-  });
-}
-const elCache = new Map();
-const documentStub = {
-  getElementById: id => { if (!elCache.has(id)) elCache.set(id, makeEl(id)); return elCache.get(id); },
-  createElement: () => makeEl(null),
-  addEventListener: () => {},
-  querySelector: () => makeEl(null),
-  querySelectorAll: () => [],
-  body: { appendChild: () => {}, dataset: {} },
-  documentElement: { classList: { add() {}, remove() {}, toggle() {}, contains: () => false } },
-};
-const fetchStub = async url => {
-  const cat = Object.keys(DATA).find(c => url.endsWith("/" + c));
-  return { ok: true, json: async () => ({ data: cat ? DATA[cat] : [] }) };
-};
-const conceptsExtra = JSON.parse(
-  fs.readFileSync(path.join(here, "gi-data/concepts-extra.js"), "utf8")
-    .replace(/^export const CONCEPTS_EXTRA = /, "").replace(/;\s*$/, "")
-);
-
-const logic = readAppSource();
 const harness = `
-;(async () => {
+return (async () => {
   await ensureData();
   const ent = id => state.entById.get(id);
 
@@ -179,16 +129,8 @@ const harness = `
   const oneKind = termHtml(termEntries("草元素伤害"), true, "草元素伤害");
   assert(!oneKind.includes("<small>术语</small>"), "单条目概念页正文不再重复「术语」（页头徽标已标）");
 
-  console.log(getFails() ? "\\n存在失败项" : "\\n全部通过");
-  process.exit(getFails() ? 1 : 0);
-})().catch(e => { console.error("执行异常:", e); process.exit(1); });
+})();
 `;
 
-await new Function(
-  "document", "window", "localStorage", "location", "history", "fetch", "navigator", "assert", "getFails", "CONCEPTS_EXTRA",
-  logic + harness,
-)(
-  documentStub, {}, { getItem: () => null, setItem() {}, removeItem() {} },
-  { hash: "" }, { replaceState() {} },
-  fetchStub, { clipboard: {} }, assert, () => fails, conceptsExtra,
-);
+await t.run(harness);
+t.finish();

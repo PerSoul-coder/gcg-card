@@ -1,4 +1,4 @@
-/* src/70-search.js —— 由 scripts/_convert.mjs 从旧脚本转换（迁移中间态）。 */
+/* 70-search.ts —— 检索：卡牌、概念、技能的统一定位与建议。 */
 import { BROWSE_DIMS, browseFilter, browseState, passFilter, renderBrowse, renderBrowseResults, syncBrowseHash } from "./85-views";
 import { $ } from "./core/dom";
 import { cardElement, charElement, pool } from "./45-pool";

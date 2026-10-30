@@ -7,56 +7,14 @@
  *     一度把历史面板与对比栏也锁了，结果是「选中过对比卡之后整页再也滚不动」。
  *
  * 这里按行为断言：不看实现文本，直接驱动层栈看它关谁、锁不锁。 */
-import fs from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
-import { readAppSource } from "./test-lib.mjs";
+import { createTest } from "./_env.mjs";
 
-const here = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-let fails = 0;
-const assert = (cond, msg) => { if (cond) console.log("  ok:", msg); else { console.error("  FAIL:", msg); fails++; } };
+const t = createTest({ window: { innerWidth: 1015 } });   /* 与 clientWidth 差 15px，用来验证 scrollbar 补偿 */
+const { assert } = t;
+t.dom.documentElement.clientWidth = 1000;
 
-/* classList / style / clientWidth 必须是真实可变的：层栈的判定全靠它们，
-   用「什么都不做」的假实现测不出顺序错。 */
-function makeEl(id) {
-  const cls = new Set();
-  const t = { id, style: {}, dataset: {}, children: [], textContent: "", value: "", innerHTML: "" };
-  return new Proxy(t, {
-    get(t, k) {
-      if (k === "classList") return {
-        add: c => cls.add(c), remove: c => cls.delete(c),
-        toggle: (c, f) => { const on = f === undefined ? !cls.has(c) : !!f; if (on) cls.add(c); else cls.delete(c); return on; },
-        contains: c => cls.has(c),
-      };
-      if (k in t) return t[k];
-      if (["addEventListener", "removeEventListener", "appendChild", "remove", "click", "focus",
-        "setAttribute", "scrollIntoView", "replaceWith"].includes(k)) return () => {};
-      if (k === "closest" || k === "querySelector") return () => null;
-      if (k === "querySelectorAll") return () => [];
-      return undefined;
-    },
-    set(t, k, v) { t[k] = v; return true; },
-  });
-}
-const elCache = new Map();
-const getEl = id => { if (!elCache.has(id)) elCache.set(id, makeEl(id)); return elCache.get(id); };
-
-const rootEl = { classList: makeEl("html").classList, clientWidth: 1000 };
-const bodyEl = makeEl("body");
-const documentStub = {
-  documentElement: rootEl,
-  body: bodyEl,
-  getElementById: getEl,
-  createElement: () => makeEl(null),
-  addEventListener() {},
-  querySelector: () => null,
-  querySelectorAll: () => [],
-};
-const windowStub = { innerWidth: 1015 };   /* 与 clientWidth 差 15px，用来验证 scrollbar 补偿 */
-
-const logic = readAppSource();
 const harness = `
-;(async () => {
+return (async () => {
   /* 层栈与数据无关：不拉起数据，避免把网络路径掺进这个测试 */
   const root = document.documentElement;
   const show = id => document.getElementById(id).classList.add("show");
@@ -109,17 +67,8 @@ const harness = `
   assert(String(document.body.style.paddingRight) === "15px", "重复同步不会重复记录补偿值");
   flag.b = false; syncScrollLock();
   assert(!document.body.style.paddingRight, "重复同步后仍能干净解除");
-
-  process.exit(getFails() ? 1 : 0);
-})().catch(e => { console.error("执行异常:", e); process.exit(1); });
+})();
 `;
 
-await new Function(
-  "document", "window", "localStorage", "location", "history", "fetch", "navigator", "assert", "getFails",
-  logic + harness,
-)(
-  documentStub, windowStub, { getItem: () => null, setItem() {}, removeItem() {} },
-  { hash: "" }, { replaceState() {} },
-  async () => ({ ok: true, json: async () => ({ data: [] }) }),
-  { clipboard: {} }, assert, () => fails,
-);
+await t.run(harness);
+t.finish();

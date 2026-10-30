@@ -1,53 +1,11 @@
 /* src/ 应用源码 · 导出/限制/充能逻辑的 Node 端验证（DOM stub + 缓存数据） */
-import fs from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
-import { readAppSource } from "./test-lib.mjs";
+import { createTest } from "./_env.mjs";
 
-const here = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const CHAR = JSON.parse(fs.readFileSync(path.join(here, "gi-data/characters.json"), "utf8")).data;
-const ENT = JSON.parse(fs.readFileSync(path.join(here, "gi-data/entities.json"), "utf8")).data;
+const t = createTest();
+const { assert } = t;
 
-let fails = 0;
-const assert = (cond, msg) => { if (cond) console.log("  ok:", msg); else { console.error("  FAIL:", msg); fails++; } };
-
-function makeEl(reg, id) {
-  const store = id ? { _id: id } : {};
-  return new Proxy(store, {
-    get(t, k) {
-      if (k === "classList") return { add() {}, remove() {}, toggle() {}, contains: () => false };
-      if (k === "style") return {};
-      if (k === "dataset") return {};
-      if (k in t) return t[k];
-      if (k === "addEventListener" || k === "removeEventListener") return () => {};
-      if (k === "appendChild" || k === "remove" || k === "click" || k === "focus" || k === "setAttribute") return () => {};
-      if (k === "closest" || k === "querySelector") return () => null;
-      if (k === "querySelectorAll") return () => [];
-      if (k === "value") return "";
-      return undefined;
-    },
-    set(t, k, v) { t[k] = v; return true; },
-  });
-}
-const elCache = new Map();
-const documentStub = {
-  getElementById: id => { if (!elCache.has(id)) elCache.set(id, makeEl(true, id)); return elCache.get(id); },
-  createElement: () => makeEl(false),
-  addEventListener: () => {},
-  querySelector: () => makeEl(false),
-  querySelectorAll: () => [],
-  body: { appendChild: () => {}, dataset: {} },
-};
-const windowStub = {};
-const localStorageStub = { getItem: () => null, setItem: () => {}, removeItem: () => {} };
-const fetchStub = async url => {
-  const cat = url.endsWith("/characters") ? CHAR : ENT;
-  return { ok: true, json: async () => ({ data: cat }) };
-};
-
-const logic = readAppSource();
 const harness = `
-;(async () => {
+return (async () => {
   await decodeAndRender(SAMPLE);
   const all = state.current.order.flatMap(t => state.current.groups[t]);
   console.log("解析结果：", state.current.chars.map(c => c.name).join(" / "), "| 行动牌种类", all.length, "总张数", all.reduce((a,x)=>a+x.count,0));
@@ -75,16 +33,8 @@ const harness = `
   assert(csv.startsWith("\\ufeff") && csv.split("\\n").length === 1 + 19, "CSV 含 BOM 且 19 数据行");
   assert(csv.includes("依赖限制"), "CSV 含依赖限制列");
 
-  console.log(getFails() ? "\\n存在失败项" : "\\n全部通过");
-  process.exit(getFails() ? 1 : 0);
-})().catch(e => { console.error("执行异常:", e); process.exit(1); });
+})();
 `;
 
-await new Function(
-  "document", "window", "localStorage", "location", "history", "fetch", "navigator", "assert", "getFails",
-  logic + harness,
-)(
-  documentStub, windowStub, localStorageStub,
-  { hash: "" }, { replaceState() {} },
-  fetchStub, { clipboard: {} }, assert, () => fails,
-);
+await t.run(harness);
+t.finish();

@@ -1,4 +1,4 @@
-/* src/47-skills.js —— 由 scripts/_convert.mjs 从旧脚本转换（迁移中间态）。 */
+/* 47-skills.ts —— 技能索引：角色技能与装备牌特技的统一形状。 */
 import { dsReady, dsSkills } from "./07-dataset";
 import { $ } from "./core/dom";
 import { costHtml, costText } from "./30-deps";

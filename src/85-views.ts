@@ -1,4 +1,4 @@
-/* src/85-views.js —— 由 scripts/_convert.mjs 从旧脚本转换（迁移中间态）。 */
+/* 85-views.ts —— 卡面 / 列表视图与卡库浏览：筛选、分面、分页、瓦片渲染。 */
 import { R_STYLE, R_ZH, allReqs, deckReqsOf, depBadges, energyCost, reqElement, restrictionsOf } from "./30-deps";
 import { $ } from "./core/dom";
 import { showOdds } from "./86-odds";

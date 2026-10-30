@@ -1,63 +1,11 @@
 /* src/ 应用源码 · 卡库浏览 / 反链索引 / 多牌组存储逻辑验证（DOM stub + 缓存数据） */
-import fs from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
-import { readAppSource } from "./test-lib.mjs";
+import { createTest } from "./_env.mjs";
 
-const here = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const DATA = {};
-for (const cat of ["characters", "entities", "keywords"])
-  DATA[cat] = JSON.parse(fs.readFileSync(path.join(here, `gi-data/${cat}.json`), "utf8")).data;
-
-let fails = 0;
-const assert = (cond, msg) => { if (cond) console.log("  ok:", msg); else { console.error("  FAIL:", msg); fails++; } };
-
-function makeEl(reg, id) {
-  const store = id ? { _id: id, children: [] } : { children: [] };
-  return new Proxy(store, {
-    get(t, k) {
-      if (k === "classList") return { add() {}, remove() {}, toggle() {}, contains: () => false };
-      if (k === "style") return (t._style || (t._style = {}));
-      if (k === "dataset") return {};
-      if (k in t) return t[k];
-      if (k === "addEventListener" || k === "removeEventListener") return () => {};
-      if (k === "appendChild" || k === "remove" || k === "click" || k === "focus" || k === "setAttribute" || k === "scrollIntoView" || k === "insertAdjacentHTML" || k === "select" || k === "blur") return () => {};
-      if (k === "closest" || k === "querySelector") return () => null;
-      if (k === "querySelectorAll") return () => [];
-      if (k === "value") return "";
-      return undefined;
-    },
-    set(t, k, v) { t[k] = v; return true; },
-  });
-}
-const elCache = new Map();
-const documentStub = {
-  getElementById: id => { if (!elCache.has(id)) elCache.set(id, makeEl(true, id)); return elCache.get(id); },
-  createElement: () => makeEl(false),
-  addEventListener: () => {},
-  querySelector: () => makeEl(false),
-  querySelectorAll: () => [],
-  body: { appendChild: () => {}, dataset: {} },
-};
-const fetchStub = async url => {
-  const cat = Object.keys(DATA).find(c => url.endsWith("/" + c));
-  return { ok: true, json: async () => ({ data: cat ? DATA[cat] : [] }) };
-};
-
-const lsStore = new Map();
-const localStorageStub = {
-  getItem: k => (lsStore.has(k) ? lsStore.get(k) : null),
-  setItem: (k, v) => lsStore.set(k, String(v)),
-  removeItem: k => lsStore.delete(k),
-};
-const logic = readAppSource();
-const conceptsExtra = JSON.parse(
-  fs.readFileSync(path.join(here, "gi-data/concepts-extra.js"), "utf8")
-    .replace(/^export const CONCEPTS_EXTRA = /, "").replace(/;\s*$/, "")
-);
+const t = createTest();
+const { assert } = t;
 
 const harness = `
-;(async () => {
+return (async () => {
   /* ===== 0. 牌组存储：首次启动自动建空牌组 ===== */
   loadDraft();
   assert(decks.length === 1 && activeDeckId === decks[0].id, "首次启动自动创建一个空牌组");
@@ -402,16 +350,8 @@ const harness = `
   assert($("summary").style.display === "none", "视图切换：卡库视图收起牌组摘要（不再压在标签栏上方）");
   state.current = null;
 
-  console.log(getFails() ? "\\\\n存在失败项" : "\\\\n全部通过");
-  process.exit(getFails() ? 1 : 0);
-})().catch(e => { console.error("执行异常:", e); process.exit(1); });
+})();
 `;
 
-await new Function(
-  "document", "window", "localStorage", "location", "history", "fetch", "navigator", "assert", "getFails", "CONCEPTS_EXTRA",
-  logic + harness,
-)(
-  documentStub, {}, localStorageStub,
-  { hash: "" }, { replaceState() {} },
-  fetchStub, { clipboard: {} }, assert, () => fails, conceptsExtra,
-);
+await t.run(harness);
+t.finish();

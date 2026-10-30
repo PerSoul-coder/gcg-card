@@ -1,57 +1,11 @@
 /* src/ 应用源码 · 概念索引（术语悬浮/展开）逻辑验证（DOM stub + 缓存数据） */
-import fs from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
-import { readAppSource } from "./test-lib.mjs";
+import { createTest } from "./_env.mjs";
 
-const here = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const DATA = {};
-for (const cat of ["characters", "entities", "keywords"])
-  DATA[cat] = JSON.parse(fs.readFileSync(path.join(here, `gi-data/${cat}.json`), "utf8")).data;
+const t = createTest();
+const { assert } = t;
 
-let fails = 0;
-const assert = (cond, msg) => { if (cond) console.log("  ok:", msg); else { console.error("  FAIL:", msg); fails++; } };
-
-function makeEl(reg, id) {
-  const store = id ? { _id: id, children: [] } : { children: [] };
-  const cls = new Set();
-  return new Proxy(store, {
-    get(t, k) {
-      if (k === "classList") return {
-        add: c => cls.add(c), remove: c => cls.delete(c),
-        toggle: (c, f) => { (f === undefined ? !cls.has(c) : f) ? cls.add(c) : cls.delete(c); },
-        contains: c => cls.has(c),
-      };
-      if (k === "style") return {};
-      if (k === "dataset") return {};
-      if (k in t) return t[k];
-      if (k === "addEventListener" || k === "removeEventListener") return () => {};
-      if (k === "appendChild" || k === "remove" || k === "click" || k === "focus" || k === "setAttribute" || k === "scrollIntoView") return () => {};
-      if (k === "closest" || k === "querySelector") return () => null;
-      if (k === "querySelectorAll") return () => [];
-      if (k === "value") return "";
-      return undefined;
-    },
-    set(t, k, v) { t[k] = v; return true; },
-  });
-}
-const elCache = new Map();
-const documentStub = {
-  getElementById: id => { if (!elCache.has(id)) elCache.set(id, makeEl(true, id)); return elCache.get(id); },
-  createElement: () => makeEl(false),
-  addEventListener: () => {},
-  querySelector: () => makeEl(false),
-  querySelectorAll: () => [],
-  body: { appendChild: () => {}, dataset: {} },
-};
-const fetchStub = async url => {
-  const cat = Object.keys(DATA).find(c => url.endsWith("/" + c));
-  return { ok: true, json: async () => ({ data: cat ? DATA[cat] : [] }) };
-};
-
-const logic = readAppSource();
 const harness = `
-;(async () => {
+return (async () => {
   await decodeAndRender(SAMPLE);
   const k0 = n => termEntries(n)[0] && termEntries(n)[0].kind;
   const d0 = n => (termEntries(n)[0] && termEntries(n)[0].desc) || "";
@@ -238,16 +192,8 @@ const harness = `
   }
   assert(visLeak === 0, "可见文本无占位符泄漏（" + visLeak + " 处）");
 
-  console.log(getFails() ? "\\n存在失败项" : "\\n全部通过");
-  process.exit(getFails() ? 1 : 0);
-})().catch(e => { console.error("执行异常:", e); process.exit(1); });
+})();
 `;
 
-await new Function(
-  "document", "window", "localStorage", "location", "history", "fetch", "navigator", "assert", "getFails",
-  logic + harness,
-)(
-  documentStub, {}, { getItem: () => null, setItem: () => {} },
-  { hash: "" }, { replaceState() {} },
-  fetchStub, { clipboard: {} }, assert, () => fails,
-);
+await t.run(harness);
+t.finish();

@@ -4,93 +4,13 @@
    2) 角色简介里的关键词被当成概念；
    3) 概念深钻里有牌面的牌不渲染牌面。
    反向验证：数据集统计与 Brotli 产物一致，避免"只测运行时、数据包坏了没人发现"。 */
-import fs from "node:fs";
-import path from "node:path";
-import zlib from "node:zlib";
-import { fileURLToPath } from "node:url";
-import { readAppSource } from "./test-lib.mjs";
+import { createTest } from "./_env.mjs";
 
-const here = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const DATA = {};
-for (const cat of ["characters", "entities", "keywords"])
-  DATA[cat] = JSON.parse(fs.readFileSync(path.join(here, `gi-data/${cat}.json`), "utf8")).data;
-const conceptsExtra = JSON.parse(
-  fs.readFileSync(path.join(here, "gi-data/concepts-extra.js"), "utf8")
-    .replace(/^export const CONCEPTS_EXTRA = /, "").replace(/;\s*$/, ""),
-);
+const t = createTest();
+const { assert } = t;
 
-let fails = 0;
-const assert = (cond, msg) => { if (cond) console.log("  ok:", msg); else { console.error("  FAIL:", msg); fails++; } };
-
-/* ---- 数据包自身一致性（不依赖运行时） ---- */
-const dsJson = JSON.parse(fs.readFileSync(path.join(here, "gi-data/dataset.json"), "utf8"));
-const dsBr = JSON.parse(zlib.brotliDecompressSync(fs.readFileSync(path.join(here, "gi-data/dataset.br"))).toString("utf8"));
-const dsGz = JSON.parse(zlib.gunzipSync(fs.readFileSync(path.join(here, "gi-data/dataset.gz"))).toString("utf8"));
-assert(dsJson.records.length === dsBr.records.length, "Brotli 包与 JSON 记录数一致（" + dsJson.records.length + "）");
-assert(dsJson.records.length === dsGz.records.length, "gzip 包与 JSON 记录数一致（浏览器原生主路径）");
-assert(dsJson.stats.skillCard > 0, "数据集记录了装备牌特技：" + dsJson.stats.skillCard);
-assert(dsJson.records.filter(r => r.kind === "char").every(r => r.refs.length === 0), "角色记录无出边（简介不参与链接）");
-
-/* ---- 概念索引：收录 / 去重 / 排序都在构建期算好，运行时只投影 ---- */
-const recKeys = new Set(dsJson.records.map(r => r.key));
-assert(Array.isArray(dsJson.terms) && dsJson.terms.length > 0, "数据集输出概念索引：" + dsJson.terms.length + " 名");
-assert(dsJson.terms.length === dsJson.stats.conceptNames, "概念名数与统计一致");
-assert(dsJson.terms.every(t => t.entries.length > 0), "概念索引无空条目");
-assert(dsJson.terms.every(t => t.entries.every(e => recKeys.has(e.key))),
-  "概念索引条目全部指向存在的记录（否则运行时投影得到空壳）");
-assert(dsJson.terms.every(t => new Set(t.entries.map(e => e.kind)).size === t.entries.length),
-  "同名同种类不重复占位（「护盾」只能有一个卡牌条目）");
-/* 牌面文本副本不进概念索引：否则概念页会并列两条一样的描述 */
-const mirrorKeys = new Set(dsJson.records.filter(r => r.flags.mirror).map(r => r.key));
-assert(dsJson.terms.every(t => t.entries.every(e => !mirrorKeys.has(e.key))), "牌面文本副本不进概念索引");
-/* 同名身份（dupIdentity）要保留在索引里，只是检索不单列 */
-assert(dsJson.terms.some(t => t.entries.some(e => dsJson.records.find(r => r.key === e.key)?.flags.dupIdentity)),
-  "同名身份条目保留在概念索引中");
-assert(dsJson.terms.some(t => t.name === "感电" && t.entries.length), "元素反应术语已派生（感电）");
-assert(dsJson.terms.some(t => t.name === "结晶" && t.entries.length), "元素反应基名已归并（结晶）");
-const unlinkableKeys = new Set(dsJson.records.filter(r => !r.linkable).map(r => r.key));
-assert(dsJson.terms.every(t => t.entries.every(e => !unlinkableKeys.has(e.key))), "不可链接记录不进概念索引");
-
-function makeEl(id) {
-  const store = id ? { _id: id, children: [], innerHTML: "" } : { children: [], innerHTML: "" };
-  const cls = new Set();
-  return new Proxy(store, {
-    get(t, k) {
-      if (k === "classList") return {
-        add: c => cls.add(c), remove: c => cls.delete(c),
-        toggle: (c, f) => { (f === undefined ? !cls.has(c) : f) ? cls.add(c) : cls.delete(c); },
-        contains: c => cls.has(c),
-      };
-      if (k === "style") return {};
-      if (k === "dataset") return {};
-      if (k in t) return t[k];
-      if (["addEventListener", "removeEventListener", "appendChild", "remove", "click", "focus", "setAttribute", "scrollIntoView", "replaceWith"].includes(k)) return () => {};
-      if (k === "closest" || k === "querySelector") return () => null;
-      if (k === "querySelectorAll") return () => [];
-      if (k === "value") return "";
-      return undefined;
-    },
-    set(t, k, v) { t[k] = v; return true; },
-  });
-}
-const elCache = new Map();
-const documentStub = {
-  getElementById: id => { if (!elCache.has(id)) elCache.set(id, makeEl(id)); return elCache.get(id); },
-  createElement: () => makeEl(null),
-  addEventListener: () => {},
-  querySelector: () => makeEl(null),
-  querySelectorAll: () => [],
-  body: { appendChild: () => {}, dataset: {} },
-  documentElement: { classList: { add() {}, remove() {}, toggle() {}, contains: () => false } },
-};
-const fetchStub = async url => {
-  const cat = Object.keys(DATA).find(c => url.endsWith("/" + c));
-  return { ok: true, json: async () => ({ data: cat ? DATA[cat] : [] }) };
-};
-
-const logic = readAppSource();
 const harness = `
-;(async () => {
+return (async () => {
   await ensureData();
 
   /* ===== 1. 装备牌特技进入技能索引 ===== */
@@ -159,16 +79,8 @@ const harness = `
   const bl = backlinks.get("跃升");
   assert(!!bl && bl.size > 0, "反链：跃升 被引用（出边来自构建期）");
 
-  console.log(getFails() ? "\\n存在失败项" : "\\n全部通过");
-  process.exit(getFails() ? 1 : 0);
-})().catch(e => { console.error("执行异常:", e); process.exit(1); });
+})();
 `;
 
-await new Function(
-  "document", "window", "localStorage", "location", "history", "fetch", "navigator", "assert", "getFails", "CONCEPTS_EXTRA",
-  logic + harness,
-)(
-  documentStub, {}, { getItem: () => null, setItem() {}, removeItem() {} },
-  { hash: "" }, { replaceState() {} },
-  fetchStub, { clipboard: {} }, assert, () => fails, conceptsExtra,
-);
+await t.run(harness);
+t.finish();

@@ -1,4 +1,4 @@
-/* src/45-pool.js —— 由 scripts/_convert.mjs 从旧脚本转换（迁移中间态）。 */
+/* 45-pool.ts —— 卡池：记录投影成浏览条目，派生筛选所需的字段与统计。 */
 import { deckReqsOf, diceCost, energyCost, isTestCard, reqElement, restrictionsOf } from "./30-deps";
 import { state } from "./data/state";
 import type { PoolEntry, PoolStats, ReqBadge } from "./types";

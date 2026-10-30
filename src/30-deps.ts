@@ -1,4 +1,4 @@
-/* src/30-deps.js —— 由 scripts/_convert.mjs 从旧脚本转换（迁移中间态）。 */
+/* 30-deps.ts —— 牌间依赖的渲染与校验：徽标、构筑门槛校验、缺口说明。 */
 import { state } from "./data/state";
 import type { DeckReq, PlayRestriction } from "./types";
 import { ELE_COLOR, WEAPON_ZH, COST_ZH, tagZh, NATION_CODE, CAMP_CODE, ELE_CODE, ENERGY_ICON } from "./core/resources";

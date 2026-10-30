@@ -1,4 +1,4 @@
-/* src/95-export.js —— 由 scripts/_convert.mjs 从旧脚本转换（迁移中间态）。 */
+/* 95-export.ts —— 导出：JSON / CSV / 文本，字段形状是对外契约。 */
 import { allReqs, costText, diceCost, energyCost } from "./30-deps";
 import { $ } from "./core/dom";
 import { skillsOf } from "./47-skills";

@@ -1,4 +1,4 @@
-/* src/20-data.js —— 由 scripts/_convert.mjs 从旧脚本转换（迁移中间态）。 */
+/* 20-data.ts —— 数据加载与派生索引装配：一次加载把数据集编译成运行时索引。 */
 import { loadDataset } from "./07-dataset";
 import { buildSkillIndex } from "./47-skills";
 import { buildTermIndex } from "./40-concepts";

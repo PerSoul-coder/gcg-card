@@ -1,4 +1,4 @@
-/* src/60-parse.js —— 由 scripts/_convert.mjs 从旧脚本转换（迁移中间态）。 */
+/* 60-parse.ts —— 分享码解析：码 → 牌组视图（角色 / 分组 / 限制）。 */
 import { decodeRaw } from "./10-codec";
 import { $ } from "./core/dom";
 import { ensureData } from "./20-data";

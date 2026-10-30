@@ -1,4 +1,4 @@
-/* src/99-main.js —— 由 scripts/_convert.mjs 从旧脚本转换（迁移中间态）。 */
+/* 99-main.ts —— 入口装配：事件绑定、菜单与快捷键、数据信息行。 */
 import { closeHistoryPanel, decodeAndRender, looksLikeCode, renderHistory, resolveInput, toggleHistoryPanel } from "./60-parse";
 import { $ } from "./core/dom";
 import { closeSuggest, moveSuggest, pushRecent, resetSuggestTimer, scheduleSuggest, searchState, selectSuggest, sugState } from "./70-search";

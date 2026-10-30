@@ -1,62 +1,25 @@
 /* src/ 应用源码 · 运行时健壮性验证：缓存 TTL / 结构校验 / 超时 / 重试 / 单 flight */
-import fs from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
-import { readAppSource } from "./test-lib.mjs";
+import { createTest, readSources } from "./_env.mjs";
 
-const here = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const DATA = {};
-for (const cat of ["characters", "entities", "keywords"])
-  DATA[cat] = JSON.parse(fs.readFileSync(path.join(here, `gi-data/${cat}.json`), "utf8")).data;
-const conceptsExtra = JSON.parse(
-  fs.readFileSync(path.join(here, "gi-data/concepts-extra.js"), "utf8")
-    .replace(/^export const CONCEPTS_EXTRA = /, "").replace(/;\s*$/, ""));
-
-let fails = 0;
-const assert = (cond, msg) => { if (cond) console.log("  ok:", msg); else { console.error("  FAIL:", msg); fails++; } };
-
-/* 可控 localStorage */
+/* 可控 localStorage：测试直接操作 store 来摆布缓存状态 */
 const store = new Map();
-const localStorageStub = {
-  getItem: k => (store.has(k) ? store.get(k) : null),
+const storage = {
+  getItem: (k) => (store.has(k) ? store.get(k) : null),
   setItem: (k, v) => store.set(k, String(v)),
-  removeItem: k => store.delete(k),
+  removeItem: (k) => store.delete(k),
+  clear: () => store.clear(),
+  get length() { return store.size; },
 };
-/* 可控 fetch：记录调用、可编程返回/抛错/挂起 */
+/* 可控 fetch：记录调用、可编程返回 / 抛错 / 挂起 */
 const fetchCtl = { log: [], impl: async () => { throw new Error("unset"); }, reset() { this.log.length = 0; } };
 const fetchStub = async (url, opts) => { fetchCtl.log.push(url); return fetchCtl.impl(url, opts); };
 
-function makeEl(reg, id) {
-  const s = id ? { _id: id } : {};
-  return new Proxy(s, {
-    get(t, k) {
-      if (k === "classList") return { add() {}, remove() {}, toggle() {}, contains: () => false };
-      if (k === "style" || k === "dataset") return {};
-      if (k in t) return t[k];
-      if (k === "addEventListener" || k === "removeEventListener") return () => {};
-      if (k === "appendChild" || k === "remove" || k === "click" || k === "focus" || k === "setAttribute" || k === "scrollIntoView" || k === "insertAdjacentHTML") return () => {};
-      if (k === "closest" || k === "querySelector") return () => null;
-      if (k === "querySelectorAll") return () => [];
-      if (k === "value") return "";
-      return undefined;
-    },
-    set(t, k, v) { t[k] = v; return true; },
-  });
-}
-const elCache = new Map();
-const documentStub = {
-  getElementById: id => { if (!elCache.has(id)) elCache.set(id, makeEl(true, id)); return elCache.get(id); },
-  createElement: () => makeEl(false),
-  addEventListener: () => {},
-  querySelector: () => makeEl(false),
-  querySelectorAll: () => [],
-  body: { appendChild: () => {}, dataset: {} },
-};
-
-const logic = readAppSource();
+const DATA = readSources();
+const t = createTest({ data: DATA, storage, fetch: fetchStub });
+const { assert } = t;
 
 const harness = `
-(async () => {
+return (async () => {
   const sleep = ms => new Promise(r => setTimeout(r, ms));
   /* 等启动时的首次加载（必然失败：初始 impl 抛错）settle，再开始计数 */
   await sleep(80); fetchCtl.reset();
@@ -150,16 +113,8 @@ const harness = `
   await ensureData();
   assert(dataReady === true, "恢复：重新加载成功");
 
-  console.log(getFails() ? "\\\\n存在失败项" : "\\\\n全部通过");
-  process.exit(getFails() ? 1 : 0);
-})().catch(e => { console.error("执行异常:", e); process.exit(1); });
+})();
 `;
 
-await new Function(
-  "document", "window", "localStorage", "location", "history", "fetch", "navigator", "assert", "getFails", "CONCEPTS_EXTRA", "DATA", "store", "fetchCtl",
-  logic + harness,
-)(
-  documentStub, {}, localStorageStub,
-  { hash: "" }, { replaceState() {} },
-  fetchStub, { clipboard: {} }, assert, () => fails, conceptsExtra, DATA, store, fetchCtl,
-);
+await t.run(harness, { DATA, store, fetchCtl });
+t.finish();

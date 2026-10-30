@@ -1,4 +1,4 @@
-/* src/86-odds.js —— 由 scripts/_convert.mjs 从旧脚本转换（迁移中间态）。 */
+/* 86-odds.ts —— 抽牌概率：起手与指定回合的抽到概率计算。 */
 import { dataReady, ensureData } from "./20-data";
 import { $ } from "./core/dom";
 import { renderOverlay, topView } from "./90-detail";
