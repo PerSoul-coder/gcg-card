@@ -99,11 +99,27 @@ const diceCostOf = cost => (cost || []).filter(c => /^GCG_COST_DICE/.test(c) && 
 const energyCostOf = cost => (cost || []).filter(c => c === "GCG_COST_ENERGY").length;
 const elemOfTags = tags => (tags || []).find(t => t.startsWith("GCG_TAG_ELEMENT"))?.replace("GCG_TAG_ELEMENT_", "") || "";
 const normDesc = s => String(s || "").replace(/^费用：\d+\s*/, "").replace(/[\s\p{P}\p{S}]/gu, "");
+/* 编辑距离相似度。只比长度比例是不够的：两条描述长度相同但内容完全不同
+   （「角色不会因为额外行动而获得充能」vs「自身行动后获得1次额外行动可叠加」）
+   会被判成同一个，于是把本该独立的概念当成副本丢掉。长度只用来剪枝。 */
+function levRatio(x, y) {
+  const m = x.length, n = y.length;
+  if (Math.abs(m - n) > Math.max(m, n) * 0.2) return 0;
+  let prev = new Array(n + 1);
+  for (let j = 0; j <= n; j++) prev[j] = j;
+  for (let i = 1; i <= m; i++) {
+    const cur = [i];
+    for (let j = 1; j <= n; j++)
+      cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (x[i - 1] === y[j - 1] ? 0 : 1));
+    prev = cur;
+  }
+  return 1 - prev[n] / Math.max(m, n);
+}
 function descSimilar(a, b) {
   const x = normDesc(a), y = normDesc(b);
   if (!x || !y) return false;
   if (x === y || x.includes(y) || y.includes(x)) return true;
-  return Math.abs(x.length - y.length) <= 2 && Math.min(x.length, y.length) / Math.max(x.length, y.length) > 0.92;
+  return levRatio(x, y) >= 0.9;
 }
 const PREPARE_TURNS_RE = /（需准备(\d+)个行动轮）/;
 const skillEffectText = d => String(d || "").split("\n").filter(l => !PREPARE_TURNS_RE.test(l)).join("\n").trim();
@@ -298,25 +314,88 @@ for (const e of ENT) {
   }
 }
 
-/* 7.3 关键词术语（牌面文本镜像不进概念） */
+/* 7.3 关键词术语（牌面文本镜像不进概念）
+ *
+ * 这里要区分**两种**「重复」，它们过去都被塞进一个 mirror 标志，语义混了：
+ *   · flags.mirror       —— 描述就是某张牌的牌面文本副本（释义等价）。
+ *                           收录它只会让概念页并列两条一样的内容 → 不进概念索引。
+ *   · flags.dupIdentity  —— 名字属于某个身份（角色/卡牌），但释义不同
+ *                           （「焚尽的炽炎魔女」是角色的形态说明）。概念页要保留，
+ *                           只是检索不单列，避免同一张牌在「角色」和「概念」两栏各出现一次。
+ * 词表（linkTargets）与这两者无关：正文里出现这个名字就该能点开。
+ * 同时 linkable 不再受 mirror 影响——「因为是副本所以点不开」不成立。 */
+function termRecord({ key, name, desc, typeRaw, typeZh, source, art, rel, mirror, dupIdentity, extra }) {
+  return {
+    key, kind: "term", domain: "term",
+    name, englishName: "", aliases: aliasOf(name),
+    typeRaw, typeZh,
+    desc: { effect: desc, story: "", rules: desc },
+    linkable: !!desc,
+    art: art || { hasFace: false, ref: null, kind: "none" },
+    stats: { cost: [], dice: -1, energy: 0, hp: null, maxEnergy: null, tags: [], tagsRaw: [], element: "" },
+    rel: rel || { ownerKey: null, ownerName: null, ownerKind: null, relatedCharacterId: null, relatedCharacterKey: null },
+    flags: { deckable: false, poolable: false, shadow: false, mirror: !!mirror, dupIdentity: !!dupIdentity, test: false, entity: false },
+    version: "", refs: [], source,
+    ...(extra || {}),
+  };
+}
+
 for (const k of KW) {
   if (!k.name || k.name.length < 2) continue;
-  const key = "term:" + k.id;
   const desc = (k.description || "").trim();
   const hit = entByNorm.get(T.nameKey(k.name));
-  const mirror = !!hit && descSimilar(k.description, hit.obj.description);
-  push({
-    key, kind: "term", domain: "term",
-    name: k.name, englishName: "", aliases: aliasOf(k.name),
-    typeRaw: k.category || "keywords", typeZh: "术语",
-    desc: { effect: desc, story: "", rules: desc },
-    linkable: !!desc && !mirror,
-    art: { hasFace: false, ref: null, kind: "none" },
-    stats: { cost: [], dice: -1, energy: 0, hp: null, maxEnergy: null, tags: [], tagsRaw: [], element: "" },
-    rel: { ownerKey: null, ownerName: null, ownerKind: null, relatedCharacterId: null, relatedCharacterKey: null },
-    flags: { deckable: false, poolable: false, shadow: false, mirror, test: false, entity: false },
-    version: "", refs: [], source: "piovium",
-  });
+  push(termRecord({
+    key: "term:" + k.id, name: k.name, desc,
+    typeRaw: k.category || "keywords", typeZh: "术语", source: "piovium",
+    mirror: !!hit && descSimilar(k.description, hit.obj.description),
+    dupIdentity: !!hit && hit.kind === "char",
+  }));
+}
+
+/* 7.3b 反应术语派生
+ *
+ * piovium 把元素反应统一写成一条「X元素相关反应」的关键词，描述是逐反应的清单
+ * （感电：… / 绽放：… / 扩散（水）：…）。这些反应名是正文里最常出现的一类术语，
+ * 必须各自成条，否则「触发感电」里的「感电」点不开。
+ * 同基名的多行还要归并出基名词条（结晶 / 扩散）：卡文写作「结晶反应」，
+ * 长名匹配不中，只会命中同名的场地牌，机制解释就丢了。
+ *
+ * 以前这一步在运行时用正则解析描述文本；现在放到构建期，运行时不再从文本里派生数据。 */
+const REACTION_LINE_RE = /^([^：\n]{2,12})：([\s\S]+)$/;
+{
+  const byBase = new Map();   /* base → Map<元素后缀, 文本> */
+  /* 同一个反应名可能出现在多条「X元素相关反应」里（如冻结同时属冰与水）：
+     先到先得，与旧实现的 addTerm 语义一致 */
+  const seenLine = new Map();
+  for (const k of KW) {
+    if (!/元素相关反应$/.test(k.name || "") || !k.description) continue;
+    for (const line of k.description.split("\n")) {
+      const m = line.match(REACTION_LINE_RE);
+      if (!m) continue;
+      const name = m[1].trim(), text = m[2].trim();
+      if (name.length < 2 || !text) continue;
+      if (!seenLine.has(name)) seenLine.set(name, text);
+      const base = name.replace(/（[^（）]*）$/, "");
+      if (base === name || base.length < 2) continue;
+      if (!byBase.has(base)) byBase.set(base, new Map());
+      const variants = byBase.get(base);
+      const suffix = name.slice(base.length + 1, -1);
+      if (!variants.has(suffix)) variants.set(suffix, text);
+    }
+  }
+  for (const [name, text] of seenLine)
+    push(termRecord({
+      key: "term:rx:" + encodeURIComponent(name), name, desc: text,
+      typeRaw: "keyword", typeZh: "概念", source: "piovium",
+    }));
+  for (const [base, variants] of byBase) {
+    if (seenLine.has(base)) continue;   /* 基名本身已作为反应行收录，不再用归并结果覆盖 */
+    push(termRecord({
+      key: "term:rx:" + encodeURIComponent(base), name: base,
+      desc: [...variants].map(([sfx, text]) => sfx ? `（${sfx}）${text}` : text).join("\n"),
+      typeRaw: "keyword", typeZh: "概念", source: "piovium",
+    }));
+  }
 }
 
 /* 7.4 补充概念：能接回真实身份就挂身份，否则作为独立术语 */
@@ -327,28 +406,25 @@ for (const [name, info] of Object.entries(EXTRA)) {
   const desc = (info.desc || "").trim();
   const hit = entByNorm.get(T.nameKey(name));
   const sameIdentity = !!hit && T.cosmeticKey(name) === T.cosmeticKey(hit.obj.name);
-  const mirror = !!hit && (ENTITY_KINDS.has(kind) || descSimilar(desc, hit.obj.description));
-  const key = "term:x:" + encodeURIComponent(name);
-  push({
-    key, kind: "term", domain: "term",
-    name, englishName: "", aliases: aliasOf(name),
-    typeRaw: kind, typeZh: info.type || "概念",
-    desc: { effect: desc, story: "", rules: desc },
-    linkable: !!desc && !mirror,
+  /* 补充库把某张牌的「状态 / 召唤物 / 术语」释义按卡名收录时，本质仍是这张牌：
+     概念页保留该条目（释义可能更完整），检索不再单列。 */
+  const dupIdentity = !!hit && (ENTITY_KINDS.has(kind) || descSimilar(desc, hit.obj.description));
+  push(termRecord({
+    key: "term:x:" + encodeURIComponent(name), name, desc,
+    typeRaw: kind, typeZh: info.type || "概念", source: "genshin-db",
+    dupIdentity,
     art: {
       hasFace: !!hit && !!hit.obj.cardFace,
       ref: hit && hit.obj.cardFace ? hit.obj.id : null,
       kind: hit && hit.kind === "char" ? "char" : "card",
     },
-    stats: { cost: [], dice: -1, energy: 0, hp: null, maxEnergy: null, tags: [], tagsRaw: [], element: "" },
     rel: {
       ownerKey: null, ownerName: null, ownerKind: null,
       relatedCharacterId: hit && hit.kind === "char" ? hit.obj.id : null,
       relatedCharacterKey: hit ? (hit.kind === "char" ? "char:" : "card:") + hit.obj.id : null,
     },
-    flags: { deckable: false, poolable: false, shadow: false, mirror, test: false, entity: false },
-    version: "", refs: [], source: "genshin-db", sameIdentity,
-  });
+    extra: { sameIdentity },
+  }));
 }
 
 /* 7.5 技能同名阶段记录去重：同一 owner + 同名只留描述最全的一条 */
@@ -387,7 +463,9 @@ for (const r of records) if (!byKey.has(r.key)) byKey.set(r.key, r);
 const kindRank = { char: 0, card: 1, skill: 2, term: 3 };
 const linkTargets = new Map();
 for (const r of records) {
-  if (!r.linkable || r.flags.mirror) continue;
+  /* mirror 排除在「出边来源」之外（它的描述是身份的副本，扫一遍只会得到重复引用），
+     但它仍可作为链接目标：正文里出现「眩晕」时要能点开解释。 */
+  if (!r.linkable) continue;
   const prev = linkTargets.get(r.name);
   if (!prev || kindRank[r.kind] < kindRank[prev.kind]) linkTargets.set(r.name, r);
 }
@@ -414,6 +492,76 @@ for (const r of records) {
   r.refs = [...set];
 }
 
+/* ---------- 8.5 概念索引（名字 → 条目列表） ----------
+ *
+ * 一个名字可能同时属于多种概念：「护盾」既是状态牌也是关键词，「幻戏」既是机制术语
+ * 也是某角色的技能名。概念页与悬浮提示按列表顺序并列展示，所以这里输出的是
+ * 「名字 → 有序条目」而不是「记录 → 名字」。
+ *
+ * 以前这些判定分散在运行时：收录条件、身份是否压过同名技能、同种类怎么取舍、
+ * 展示顺序，各有各的启发式。现在全部在此一次算完，运行时只做投影。
+ * 好处不是性能，而是「同一张牌在不同界面得出不同结论」这件事不再可能发生。 */
+const TERM_ENTRY_KIND = {
+  keywords: "keyword", keyword: "keyword", rule: "rule", "rule-term": "rule-term",
+  status: "status", summon: "summon", enemy: "enemy", attachment: "attachment",
+  card: "cardref", character: "charref",
+};
+/* 并列顺序：身份（卡/角色）→ 规则术语 → 技能 → 对局实体。
+   规则术语排在技能前：同名时「幻戏」这类机制词义更常用（技能只是某角色的内部命名），
+   先看机制解释更符合直觉；技能页有独立入口，不会被埋掉。 */
+const CONCEPT_KIND_ORDER = ["card", "char", "keyword", "rule", "rule-term", "skill",
+  "status", "summon", "enemy", "attachment", "cardref", "charref"];
+const KIND_GROUP_OF = { card: "card", cardref: "card", char: "char", charref: "char" };
+
+/* 补充库条目能否接回真实身份：只有当它的种类与 piovium 身份种类相符时才挂，
+   否则保留 cardref/charref 的降级语义（点击走概念弹层，不跳到不存在的详情） */
+function conceptKindOf(r) {
+  if (r.kind !== "term") return r.kind;
+  const raw = r.typeRaw;
+  const identityKind = String(r.rel.relatedCharacterKey || "").split(":")[0];
+  if (r.sameIdentity && (raw === "card" || raw === "cardref") && identityKind === "card") return "card";
+  if (r.sameIdentity && (raw === "char" || raw === "charref") && identityKind === "char") return "char";
+  return TERM_ENTRY_KIND[raw] || "keyword";
+}
+/* 同种类内的取舍：现网优先 → 可入构筑 → 有描述。
+   有牌面不能算加分项：同名版本里「有图但无描述」的那条恰恰是最该被跳过的
+   （如「元素附魔：冰」的两条记录），用图优先会把它推上来。 */
+const conceptScore = r =>
+  (r.source === "piovium" ? 4 : 0) + (r.flags.deckable ? 2 : 0) + (r.desc.effect ? 1 : 0);
+
+const identityNorms = new Set();
+for (const r of records) if ((r.kind === "card" || r.kind === "char") && r.linkable) identityNorms.add(r.aliases.norm);
+
+const conceptGroups = new Map();   /* name → Map<种类组, {key, kind, score}> */
+for (const r of records) {
+  /* terms 是「概念页/悬浮提示要展示什么」，mirror 的含义就是「与身份重复」，
+     收进来只会让概念页并列两条同样的内容。词表（linkTargets）不受影响，
+     正文里出现这个名字照样能点。 */
+  if (!r.linkable || r.flags.mirror || !r.name || r.name.length < 2) continue;
+  const kind = conceptKindOf(r);
+  /* 身份优先于同名技能：卡文里的「神里流·霰步」指的首先是那张牌 */
+  if (kind === "skill" && identityNorms.has(r.aliases.norm)) continue;
+  const group = KIND_GROUP_OF[kind] || kind;
+  let groups = conceptGroups.get(r.name);
+  if (!groups) conceptGroups.set(r.name, groups = new Map());
+  const score = conceptScore(r);
+  const cur = groups.get(group);
+  if (!cur) groups.set(group, { key: r.key, kind, score });
+  else if (score > cur.score) { cur.key = r.key; cur.kind = kind; cur.score = score; }
+  /* 平手保留先到的：piovium 原始关键词先于派生的反应术语注册 */
+}
+const terms = [...conceptGroups]
+  .map(([name, groups]) => ({
+    name,
+    entries: [...groups.values()]
+      .sort((a, b) => {
+        const ia = CONCEPT_KIND_ORDER.indexOf(a.kind), ib = CONCEPT_KIND_ORDER.indexOf(b.kind);
+        return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+      })
+      .map(e => ({ key: e.key, kind: e.kind })),
+  }))
+  .sort((a, b) => a.name.length - b.name.length || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+
 /* ---------- 9. 测试卡判定（与运行时一致：名称含 test 标记） ---------- */
 function isTestCard(e) {
   return /[（(]\s*test\s*[）)]/i.test(e.name || "");
@@ -435,6 +583,8 @@ const stats = {
   mirror: records.filter(r => r.flags.mirror).length,
   test: records.filter(r => r.flags.test).length,
   refs: records.reduce((n, r) => n + r.refs.length, 0),
+  conceptNames: terms.length,
+  conceptEntries: terms.reduce((n, t) => n + t.entries.length, 0),
 };
 const problems = [];
 if (stats.chars !== CHAR.length) problems.push(`角色数不一致：记录 ${stats.chars} / 源 ${CHAR.length}`);
@@ -447,6 +597,12 @@ const dup = new Set(), dups = [];
 for (const r of records) { if (dup.has(r.key)) dups.push(r.key); dup.add(r.key); }
 if (dups.length) problems.push(`重复 key：${dups.slice(0, 5).join(", ")}`);
 
+/* 概念索引必须是记录的纯投影：出现的每个 key 都要能取到记录，
+   否则运行时投影会拿到 undefined，概念页只剩空壳。 */
+const missingConcept = [];
+for (const t of terms) for (const e of t.entries) if (!byKey.has(e.key)) missingConcept.push(`${t.name} → ${e.key}`);
+if (missingConcept.length) problems.push(`概念索引指向不存在的记录：${missingConcept.slice(0, 5).join(" / ")}`);
+
 if (problems.length) {
   console.error("数据集校验失败：");
   for (const p of problems) console.error("  - " + p);
@@ -454,7 +610,7 @@ if (problems.length) {
 }
 
 /* ---------- 11. 输出 ---------- */
-const payload = { v: 1, builtAt: new Date().toISOString(), stats, records };
+const payload = { v: 1, builtAt: new Date().toISOString(), stats, records, terms };
 const json = JSON.stringify(payload);
 fs.writeFileSync(path.join(ROOT, "gi-data/dataset.json"), json, "utf8");
 const br = zlib.brotliCompressSync(Buffer.from(json, "utf8"), {
@@ -476,5 +632,5 @@ console.log("数据集已生成");
 console.log(`  记录 ${stats.total}（角色 ${stats.chars} / 卡牌 ${stats.cards} / 技能 ${stats.skills} / 术语 ${stats.terms}）`);
 console.log(`  技能来源：角色 ${stats.skillChar} · 装备牌特技 ${stats.skillCard}`);
 console.log(`  可链接 ${stats.linkable} · 有牌面 ${stats.withFace} · 影子 ${stats.shadow} · 镜像 ${stats.mirror} · 测试 ${stats.test}`);
-console.log(`  出边引用 ${stats.refs}`);
+console.log(`  出边引用 ${stats.refs} · 概念 ${stats.conceptNames} 名 / ${stats.conceptEntries} 条`);
 console.log(`  dataset.json ${kb(Buffer.byteLength(json))} → br ${kb(br.length)} / gz ${kb(gz.length)}`);

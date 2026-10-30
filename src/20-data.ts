@@ -108,7 +108,9 @@ async function loadData(forceNetwork = false) {
   state.CHAR = res[0].value; state.ENT = res[1].value;
   state.KW = res[2].status === "fulfilled" ? res[2].value : [];
   /* 统一数据集：构建期归一化的记录（技能含装备牌特技、出边、可链接标记）。
-     失败不阻塞主流程——旧索引仍可工作，页面不会因数据包缺失白屏。 */
+     单文件版内联在页面里，多文件版走 gi-data/，两者都在 loadDataset 里处理。
+     加载失败不阻塞主流程：卡库与详情仍能用原始快照渲染，只是概念索引与反链会空着
+     （它们只认归一化记录）——这比整页白屏好，也便于从界面看出是数据包的问题。 */
   await loadDataset();
   for (const c of [...state.CHAR, ...state.ENT]) if (c.shareId != null) {
     state.shareMap[c.shareId] = c.id;
@@ -118,10 +120,10 @@ async function loadData(forceNetwork = false) {
   state.charByName = new Map(state.CHAR.map(c => [c.name, c]));
   state.entById = new Map(state.ENT.map(e => [e.id, e]));
   buildShadowStates();   /* 准备状态影子：必须先于概念索引（重名的状态要让位给技能） */
-  buildSkillIndex();     /* 技能索引：概念索引要用它注册「技能」条目 */
-  buildTermIndex();
+  buildSkillIndex();     /* 技能索引：数据集可用时直接投影，否则回退到原始快照 */
+  buildTermIndex();      /* 概念索引：只读 dataset.terms（收录/去重/排序已在构建期完成） */
   buildPool();
-  buildBacklinks();
+  buildBacklinks();      /* 反链：只读出边（refs），不再运行时扫文本 */
   pruneDraft(); renderDraft();
   renderDataInfo();
   dataReady = true;

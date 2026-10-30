@@ -6,6 +6,7 @@ import { browseState, parseBrowseHash, renderBrowse, renderBrowseResults, render
 import { ORIGIN_ZH, dataOrigins, ensureData, resetDataState } from "./20-data";
 import { pool, poolStats, resetPool } from "./45-pool";
 import { resetConceptIndex } from "./40-concepts";
+import { dsStats } from "./07-dataset";
 import { resetBacklinks } from "./50-backlinks";
 import { SKILLS, resetSkillIndex } from "./47-skills";
 import { beginRenameDeck, closeDraftPanel, deleteDeckById, draftClear, draftEncode, draftLoadCurrent, draftRemoveCard, draftRemoveChar, draftSetCount, duplicateDeck, loadDraft, newDeck, renderDraft, renderDraftPanel, syncFromActive, toggleDraftPanel } from "./80-deck";
@@ -16,7 +17,6 @@ import { closeTopLayer } from "./core/layers";
 import { setStatus, toast, copyText } from "./core/dom";
 import { shadowStateIds, shadowStateBySkill } from "./data/model";
 import { dataReady, writeCache } from "./20-data";
-import { EXTRA_CONCEPTS } from "./40-concepts";
 import { backlinks } from "./50-backlinks";
 import { refreshSuggest } from "./70-search";
 
@@ -135,7 +135,8 @@ function renderDataInfo() {
   /* 来源如实展示：内置快照 / 本地缓存 / 现网，混合来源按实际出现的组合列出 */
   const origin = [...dataOrigins].map(k => ORIGIN_ZH[k] || k).join(" + ") || "—";
   const imgNote = dataOrigins.has("builtin") && !dataOrigins.has("network") ? "　|　卡面图需联网" : "";
-  el.innerHTML = `数据源：piovium 官方静态数据 v5 · CHS　|　${state.CHAR.length} 角色 · ${pool.filter(x => x.kind === "card").length} 卡牌 · ${SKILLS.length} 技能 · ${state.KW.length} 术语 + ${Object.keys(EXTRA_CONCEPTS).length} 规则概念${testNote}${shadowNote}　|　${origin}${imgNote}`;
+  const ds = dsStats();
+  el.innerHTML = `数据源：piovium 官方静态数据 v5 · CHS　|　${state.CHAR.length} 角色 · ${pool.filter(x => x.kind === "card").length} 卡牌 · ${SKILLS.length} 技能 · ${ds ? `${ds.conceptNames} 个概念` : `${state.KW.length} 术语`}${testNote}${shadowNote}　|　${origin}${imgNote}`;
 }
 $("btnRefresh").addEventListener("click", async () => {
   /* 不预先清缓存：网络不可用时旧缓存 / 内置快照还能兜住，不至于整页失去数据。

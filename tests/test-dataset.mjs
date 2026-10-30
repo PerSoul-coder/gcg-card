@@ -31,6 +31,26 @@ assert(dsJson.records.length === dsGz.records.length, "gzip 包与 JSON 记录�
 assert(dsJson.stats.skillCard > 0, "数据集记录了装备牌特技：" + dsJson.stats.skillCard);
 assert(dsJson.records.filter(r => r.kind === "char").every(r => r.refs.length === 0), "角色记录无出边（简介不参与链接）");
 
+/* ---- 概念索引：收录 / 去重 / 排序都在构建期算好，运行时只投影 ---- */
+const recKeys = new Set(dsJson.records.map(r => r.key));
+assert(Array.isArray(dsJson.terms) && dsJson.terms.length > 0, "数据集输出概念索引：" + dsJson.terms.length + " 名");
+assert(dsJson.terms.length === dsJson.stats.conceptNames, "概念名数与统计一致");
+assert(dsJson.terms.every(t => t.entries.length > 0), "概念索引无空条目");
+assert(dsJson.terms.every(t => t.entries.every(e => recKeys.has(e.key))),
+  "概念索引条目全部指向存在的记录（否则运行时投影得到空壳）");
+assert(dsJson.terms.every(t => new Set(t.entries.map(e => e.kind)).size === t.entries.length),
+  "同名同种类不重复占位（「护盾」只能有一个卡牌条目）");
+/* 牌面文本副本不进概念索引：否则概念页会并列两条一样的描述 */
+const mirrorKeys = new Set(dsJson.records.filter(r => r.flags.mirror).map(r => r.key));
+assert(dsJson.terms.every(t => t.entries.every(e => !mirrorKeys.has(e.key))), "牌面文本副本不进概念索引");
+/* 同名身份（dupIdentity）要保留在索引里，只是检索不单列 */
+assert(dsJson.terms.some(t => t.entries.some(e => dsJson.records.find(r => r.key === e.key)?.flags.dupIdentity)),
+  "同名身份条目保留在概念索引中");
+assert(dsJson.terms.some(t => t.name === "感电" && t.entries.length), "元素反应术语已派生（感电）");
+assert(dsJson.terms.some(t => t.name === "结晶" && t.entries.length), "元素反应基名已归并（结晶）");
+const unlinkableKeys = new Set(dsJson.records.filter(r => !r.linkable).map(r => r.key));
+assert(dsJson.terms.every(t => t.entries.every(e => !unlinkableKeys.has(e.key))), "不可链接记录不进概念索引");
+
 function makeEl(id) {
   const store = id ? { _id: id, children: [], innerHTML: "" } : { children: [], innerHTML: "" };
   const cls = new Set();
@@ -122,6 +142,22 @@ const harness = `
   showDetail(113154);
   const cardHtml = String(document.getElementById("detail").innerHTML || "");
   assert(cardHtml.includes("特技") && cardHtml.includes("跃升"), "卡牌详情列出特技「跃升」");
+
+  /* ===== 7. 概念索引：构建期判定，运行时只投影 ===== */
+  assert(termIndex.size === DATASET.stats.conceptNames,
+    "运行时概念索引规模与数据集一致：" + termIndex.size);
+  const mirrorRec = DATASET.records.find(r => r.flags.mirror && r.name.length >= 2);
+  assert(!!mirrorRec, "存在牌面文本副本记录（数据前提）");
+  if (mirrorRec) {
+    /* 副本之所以是「副本」，就是另有同名的身份记录承载展示；
+       副本自身不进索引（静态断言已校验 key 级），名字仍要能被正文链接。 */
+    const hasIdentity = DATASET.records.some(o => o !== mirrorRec && o.name === mirrorRec.name && !o.flags.mirror);
+    assert(hasIdentity, "牌面副本必有同名身份记录承载展示：" + mirrorRec.name);
+    assert(new RegExp(termRe.source).test(mirrorRec.name), "牌面文本副本仍可被正文链接：" + mirrorRec.name);
+  }
+  /* 反链来自构建期出边，不再运行时扫文本 */
+  const bl = backlinks.get("跃升");
+  assert(!!bl && bl.size > 0, "反链：跃升 被引用（出边来自构建期）");
 
   console.log(getFails() ? "\\n存在失败项" : "\\n全部通过");
   process.exit(getFails() ? 1 : 0);

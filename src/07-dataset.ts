@@ -12,7 +12,7 @@
  *   3) 多文件版 gi-data/dataset.gz → .br → .json；
  *   4) 任一步失败返回 null，调用方回退到原始快照索引，页面不会因数据包问题白屏。 */
 
-import type { Dataset, GcgRecord } from "./types";
+import type { Dataset, GcgRecord, TermGroup } from "./types";
 import { isDataset } from "./types";
 import { state } from "./data/state";
 import { DATASET_GZ_URL, DATASET_BR_URL, DATASET_JSON_URL } from "./core/resources";
@@ -124,6 +124,8 @@ const dsRecords = (kind: string): GcgRecord[] => dsIndex.byKind.get(kind) || [];
 const dsSkills = (): GcgRecord[] => dsIndex.byKind.get("skill") || [];
 const dsByName = (name: string): GcgRecord[] => dsIndex.byNorm.get(nameKey(name)) || [];
 const dsStats = () => DATASET?.stats || null;
+/** 概念索引：名字 → 有序条目（收录 / 去重 / 排序已在构建期完成）。 */
+const dsTerms = (): TermGroup[] => DATASET?.terms || [];
 
 /* 数字 id（卡牌/角色）→ 统一 key；技能用自身 key */
 const dsKeyOfId = (id: number): string =>
@@ -131,5 +133,5 @@ const dsKeyOfId = (id: number): string =>
 
 export {
   DATASET, DATASET_READY, dsIndex, datasetFromHost, decodeBinaryBase64, readDatasetResponse,
-  loadDataset, buildDatasetIndex, dsReady, dsByKey, dsRecords, dsSkills, dsByName, dsStats, dsKeyOfId,
+  loadDataset, buildDatasetIndex, dsReady, dsByKey, dsRecords, dsSkills, dsByName, dsStats, dsTerms, dsKeyOfId,
 };

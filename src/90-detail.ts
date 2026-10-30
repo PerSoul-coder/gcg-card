@@ -374,11 +374,13 @@ document.addEventListener("mousemove", ev => {
   if (!canHover()) { hideTip(); return; }
   const el = (ev.target as HTMLElement).closest ? (ev.target as HTMLElement).closest(".term") : null;
   if (!el) { hideTip(); return; }
-  const entries = termEntries(el.dataset.term);
+  const termName = el.dataset.term;
+  if (!termName) { hideTip(); return; }
+  const entries = termEntries(termName);
   if (!entries.length) { hideTip(); return; }
   /* mousemove 会连续触发：只有换了术语才重建内容，避免每次移动都重写 DOM */
-  if (tipTerm !== el.dataset.term) {
-    tipTerm = el.dataset.term || null;
+  if (tipTerm !== termName) {
+    tipTerm = termName;
     tip.innerHTML = `<div class="tip-kind">${entries.map(e => KIND_ZH[e.kind] || e.kind).join(" / ")}</div>${termHtml(entries)}`;
   }
   tip.classList.add("show");

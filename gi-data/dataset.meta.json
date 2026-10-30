@@ -1,19 +1,21 @@
 {
   "v": 1,
-  "builtAt": "2026-10-30T11:46:35.151Z",
+  "builtAt": "2026-10-30T13:02:04.654Z",
   "stats": {
-    "total": 2677,
+    "total": 2699,
     "chars": 155,
     "cards": 1347,
     "skills": 601,
     "skillChar": 578,
     "skillCard": 23,
-    "terms": 574,
-    "linkable": 2580,
+    "terms": 596,
+    "linkable": 2674,
     "withFace": 1499,
     "shadow": 17,
-    "mirror": 72,
+    "mirror": 48,
     "test": 5,
-    "refs": 8041
+    "refs": 8375,
+    "conceptNames": 2425,
+    "conceptEntries": 2437
   }
 }

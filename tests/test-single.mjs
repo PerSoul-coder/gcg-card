@@ -65,7 +65,9 @@ const appBlock = `<script>\n${appSrc}\n</script>`;
 assert(html.includes(appBlock), "内联的应用脚本与打包产物逐字一致（整段比对）");
 assert(html.includes(`<style>\n${cssSrc}\n</style>`), "内联的样式与源文件逐字一致（整段比对）");
 assert(html.includes("ELEMENT_ICONS_SVG"), "官方七元素矢量图标已随应用包内联");
-assert(html.includes("CONCEPTS_EXTRA"), "补充概念库已随应用包内联");
+/* 补充概念库（genshin-db 快照）不再作为运行时依赖：它在构建期被归一进 dataset.terms，
+   运行时只读归一化结果。断言它没有随包内联，防止有人把旧的全局写法加回来。 */
+assert(!html.includes("CONCEPTS_EXTRA"), "补充概念库已并入数据集，不再随应用包内联");
 assert(html.includes("PINYIN_DATA"), "拼音索引已随应用包内联");
 
 /* ===== 4. 体积与构建信息 ===== */

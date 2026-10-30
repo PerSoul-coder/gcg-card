@@ -168,11 +168,16 @@ type Record = {
 | 判定 | 现在 | 之后 |
 | --- | --- | --- |
 | 准备状态影子 | 运行时正则 `PREPARED_STATE_RE` | 构建期 `flags.shadow` |
-| 牌面文本镜像 | 运行时 `descMirrors` + `levRatio` | 构建期 `flags.mirror` |
+| 牌面文本副本 | 运行时 `descMirrors` + `levRatio` | 构建期 `flags.mirror`（不进概念索引） |
+| 同名身份（角色形态说明） | 运行时 `mirrorCard` 标志 | 构建期 `flags.dupIdentity`（进索引但不单列检索） |
 | 是否可构筑 | 运行时 `shareId != null` | 构建期 `flags.deckable` |
-| 是否可链接 | 散落在各视图 | 构建期 `linkable` |
-| 同名合并 | 运行时 `nameKey` 竞争 | 构建期按 `aliases.norm` 合并 |
+| 是否可链接 | 散落在各视图 | 构建期 `linkable`（有描述即可链接，与 mirror 解耦） |
+| 同名合并 | 运行时 `nameKey` 竞争 + `entryBetter` | 构建期 `terms` 分组（同名同种类取一条） |
 | 反链 | 运行时扫描全文 | 构建期 `refs` |
+| 元素反应术语 | 运行时解析关键词描述文本 | 构建期派生 `term:rx:*` 记录 |
+
+**linkable 与 mirror 必须分开。** 早期把「是副本」也算进「不可链接」，等于 `正文里出现「眩晕」却点不开`。
+两者管的是不同的事：`linkable` 决定能否点，`mirror` 决定是否在概念索引里重复占位。
 
 ---
 
@@ -186,13 +191,16 @@ type Record = {
 4. 生成卡牌/实体记录；按 `type` 定 `domain`、`deckable`、`entity`。
 5. 合并补充库：已有身份则挂载释义，否则新建 `term` 记录。
 6. 判定 `shadow` / `mirror` / `test` / `linkable`。
-7. 只对 `linkable` 的 `desc.effect` / `desc.rules` 扫描，生成 `refs`。
-8. 校验：
+7. 只对 `linkable` 且非 `mirror` 的 `desc.effect` / `desc.rules` 扫描，生成 `refs`。
+8. 生成概念索引 `terms`：按名字归组，同名同种类取一条（现网优先 → 可入构筑 → 有描述），
+   按 `card → char → keyword → rule → rule-term → skill → status → summon → enemy → cardref → charref` 排序。
+9. 校验：
    - key 唯一；
    - 技能必须有 `ownerKey`；
    - 记录数、可链接数、有牌面数与源数据对账；
-   - 空名/空描述记录只允许 `linkable=false`。
-9. 输出：
+   - 空名/空描述记录只允许 `linkable=false`；
+   - `terms` 里每个 key 都能在 `records` 里取到（否则运行时投影得到空壳）。
+10. 输出：
    - `gi-data/dataset.json`：归一化 JSON（调试、单文件内联、Node 测试兜底）
    - `gi-data/dataset.gz`：gzip 压缩的同一份 JSON（浏览器原生 `DecompressionStream` 主路径）
    - `gi-data/dataset.br`：Brotli 压缩的同一份 JSON（体积最小，供 Node / 归档 / 未来解码器）
@@ -215,7 +223,15 @@ type Record = {
   3. gzip 不可用：尝试 `dataset.br`（Brotli，视浏览器支持）；
   4. 再失败：回退 `fetch("gi-data/dataset.json")`。
 - `buildDatasetIndex()`：建立 `byKey` / `byKind` / `byDomain` / `byName`（norm/cosmetic）。
-- 兼容投影：P0 仍保留 `CHAR` / `ENT` / `KW` 供未迁移模块；技能、概念、反链、牌面已切到统一记录，P1 完成唯一化。
+- 概念索引（`40-concepts`）：只读 `dataset.terms` 做字段投影，再编译成扫描正则。
+  收录、去重、排序、身份挂载全部在构建期完成——运行时不再有 `entryBetter` / `descMirrors` /
+  `kwMirrorsEntity` 这类启发式，也不再有「补充库与现网谁先注册」的顺序依赖。
+- 反链（`50-backlinks`）：只读 `refs` 翻转成「谁引用了我」，不再二次扫描文本。
+
+数据源分工（当前状态）：`dataset.records` 负责概念、技能、反链与所有判定；
+`CHAR` / `ENT` / `KW` 仍是卡库与详情渲染的字段来源（原始字段未经投影）。
+两套并存是已知的中间状态：把卡池与详情也切到记录，需要对 `stats` 做更完整的建模，
+留到 UI 重组（P3）之后统一处理。
 
 模块组织：源码为标准 ESM，依赖由各模块的 `import` 表达；`src/main.ts` 只固定顶层副作用次序。浏览器产物由 esbuild 打成单个 IIFE（`dist/app.js`），因为单 HTML 需要内联脚本且要能在 `file://` 下运行。测试执行同一份产物，通过 `src/test-api.ts` 的导出面访问内部符号——全局暴露只存在于测试进程。
 
@@ -308,11 +324,20 @@ P0 验收：
 
 ---
 
+P1 验收：
+
+- 概念索引的名字集合与迁移前逐名一致（构建期 `terms` 对账：2425 名，0 丢 0 多）；
+- 元素反应术语（感电 / 结晶 / 超载…）各有独立条目，基名（结晶 / 扩散）已归并；
+- 同名跨种类并列（护盾 = 状态牌 + 关键词；幻戏 = 规则术语 + 技能）；
+- 牌面文本副本不进概念索引，但仍可被正文链接；
+- 反链只读出边，不再二次扫描文本；
+- `gi-data/concepts-extra.js` 不再是运行时依赖（仅构建期输入）。
+
 ## 12. 分阶段
 
 | 阶段 | 内容 | 状态 |
 | --- | --- | --- |
 | P0 | 统一模型 + 构建脚本 + 压缩包 + 运行时数据层 + 资源层 + 修 ENT 特技 / storyText / 牌面统一 | 已完成 |
-| P1 | 检索语料统一、linkable、反链迁移 | 待开始（数据集已就绪，索引仍走旧路径） |
+| P1 | 检索语料统一、linkable、反链迁移 | 已完成：概念索引与反链全部消费统一记录；反应术语改构建期派生；linkable 与 mirror 解耦 |
 | P2 | 浮层层管理、滑动链、Esc | 已完成：core/layers 统一登记层序，Esc 只关最上层；锁滚动只对模态层（overlay / draftPanel），历史与对比栏不再误锁 |
 | P3 | UI 重组：默认卡库、分享码入口下沉 | 待开始 |

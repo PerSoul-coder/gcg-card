@@ -50,11 +50,6 @@ const fetchStub = async url => {
 };
 
 const logic = readAppSource();
-/* 补充概念库（genshin-db 静态快照）——从 JS 包装中取 JSON 注入作用域 */
-const conceptsExtra = JSON.parse(
-  fs.readFileSync(path.join(here, "gi-data/concepts-extra.js"), "utf8")
-    .replace(/^export const CONCEPTS_EXTRA = /, "").replace(/;\s*$/, "")
-);
 const harness = `
 ;(async () => {
   await decodeAndRender(SAMPLE);
@@ -137,11 +132,12 @@ const harness = `
     "丝柯克/杜林 → 主版本（1116/1317，非 66xx 变体）");
   /* 补充库卡牌不与 piovium 同名卡重复占位（同种类排除的跨源形态） */
   const piovCardNames = new Set(state.ENT.map(e => e.name));
-  for (const [n, i] of Object.entries(EXTRA_CONCEPTS)) {
-    if (i.kind !== "card" && i.kind !== "character") continue;
-    if (!piovCardNames.has(n) && !new Set(state.CHAR.map(c => c.name)).has(n)) continue;
-    const kinds = termEntries(n).map(e => GROUP[e.kind] || e.kind);
-    assert(new Set(kinds).size === kinds.length, "跨源同种类排除：" + n + "（" + kinds.join("+") + "）");
+  const extraRecords = DATASET.records.filter(r => r.source === "genshin-db");
+  for (const r of extraRecords) {
+    if (r.typeRaw !== "card" && r.typeRaw !== "character") continue;
+    if (!piovCardNames.has(r.name) && !new Set(state.CHAR.map(c => c.name)).has(r.name)) continue;
+    const kinds = termEntries(r.name).map(e => GROUP[e.kind] || e.kind);
+    assert(new Set(kinds).size === kinds.length, "跨源同种类排除：" + r.name + "（" + kinds.join("+") + "）");
   }
 
   /* ===== 定义质量（反向断言：释义必须出自定义性章节，不能是效果句） ===== */
@@ -228,11 +224,11 @@ const harness = `
   assert(k0("静水流涌之辉") === "card", "piovium 优先：静水流涌之辉 仍为 card（身份层不被补充库覆盖）");
   assert(k0("芙宁娜") === "char", "piovium 优先：芙宁娜 仍为 char");
   /* 补充库卡牌分两种：与现网同名的接回真实卡牌身份；对不上号的才降级 cardref */
-  const realCard = Object.entries(EXTRA_CONCEPTS).find(([n, i]) => i.kind === "card" && k0(n) === "card" && termEntries(n)[0]?.id != null);
-  assert(realCard, "补充库同名卡接回真实身份（可跳详情）：" + (realCard ? realCard[0] : "（无样本）"));
-  const cardref = Object.entries(EXTRA_CONCEPTS).find(([n, i]) => i.kind === "card" && k0(n) === "cardref");
-  assert(cardref, "补充库卡牌降级为 cardref（不跳转不存在详情）：" + (cardref ? cardref[0] : "（全部已接回真实卡牌）"));
-  assert(termIndex.size > Object.keys(EXTRA_CONCEPTS).length, "索引规模含补充概念：" + termIndex.size);
+  const realCard = extraRecords.find(r => r.typeRaw === "card" && k0(r.name) === "card" && termEntries(r.name)[0]?.id != null);
+  assert(realCard, "补充库同名卡接回真实身份（可跳详情）：" + (realCard ? realCard.name : "（无样本）"));
+  const cardref = extraRecords.find(r => r.typeRaw === "card" && k0(r.name) === "cardref");
+  assert(cardref, "补充库卡牌降级为 cardref（不跳转不存在详情）：" + (cardref ? cardref.name : "（全部已接回真实卡牌）"));
+  assert(termIndex.size > extraRecords.length, "索引规模含补充概念：" + termIndex.size);
 
   /* 占位符：可见文本零泄漏（残留仅存在于 hidden 引擎技能与未加工的 rawDescription） */
   let visLeak = 0;
@@ -248,10 +244,10 @@ const harness = `
 `;
 
 await new Function(
-  "document", "window", "localStorage", "location", "history", "fetch", "navigator", "assert", "getFails", "CONCEPTS_EXTRA",
+  "document", "window", "localStorage", "location", "history", "fetch", "navigator", "assert", "getFails",
   logic + harness,
 )(
   documentStub, {}, { getItem: () => null, setItem: () => {} },
   { hash: "" }, { replaceState() {} },
-  fetchStub, { clipboard: {} }, assert, () => fails, conceptsExtra,
+  fetchStub, { clipboard: {} }, assert, () => fails,
 );

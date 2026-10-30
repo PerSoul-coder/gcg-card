@@ -80,6 +80,9 @@ export interface Flags {
   shadow: boolean;
   /** 牌面文本镜像：关键词表里原样复存的牌面文本，不是独立概念。 */
   mirror: boolean;
+  /** 名字属于某个身份（角色 / 卡牌），释义却不同（如角色的形态说明）。
+      概念页保留该条目，检索不再单列——否则同一张牌会在两个栏目各出现一次。 */
+  dupIdentity?: boolean;
   /** 测试牌（数据源标记 GCG_TAG_TEST）。 */
   test: boolean;
   /** 对局实体（永不进牌组）。 */
@@ -137,6 +140,15 @@ export interface DatasetStats {
   mirror: number;
   test: number;
   refs: number;
+  /** 概念索引的名字数与条目数（一个名字可对应多条：既是卡牌又是关键词）。 */
+  conceptNames: number;
+  conceptEntries: number;
+}
+
+/** 概念索引的一组条目：同一个名字可能属于多种概念，按展示顺序排列。 */
+export interface TermGroup {
+  name: string;
+  entries: Array<{ key: string; kind: string }>;
 }
 
 export interface Dataset {
@@ -145,6 +157,8 @@ export interface Dataset {
   builtAt: string;
   stats: DatasetStats;
   records: GcgRecord[];
+  /** 概念索引：名字 → 条目。收录、去重、排序全部在构建期算好。 */
+  terms: TermGroup[];
 }
 
 /** 构建期与运行时共同接受的最小记录形状校验。 */
