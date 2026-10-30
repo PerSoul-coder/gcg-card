@@ -45,7 +45,7 @@ function parseShareIds(code) {
 }
 
 /* ---------- 解析主流程（分享码 → 牌组） ---------- */
-async function decodeAndRender(code, opts = {}) {
+async function decodeAndRender(code: string, opts: { noHash?: boolean; noHistory?: boolean } = {}) {
   code = code.trim();
   if (!code) return;
   $("btnDecode").disabled = true;

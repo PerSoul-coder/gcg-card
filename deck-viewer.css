@@ -148,6 +148,12 @@ td.cnt { color: var(--gold); white-space: nowrap; }
 /* 弹层打开时锁住文档滚动：否则弹层滚到边界后滚动链会传给文档，
    出现「在弹层里滑动，背景的卡面视图跟着动」 */
 html.ovl-lock, html.ovl-lock body { overflow: hidden; }
+/* 其它浮层同理。以前只有详情弹层自己加 ovl-lock，牌组面板 / 历史 / 对比栏
+   打开时背景仍可滚动——表现为"滑动被背景捕捉"。这里用 :has() 把"浮层开着就锁背景"
+   变成声明式规则：新增浮层只要在下面补一个选择器，不必在每个开合点记得调 JS。 */
+html:has(#draftPanel.show),
+html:has(#histPanel.show),
+html:has(body.cmp-on) { overflow: hidden; }
 #overlay { position: fixed; inset: 0; background: rgba(5,7,11,.78); backdrop-filter: blur(3px); display: none; align-items: center; justify-content: center; z-index: 50; padding: 24px; overscroll-behavior: contain; }
 #overlay.show { display: flex; }
 .detail { position: relative; background: linear-gradient(180deg, var(--panel2), var(--panel)); border: 1px solid rgba(211,188,142,.4); border-radius: 16px; max-width: 880px; width: 100%; max-height: 88vh; max-height: 88dvh; overflow: auto; overscroll-behavior: contain; display: flex; gap: 20px; padding: 22px; box-shadow: 0 24px 70px rgba(0,0,0,.7), inset 0 1px 0 rgba(255,255,255,.04); }

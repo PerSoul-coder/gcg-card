@@ -153,3 +153,53 @@ export function isDataset(x: unknown): x is Dataset {
   const d = x as Partial<Dataset>;
   return Array.isArray(d.records) && d.records.length > 0;
 }
+
+/* ---------- 牌组解析产物 ----------
+   分享码解码后的内存视图：chars 是角色明细，groups 按牌类型分组，order 是分组顺序。
+   以前这几个字段散在 state.current 的隐式结构里，读写双方都靠"记得有哪些字段"。 */
+export interface ParsedChar {
+  id: number;
+  name: string;
+  hp?: number;
+  energy?: number;
+  since?: string;
+  element: string;
+}
+
+export interface ParsedCard {
+  id: number;
+  count: number;
+  name: string;
+  type: string;
+  typeRaw: string;
+  element: string;
+  tags: Array<string | null>;
+  tagsRaw: string[];
+  playCost: unknown;
+  dice: number;
+  energy: number;
+  related?: string | null;
+  relatedId: number | null;
+  restrictions: unknown;
+  deckReqs: unknown;
+  desc: string;
+  since?: string;
+}
+
+export interface ParsedDeck {
+  code: string;
+  charIds: number[];
+  cardIds: number[];
+  chars: ParsedChar[];
+  groups: Record<string, ParsedCard[]>;
+  order: string[];
+}
+
+/** 弹层栈的一层。detail / term 可继续下钻，odds 与 deckdiff 是互斥的整屏弹层。 */
+export interface OverlayEntry {
+  kind: "detail" | "term" | "odds" | "deckdiff";
+  id?: number;
+  key?: string;
+  pick?: unknown;
+  [k: string]: unknown;
+}

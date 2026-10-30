@@ -69,11 +69,11 @@ import { esc, toast } from "./core/dom";
 import { typeZhOf, nameKey } from "./data/model";
 import { buildPool } from "./45-pool";
 const PY_DATA = PINYIN_DATA || null;
-const pyCache = new Map();
+const pyCache = new Map<string, { full: string; initials: string } | null>();
 function pinyinOf(name) {
   if (!PY_DATA) return null;
   if (pyCache.has(name)) return pyCache.get(name);
-  let v = null;
+  let v: { full: string; initials: string } | null = null;
   const hit = PY_DATA.names && PY_DATA.names[name];
   if (hit) {
     const [full, initials] = hit.split("|");
@@ -144,9 +144,9 @@ function pinyinScore(ctx, name) {
 }
 
 /* 子序列匹配：返回最紧凑的窗口（gap = 窗口长度 - 查询长度） */
-function subseqWindow(q, t) {
+function subseqWindow(q: string, t: string): { gap: number; start: number } | null {
   if (q.length < 2 || t.length < q.length) return null;
-  let best = null;
+  let best: { gap: number; start: number } | null = null;
   for (let s = 0; s < t.length; s++) {
     if (t[s] !== q[0]) continue;
     let qi = 1, last = s;
@@ -186,7 +186,7 @@ function fuzzyScore(ctx, forms) {
 }
 
 function scoreName(ctx, name, englishName, sc = searchScope) {
-  let best = null;
+  let best: { score: number; match: string; note?: string } | null = null;
   const take = r => { if (r && (!best || r.score < best.score)) best = r; };
   if (sc.title) {
     take(literalScore(ctx, name));
@@ -231,7 +231,7 @@ function compareResults(a, b) {
     || a.name.localeCompare(b.name, "zh");
 }
 
-function searchCards(q, opts = {}) {
+function searchCards(q: string, opts: { scope?: string; corpus?: unknown; noDesc?: boolean; limit?: number } = {}) {
   const ctx = queryCtx(q);
   if (!ctx.compact) return [];
   const sc = opts.scope || searchScope;

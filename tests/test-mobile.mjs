@@ -70,6 +70,13 @@ assert(/Math\.max\(pad, Math\.min\(x, innerWidth - r\.width - pad\)\)/.test(js)
 assert(/html\.ovl-lock, html\.ovl-lock body\s*\{\s*overflow:\s*hidden/.test(css),
   "CSS：ovl-lock 锁住文档滚动");
 assert(/root\.classList\.toggle\("ovl-lock", open\)/.test(js), "JS：开关弹层时同步 ovl-lock");
+
+/* 非弹层类浮层（牌组面板 / 历史 / 对比栏）打开时也要锁住文档滚动，
+   否则在这些面板里滑动会带着背景一起滚。 */
+for (const panel of ["#draftPanel.show", "#histPanel.show", "body.cmp-on"]) {
+  assert(new RegExp(`html:has\\(${panel.replace(/[.()]/g, "\\$&")}\\)`).test(css),
+    `CSS：${panel} 打开时锁住文档滚动`);
+}
 assert(/#overlay[^{]*\{[^}]*overscroll-behavior:\s*contain/.test(css), "#overlay 阻断滚动链");
 assert(/\.detail \{[^}]*overscroll-behavior:\s*contain/.test(css), ".detail 阻断滚动链");
 assert(!'overlay").classList.add("show")'.includes("x") && !/\$\("overlay"\)\.classList\.add\("show"\)/.test(js),

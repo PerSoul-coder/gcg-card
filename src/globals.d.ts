@@ -16,3 +16,9 @@ interface Window {
   /** 单文件版内嵌的统一数据集（brotli base64，归档格式）。 */
   BUILTIN_DATASET_B64?: string;
 }
+
+/* lib.dom 只把 dataset 声明在 HTMLElement / SVGElement 上，但 closest() 返回的是
+   Element——实践中 HTML 与 SVG 元素都有 dataset。这里补上，避免每处调用都做断言。 */
+interface Element {
+  readonly dataset: DOMStringMap;
+}

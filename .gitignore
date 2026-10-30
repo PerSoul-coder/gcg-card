@@ -6,3 +6,6 @@ site/
 .DS_Store
 Thumbs.db
 *.log
+.build-tools/*.txt
+.build-tools/*.json
+.build-tools/*.err
