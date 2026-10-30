@@ -1,0 +1,19 @@
+{
+  "v": 1,
+  "builtAt": "2026-10-30T11:25:29.475Z",
+  "stats": {
+    "total": 2677,
+    "chars": 155,
+    "cards": 1347,
+    "skills": 601,
+    "skillChar": 578,
+    "skillCard": 23,
+    "terms": 574,
+    "linkable": 2580,
+    "withFace": 1499,
+    "shadow": 17,
+    "mirror": 72,
+    "test": 5,
+    "refs": 8041
+  }
+}

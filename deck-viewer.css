@@ -360,6 +360,10 @@ th.sortable:hover { color: var(--gold); }
 }
 #tip .tip-kind { font-size: 10.5px; color: var(--gold-dim); letter-spacing: 2px; margin-bottom: 5px; }
 .term-body { display: flex; gap: 10px; }
+.term-art { flex: 0 0 auto; align-self: flex-start; }
+.term-body .term-art img, .term-body .term-art .noart { width: 100%; height: auto; border-radius: 7px; border: 1px solid var(--line); }
+.term-art .noart { aspect-ratio: 420 / 720; }
+.sk-sec { margin: 14px 0 6px; font-size: 11.5px; color: var(--gold-dim); letter-spacing: 2px; }
 .term-body img { width: 78px; height: auto; border-radius: 7px; border: 1px solid var(--line); flex: none; align-self: flex-start; }
 .term-body b { color: var(--gold); font-size: 13.5px; display: block; }
 .term-body small { color: var(--dim); display: block; margin: 2px 0 5px; font-size: 11px; }

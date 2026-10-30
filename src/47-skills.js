@@ -39,11 +39,57 @@ function skillDescOf(s) {
 function skillEffectText(desc) {
   return String(desc || "").split("\n").filter(l => !PREPARE_TURNS_RE.test(l)).join("\n").trim();
 }
+/* 统一数据集路径：技能来源 = 角色技能 + 装备牌特技（构建期已归一、已去重）。
+   装备牌的「特技：X」过去完全不在索引里，导致卡文里的 X 既搜不到也点不动。 */
+function buildSkillIndexFromDataset() {
+  const rows = dsSkills().map(r => {
+    const rel = r.rel || {};
+    const ownerKey = rel.ownerKey || "";
+    const ownerKind = rel.ownerKind || "char";
+    return {
+      kind: "skill", key: r.key,
+      id: Number(String(r.key).split(":").pop()),
+      ownerKey, ownerKind,
+      ownerId: ownerKind === "char" ? Number(ownerKey.slice(5)) : null,
+      ownerCardId: ownerKind === "card" ? Number(ownerKey.slice(5)) : null,
+      ownerName: rel.ownerName || "",
+      name: r.name, englishName: r.englishName || "",
+      tag: r.typeRaw || "", tagZh: r.typeZh || "技能",
+      cost: (r.stats && r.stats.cost) || [],
+      desc: (r.desc && r.desc.effect) || "",
+      effect: (r.desc && r.desc.effect) || "",
+      hidden: !!r.hidden,
+      prepared: !!r.prepared,
+      prepareTurns: r.prepareTurns || 0,
+      stateId: r.stateId == null ? null : r.stateId,
+      altCount: r.altCount || 0,
+      art: r.art || null,
+      linkable: !!r.linkable,
+    };
+  });
+  rows.sort((a, b) =>
+    String(a.ownerKey).localeCompare(String(b.ownerKey)) ||
+    SKILL_TAG_ORDER.indexOf(a.tag) - SKILL_TAG_ORDER.indexOf(b.tag));
+  const byOwner = new Map();
+  for (const s of rows) {
+    SKILLS.push(s);
+    skillByKey.set(s.key, s);
+    const k = nameKey(s.name);
+    if (!skillByName.has(k)) skillByName.set(k, []);
+    skillByName.get(k).push(s);
+    const list = byOwner.get(s.ownerKey) || [];
+    list.push(s);
+    byOwner.set(s.ownerKey, list);
+  }
+  for (const [k, list] of byOwner) skillsOfOwner.set(k, list);
+}
+
 function buildSkillIndex() {
   SKILLS = [];
   skillByKey.clear();
   skillByName.clear();
   skillsOfOwner.clear();
+  if (typeof dsReady === "function" && dsReady()) { buildSkillIndexFromDataset(); return; }
   const seen = new Set();
   for (const c of CHAR) {
     const list = [];
@@ -83,7 +129,7 @@ function buildSkillIndex() {
     }
     /* 排序：普攻 → 战技 → 爆发 → 被动 → 特殊；同类型保持数据原顺序 */
     list.sort((a, b) => SKILL_TAG_ORDER.indexOf(a.tag) - SKILL_TAG_ORDER.indexOf(b.tag));
-    if (list.length) skillsOfOwner.set(c.id, list);
+    if (list.length) skillsOfOwner.set("char:" + c.id, list);
     for (const s of list) {
       SKILLS.push(s);
       skillByKey.set(s.key, s);
@@ -93,7 +139,8 @@ function buildSkillIndex() {
     }
   }
 }
-const skillsOf = charId => skillsOfOwner.get(charId) || [];
+const skillsOf = charId => skillsOfOwner.get("char:" + charId) || [];
+const skillsOfCard = cardId => skillsOfOwner.get("card:" + cardId) || [];
 const skillOf = key => skillByKey.get(key) || null;
 /* 技能名检索：同一名字可能属于多个角色（同名不同角色），按角色名建索引，全部返回 */
 const skillsNamed = name => skillByName.get(nameKey(name)) || [];
@@ -120,6 +167,12 @@ function skillsHtml(charId) {
   if (!list.length) return "";
   return `<div class="skills">${list.map(skillRowHtml).join("")}</div>`;
 }
+/* 装备牌 / 载具赋予的特技：与角色技能同一套行渲染，卡牌详情里单独成段 */
+function skillsHtmlCard(cardId) {
+  const list = skillsOfCard(cardId);
+  if (!list.length) return "";
+  return `<div class="sk-sec">特技</div><div class="skills">${list.map(skillRowHtml).join("")}</div>`;
+}
 
 /* 技能页：与概念页同一套弹层外壳，但信息更全（费用 / 充能 / 准备 / 所属角色） */
 function renderSkillView(v) {
@@ -128,12 +181,18 @@ function renderSkillView(v) {
   const cost = costHtml(s.cost);
   const prep = s.prepared
     ? `<span class="tagpill prep">需准备 ${s.prepareTurns || 1} 个行动轮</span>` : "";
-  const owner = `<div class="drel"><b>所属角色</b><span class="blchips"><button class="blchip" data-goto="${s.ownerId}">${esc(s.ownerName)}</button></span></div>`;
+  const ownerId = s.ownerId != null ? s.ownerId : s.ownerCardId;
+  const ownerLabel = s.ownerKind === "card" ? "所属卡牌" : "所属角色";
+  const owner = ownerId != null
+    ? `<div class="drel"><b>${ownerLabel}</b><span class="blchips"><button class="blchip" data-goto="${ownerId}">${esc(s.ownerName)}</button></span></div>` : "";
   const state = s.stateId != null
     ? `<div class="drel"><b>准备中状态</b><span class="blchips"><button class="blchip" data-goto="${s.stateId}" title="查看该技能准备期间挂载的状态牌">准备中 · 状态牌</button></span></div>` : "";
   const alt = s.altCount ? `<div class="dnote">该技能在数据里有 ${s.altCount} 条同名阶段记录，此处显示描述最完整的一条。</div>` : "";
+  /* 技能本身没有牌面，用所属角色/卡牌的牌面作为视觉锚点，保证与卡库/详情同一套呈现 */
+  const art = s.art && s.art.ref != null
+    ? `<div class="dimg">${cardArtHtml(s.art.ref, { kind: "detail", alt: s.name })}</div>` : "";
   $("detail").innerHTML = `${navBar()}
-    <div class="dinfo"><h2>${esc(s.name)}</h2>
+    ${art}<div class="dinfo"><h2>${esc(s.name)}</h2>
     <div class="meta"><span class="tagpill">${esc(s.tagZh)}</span>${prep}${cost ? `<span class="tagpill costpill">${cost}</span>` : ""}${s.hidden && !s.prepared && s.tag !== "GCG_SKILL_TAG_PASSIVE" ? `<span class="tagpill">隐藏技能</span>` : ""}</div>
     <div class="dtext">${linkify(esc(s.effect || "（该技能没有文字说明）"))}</div>
     ${alt}${owner}${state}${backlinkHtml(s.name)}</div>`;

@@ -8,6 +8,28 @@
 let backlinks = new Map();
 function buildBacklinks() {
   backlinks.clear();
+  /* 统一数据集：出边在构建期算好，只来自可链接文本（卡牌效果 / 技能效果 / 规则），
+     角色简介不参与；引用者归到卡牌 / 角色 id（技能归其所属）。 */
+  if (typeof dsReady === "function" && dsReady() && DATASET && DATASET.records) {
+    for (const r of DATASET.records) {
+      if (!r.refs || !r.refs.length) continue;
+      let srcId = null;
+      if (r.kind === "char" || r.kind === "card") srcId = Number(String(r.key).split(":")[1]);
+      else if (r.kind === "skill" && r.rel && r.rel.ownerKind === "char")
+        srcId = Number(String(r.rel.ownerKey).slice(5));
+      else if (r.kind === "skill" && r.rel && r.rel.ownerKind === "card")
+        srcId = Number(String(r.rel.ownerKey).slice(5));
+      if (srcId == null) continue;
+      for (const tk of r.refs) {
+        const t = dsByKey(tk);
+        if (!t || !t.name) continue;
+        let b = backlinks.get(t.name);
+        if (!b) backlinks.set(t.name, b = new Set());
+        b.add(srcId);
+      }
+    }
+    return;
+  }
   if (!termRe) return;
   const scan = (text, id) => {
     if (!text) return;
@@ -19,15 +41,19 @@ function buildBacklinks() {
     });
   };
   for (const e of ENT) if (POOL_TYPE_ORDER.includes(e.type)) scan(e.description, e.id);
-  for (const c of CHAR) {
-    scan(c.storyText, c.id);
-    for (const s of c.skills || []) scan(s.description || s.rawDescription, c.id);
-  }
+  /* 角色简介是叙事文本，不作为概念引用来源（只在技能效果里收集） */
+  for (const c of CHAR) for (const s of c.skills || []) scan(s.description || s.rawDescription, c.id);
 }
 const KIND_ZH = { card: "卡牌", char: "角色", skill: "技能", keyword: "术语", rule: "规则", "rule-term": "规则术语", status: "状态效果", summon: "召唤物", enemy: "敌方牌", cardref: "卡牌", charref: "角色" };
 function termBodyHtml(info, big, showKind, hideName) {
   const kindLabel = KIND_ZH[info.kind] || info.kind;
-  const img = info.image ? `<img src="${info.image}" loading="lazy" decoding="async" alt="" style="width:${big ? 110 : 78}px">` : "";
+  /* 统一牌面：卡牌/角色/技能都用同一个组件（同比例、同占位、同降级），
+     不再各界面自己拼 <img> 或只显示 78px 小图。 */
+  const artId = info.artId != null ? info.artId
+    : (info.id != null && (info.kind === "card" || info.kind === "char") ? info.id : null);
+  const art = artId != null
+    ? `<div class="term-art" style="width:${big ? 110 : 78}px">${cardArtHtml(artId, { kind: "thumb", alt: info.name || "" })}</div>`
+    : "";
   const skillMeta = info.kind === "skill"
     ? [info.owner ? `所属：${info.owner}` : "", info.type || "", info.prepared ? `需准备 ${info.prepareTurns || 1} 轮` : ""].filter(Boolean).join(" · ")
     : "";
@@ -47,7 +73,7 @@ function termBodyHtml(info, big, showKind, hideName) {
     ? `<button class="blchip term-jump" data-skill="${esc(info.key)}" title="打开「${esc(info.name)}」技能页">查看技能</button>`
     : big && info.id != null && (info.kind === "card" || info.kind === "char")
     ? `<button class="blchip term-jump" data-goto="${info.id}" title="打开「${esc(info.name)}」详情">查看详情</button>` : "";
-  return `<div class="term-body${showKind ? " term-body-multi" : ""}">${img}<div>
+  return `<div class="term-body${showKind ? " term-body-multi" : ""}">${art}<div>
     ${showKind ? `<small class="term-kind">${kindLabel}</small>` : ""}
     ${nameLine}${metaLine}
     <p>${linkifyExcept(esc(info.desc || "（暂无描述）"), info.name)}</p>${jump}</div></div>`;

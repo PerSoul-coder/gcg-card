@@ -4,6 +4,7 @@
 export const APP_SOURCES = [
   "src/00-resources.js",
   "src/05-core.js",
+  "src/07-dataset.js",
   "src/10-codec.js",
   "src/12-model.js",
   "src/20-data.js",

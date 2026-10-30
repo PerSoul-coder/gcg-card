@@ -8,6 +8,13 @@ import { APP_SOURCES, ASSET_SOURCES } from "../src/sources.mjs";
 
 const here = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
+/* 统一数据集：Node 环境没有 fetch(file://) 与稳定的 Brotli 流解码，
+   直接把构建产物注入全局，让运行时数据层与浏览器走同一套读取逻辑。 */
+const datasetPath = path.join(here, "gi-data/dataset.json");
+if (fs.existsSync(datasetPath)) {
+  globalThis.__DATASET_JSON = JSON.parse(fs.readFileSync(datasetPath, "utf8"));
+}
+
 export function readAppSource({ withAssets = true } = {}) {
   const parts = [];
   if (withAssets) {

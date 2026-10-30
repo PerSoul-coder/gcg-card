@@ -211,7 +211,7 @@ function renderDetailView(v) {
     html = `${nav}<div class="dimg">${cardArtHtml(id, { kind: "detail", alt: c.name })}</div>
       <div class="dinfo"><h2>${esc(c.name)}</h2>
       <div class="meta">${el ? `<span class="tagpill">${eleIcon(el)}${esc(ELE_ZH[el] || el)}</span>` : ""}${tags.map(t => `<span class="tagpill">${esc(t)}</span>`).join("")}<span class="tagpill">生命 ${c.hp}</span><span class="tagpill">充能上限 ${enPips(c.maxEnergy)}</span><span class="tagpill">${esc(c.sinceVersion || "")}</span></div>
-      ${c.storyText ? `<div class="dtext dstory">${linkify(esc(c.storyText.trim()))}</div>` : ""}
+      ${c.storyText ? `<div class="dtext dstory">${esc(c.storyText.trim())}</div>` : ""}
       ${skillsHtml(id)}
       ${charTalentChips(id)}${backlinkHtml(c.name, id)}</div>`;
   } else if (e) {
@@ -241,6 +241,7 @@ function renderDetailView(v) {
       ${isFieldEntity(e) ? `<div class="dnote">对局实体：由技能或卡牌效果在对局中生成，不可加入牌组。</div>` : ""}
       ${reqBlock}
       <div class="dtext">${linkify(esc((e.description || "").trim()))}</div>
+      ${skillsHtmlCard(e.id)}
       ${relChip}${e.relatedCharacterId != null ? charTalentChips(e.relatedCharacterId, id) : ""}${backlinkHtml(e.name, id)}</div>`;
   } else html = nav;
   $("detail").innerHTML = html;

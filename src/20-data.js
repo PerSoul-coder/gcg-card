@@ -88,6 +88,9 @@ async function loadData(forceNetwork = false) {
     throw new Error("卡牌数据获取失败，请检查网络后重试");
   CHAR = res[0].value; ENT = res[1].value;
   KW = res[2].status === "fulfilled" ? res[2].value : [];
+  /* 统一数据集：构建期归一化的记录（技能含装备牌特技、出边、可链接标记）。
+     失败不阻塞主流程——旧索引仍可工作，页面不会因数据包缺失白屏。 */
+  await loadDataset();
   for (const c of [...CHAR, ...ENT]) if (c.shareId != null) {
     shareMap[c.shareId] = c.id;
     if (!(c.id in idToShare)) idToShare[c.id] = c.shareId;

@@ -66,6 +66,19 @@ for (const [p, code] of assets) {
 /* ---------- 4. 数据快照 + 应用脚本 ---------- */
 let payload = "";
 const counts = [];
+/* 统一数据集（gzip）：两种模式都内联。浏览器原生 DecompressionStream 不支持 brotli，
+   所以运行时主路径用 gzip；Brotli 包仍由 build-dataset 产出于 gi-data/dataset.br。 */
+let dsB64 = "";
+try { dsB64 = readFileSync(resolve(ROOT, "gi-data/dataset.gz")).toString("base64"); } catch (e) {}
+const dsPayload = dsB64
+  ? `<script id="builtin-dataset" type="text/plain">${dsB64}</script>
+<script>
+/* 单文件版：压缩数据集交给运行时数据层（内置，无需联网） */
+try { window.BUILTIN_DATASET_GZ_B64 = document.getElementById("builtin-dataset").textContent.trim(); }
+catch (e) { console.error("内置数据集读取失败：", e); }
+</script>
+`
+  : "";
 if (!lite) {
   const data = {};
   for (const [key, file] of DATASETS) {
@@ -82,7 +95,9 @@ if (!lite) {
 try { window.BUILTIN_DATA = JSON.parse(document.getElementById("builtin-data").textContent); }
 catch (e) { console.error("内置数据快照解析失败：", e); }
 </script>
-`;
+${dsPayload}`;
+} else {
+  payload = dsPayload;
 }
 
 /* 应用脚本整块替换：多文件版是 16 个 <script src="src/...">，单文件版按同一顺序合并为一段 */

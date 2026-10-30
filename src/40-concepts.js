@@ -111,10 +111,11 @@ function buildTermIndex() {
   for (const e of ENT) if (e.name && e.name.length >= 2 && !isShadowState(e))
     addTerm(e.name, { src: 0, kind: "card", id: e.id, name: e.name, shareId: e.shareId,
       type: typeZhOf(e), playCost: e.playCost,
-      desc: (e.description || "").trim(), image: hasCardFace(e) ? imgFull(e.id) : "" });
+      desc: (e.description || "").trim(), image: hasCardFace(e) ? imgFull(e.id) : "",
+      artId: hasCardFace(e) ? e.id : null });
   for (const c of CHAR) if (c.name && c.name.length >= 2)
     addTerm(c.name, { src: 0, kind: "char", id: c.id, name: c.name, shareId: c.shareId,
-      hp: c.hp, energy: c.maxEnergy, desc: (c.storyText || "").trim(), image: imgFull(c.id) });
+      hp: c.hp, energy: c.maxEnergy, desc: (c.storyText || "").trim(), image: imgFull(c.id), artId: c.id });
   /* 角色技能：卡牌/角色的身份优先于技能名（同名时以牌面为准），
      没有身份竞争时注册为 skill 条目——正文里的「准备技能：踏潮」「技能：霆电迸发」
      由此指向技能效果，而不是同名的准备中状态。 */
@@ -123,7 +124,10 @@ function buildTermIndex() {
     const owner = entityByKey.get(nameKey(s.name));
     if (owner && (owner.kind === "card" || owner.kind === "char")) continue;
     addTerm(s.name, { src: 0, kind: "skill", key: s.key, name: s.name,
-      type: s.tagZh, cost: s.cost, owner: s.ownerName, ownerId: s.ownerId,
+      type: s.tagZh, cost: s.cost, owner: s.ownerName,
+      ownerId: s.ownerId != null ? s.ownerId : s.ownerCardId,
+      ownerKind: s.ownerKind,
+      artId: s.art && s.art.ref != null ? s.art.ref : null,
       prepared: s.prepared, prepareTurns: s.prepareTurns, desc: s.effect || s.desc });
   }
   for (const k of KW) {
@@ -148,13 +152,14 @@ function buildTermIndex() {
       if (hit.kind === "card" && (kind === "card" || kind === "cardref")) {
         addTerm(name, { src: 1, kind: "card", id: hit.obj.id, name: hit.obj.name, shareId: hit.obj.shareId,
           type: typeZhOf(hit.obj), playCost: hit.obj.playCost,
-          desc: desc.trim() || (hit.obj.description || "").trim(), image: hasCardFace(hit.obj) ? imgFull(hit.obj.id) : "" });
+          desc: desc.trim() || (hit.obj.description || "").trim(), image: hasCardFace(hit.obj) ? imgFull(hit.obj.id) : "",
+          artId: hasCardFace(hit.obj) ? hit.obj.id : null });
         continue;
       }
       if (hit.kind === "char" && (kind === "char" || kind === "charref")) {
         addTerm(name, { src: 1, kind: "char", id: hit.obj.id, name: hit.obj.name, shareId: hit.obj.shareId,
           hp: hit.obj.hp, energy: hit.obj.maxEnergy,
-          desc: desc.trim() || (hit.obj.storyText || "").trim(), image: imgFull(hit.obj.id) });
+          desc: desc.trim() || (hit.obj.storyText || "").trim(), image: imgFull(hit.obj.id), artId: hit.obj.id });
         continue;
       }
     }

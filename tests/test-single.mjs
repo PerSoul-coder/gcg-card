@@ -72,7 +72,10 @@ for (const p of ASSET_SOURCES) {
 }
 
 /* ===== 4. 体积与构建信息 ===== */
-assert(bytes > 2_000_000 && bytes < 3_000_000, `文件体积在预期区间（${(bytes / 1024 / 1024).toFixed(2)} MB）`);
+/* 主文件 = 原始三份快照（约 2.2MB）+ Brotli 数据集 base64（约 0.3MB）+ 脚本样式。
+   上限用来兜住"误把未压缩数据重复内联"的回归，不是抠几十 KB。 */
+assert(bytes > 2_500_000 && bytes < 3_500_000, `文件体积在预期区间（${(bytes / 1024 / 1024).toFixed(2)} MB）`);
+assert(html.includes('id="builtin-dataset"') && html.includes("BUILTIN_DATASET_GZ_B64"), "压缩数据集已内联并交给运行时");
 assert(/单文件版 · build-single\.mjs 生成于 \d{4}-\d{2}-\d{2}/.test(html), "头部含构建时间戳（可追溯版本）");
 assert(/数据快照（characters 155 \/ entities 1347 \/ keywords 149）/.test(html), "头部标注内置数据规模");
 assert(!/deck-viewer\.(?:css|js|html)\?v=/.test(html), "无残留的资源版本戳查询串（单文件不靠 URL 版本戳）");
@@ -85,9 +88,11 @@ if (fs.existsSync(LITE)) {
   assert(!/<script[^>]+src=/i.test(liteHtml), "轻量版脚本同样全内联");
   assert(liteHtml.includes(appBlock), "轻量版应用脚本与源文件逐字一致（整段比对）");
   assert(liteHtml.includes(`<style>\n${cssSrc}\n</style>`), "轻量版样式与源文件逐字一致（整段比对）");
-  /* 轻量版 = 应用脚本 + 资源脚本（拼音 102KB + 概念库 91KB + 官方元素矢量 48KB），
-     这条上限只用来兜住"误把数据快照内联进来"（那样会到 2.7MB），不是抠几十 KB */
-  assert(Buffer.byteLength(liteHtml) < 620_000, `轻量版体积 < 620KB（${(Buffer.byteLength(liteHtml) / 1024).toFixed(0)} KB）`);
+  /* 轻量版 = 应用脚本 + 资源脚本（拼音 102KB + 概念库 91KB + 官方元素矢量 48KB）
+     + gzip 数据集 base64（约 0.42MB）。不内嵌原始三份快照（否则会到 2.7MB）。 */
+  assert(Buffer.byteLength(liteHtml) < 1_100_000, `轻量版体积 < 1.05MB（${(Buffer.byteLength(liteHtml) / 1024).toFixed(0)} KB）`);
+  assert(!liteHtml.includes('id="builtin-data"'), "轻量版不含原始数据快照");
+  assert(liteHtml.includes('id="builtin-dataset"'), "轻量版仍内联压缩数据集（保证特技等索引可用）");
 }
 
 console.log(fails ? `\n${fails} 条断言失败` : "\n全部通过");

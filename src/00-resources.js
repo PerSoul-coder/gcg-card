@@ -25,6 +25,11 @@ const STORAGE_KEYS = {
 };
 const cacheKey = cat => `${STORAGE_PREFIX}-${LANG}-latest-${cat}`;
 const imgFull = id => `${API}/image/${id}`;
+/* 统一数据集：gzip 为浏览器原生主路径（DecompressionStream 不支持 brotli），
+   br 为 Brotli 归档包，json 为最终回退（构建产物见 scripts/build-dataset.mjs） */
+const DATASET_GZ_URL = "gi-data/dataset.gz";
+const DATASET_BR_URL = "gi-data/dataset.br";
+const DATASET_JSON_URL = "gi-data/dataset.json";
 
 /* ---------- 翻译表 ---------- */
 const ELE_ZH = { CRYO:"冰", HYDRO:"水", PYRO:"火", ELECTRO:"雷", ANEMO:"风", GEO:"岩", DENDRO:"草" };
