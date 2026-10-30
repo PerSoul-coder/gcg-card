@@ -8,6 +8,7 @@ import { renderGrid, renderList, renderSummary } from "./85-views";
 import { state } from "./data/state";
 import { STORAGE_KEYS, tagZh, eleIcon } from "./core/resources";
 import { esc, setStatus } from "./core/dom";
+import { registerLayer } from "./core/layers";
 import { TYPE_ZH } from "./data/model";
 import { pool } from "./45-pool";
 
@@ -27,6 +28,24 @@ function renderHistory() {
     <span>${esc(x.chars.map(c => c.name).join(" / "))}</span>
     <span class="code">${esc(x.code)}</span></div>`).join("");
 }
+
+/* ---------- 历史面板开合 ----------
+   历史面板在文档流内（展开在本页顶部），不是模态浮层：它开着时页面照样该能滚动，
+   所以不设 modal、也不参与滚动锁。层序排在菜单之上、牌组面板之下。 */
+const histPanelEl = () => $("histPanel");
+const histPanelOpen = () => !!(histPanelEl() && histPanelEl().classList.contains("show"));
+export function openHistoryPanel(): void {
+  const el = histPanelEl();
+  if (el && el.classList) el.classList.add("show");
+}
+export function closeHistoryPanel(): void {
+  const el = histPanelEl();
+  if (el && el.classList) el.classList.remove("show");
+}
+export function toggleHistoryPanel(): void {
+  if (histPanelOpen()) closeHistoryPanel(); else openHistoryPanel();
+}
+registerLayer({ id: "histPanel", isOpen: histPanelOpen, close: closeHistoryPanel, order: 20 });
 
 /* 分享码 → 角色 id / 行动牌 id / 数量表。解析主流程与牌组差异共用，
    保证两处对同一串码得到完全一致的结果。 */

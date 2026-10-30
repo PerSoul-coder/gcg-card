@@ -7,6 +7,7 @@ import { cardElement, charElement } from "./45-pool";
 import { state } from "./data/state";
 import { STORAGE_KEYS, imgFull, eleIcon } from "./core/resources";
 import { esc, toast } from "./core/dom";
+import { registerLayer, syncScrollLock } from "./core/layers";
 import { TYPE_ZH } from "./data/model";
 import { reqGapText } from "./30-deps";
 import { pool } from "./45-pool";
@@ -312,5 +313,28 @@ document.addEventListener("click", ev => {
   activeDeckId = Number(item.dataset.deck);
   syncFromActive(); renderDraft(); renderDraftPanel();
 });
+
+/* ---------- 牌组管理面板：开合集中在这里 ----------
+   面板是可滚动的 60dvh 浮层，打开期间必须锁住文档滚动，否则在面板里滑到底
+   滚动链会传给页面（表现为「滑动被背景捕捉」）。锁同步交给层栈，
+   开合点只调这两个函数，就不会有人忘记。 */
+const draftPanelEl = () => $("draftPanel");
+const draftPanelOpen = () => !!(draftPanelEl() && draftPanelEl().classList.contains("show"));
+export function openDraftPanel(): void {
+  const el = draftPanelEl();
+  if (!el || !el.classList) return;
+  el.classList.add("show");
+  syncScrollLock();
+}
+export function closeDraftPanel(): void {
+  const el = draftPanelEl();
+  if (!el || !el.classList) return;
+  el.classList.remove("show");
+  syncScrollLock();
+}
+export function toggleDraftPanel(): void {
+  if (draftPanelOpen()) closeDraftPanel(); else openDraftPanel();
+}
+registerLayer({ id: "draftPanel", isOpen: draftPanelOpen, close: closeDraftPanel, order: 46, modal: true });
 
 export { draft, decks, activeDeckId, deckRenameId, loadDecks, saveDecks, activeDeck, deckSeq, newDeck, syncFromActive, saveDraft, loadDraft, pruneDraft, draftTotal, COPY_LIMIT, LEGEND_COPY_LIMIT, copyLimit, draftAdd, draftRemoveChar, draftRemoveCard, draftSetCount, draftClear, draftLoadCurrent, deckProblems, draftEncode, renderDraft, renderDraftPanel, commitDeckRename };

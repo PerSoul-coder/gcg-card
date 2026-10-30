@@ -12,6 +12,7 @@ import { termEntries } from "./40-concepts";
 import { state } from "./data/state";
 import { ELE_ZH, ELE_COLOR, tagZh, eleIcon, enPips } from "./core/resources";
 import { esc, toast, copyText } from "./core/dom";
+import { registerLayer, syncScrollLock } from "./core/layers";
 import { typeZhOf, isFieldEntity, isShadowState, cardArtHtml } from "./data/model";
 import { BUILTIN_DATA } from "./20-data";
 import { costHtml } from "./30-deps";
@@ -86,24 +87,15 @@ function deckActionHtml(id, joinable, c) {
 function topView() { return state.overlayStack.length ? state.overlayStack[state.overlayStack.length - 1] : null; }
 const overlayOpen = () => $("overlay").classList.contains("show");
 
-/* 弹层的开关统一走这里：显示/隐藏 + 锁定背景滚动。
+/* 弹层的开关统一走这里：显示/隐藏 + 通知层栈同步背景滚动锁。
    只挂 fixed 遮罩是不够的——弹层滚到边界后滚动链会继续传给文档，
-   于是"在弹层里上下滑，背景的卡面视图跟着动"。锁住文档滚动是最直接的断链方式，
-   补偿 scrollbar 宽度避免锁定瞬间页面横向跳动。 */
-function setOverlayOpen(open) {
+   于是"在弹层里上下滑，背景的卡面视图跟着动"。锁滚动与 scrollbar 补偿
+   都收在 core/layers 里，其他浮层共用同一套。 */
+function setOverlayOpen(open: boolean) {
   const ov = $("overlay");
   if (!ov || !ov.classList) return;
-  const wasOpen = ov.classList.contains("show");
   ov.classList.toggle("show", open);
-  const root = document.documentElement;
-  if (root && root.classList) root.classList.toggle("ovl-lock", open);
-  const body = document.body;
-  if (body && body.style) {
-    if (open && !wasOpen) {
-      const sbw = root && typeof root.clientWidth === "number" ? window.innerWidth - root.clientWidth : 0;
-      body.style.paddingRight = sbw > 0 ? sbw + "px" : "";
-    } else if (!open) body.style.paddingRight = "";
-  }
+  syncScrollLock();
   if (open) hideTip();      /* 弹层盖上来时，残留的悬浮预览会浮在遮罩之上 */
 }
 
@@ -167,6 +159,8 @@ function overlayBack() {
   renderOverlay();
 }
 function overlayClose() { state.overlayStack = []; setOverlayOpen(false); }
+/* 登记为最顶层（z-index 50）。Esc 走 overlayBack 逐层退回，栈空时它自己关闭弹层。 */
+registerLayer({ id: "overlay", isOpen: overlayOpen, close: overlayBack, order: 50, modal: true });
 /* 翻页：同一列表内前后跳 */
 function modalStep(d) {
   const top = topView();

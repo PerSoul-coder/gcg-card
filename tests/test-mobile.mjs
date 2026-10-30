@@ -66,19 +66,29 @@ assert(/Math\.max\(pad, Math\.min\(x, innerWidth - r\.width - pad\)\)/.test(js)
   && /Math\.max\(pad, Math\.min\(y, innerHeight - r\.height - pad\)\)/.test(js),
   "预览位置在四边钳制（旧逻辑只挡右/下，左侧会算出负坐标）");
 
-/* ---------- 4. 弹层打开时锁背景滚动 ---------- */
-assert(/html\.ovl-lock, html\.ovl-lock body\s*\{\s*overflow:\s*hidden/.test(css),
-  "CSS：ovl-lock 锁住文档滚动");
-assert(/root\.classList\.toggle\("ovl-lock", open\)/.test(js), "JS：开关弹层时同步 ovl-lock");
-
-/* 非弹层类浮层（牌组面板 / 历史 / 对比栏）打开时也要锁住文档滚动，
-   否则在这些面板里滑动会带着背景一起滚。 */
-for (const panel of ["#draftPanel.show", "#histPanel.show", "body.cmp-on"]) {
-  assert(new RegExp(`html:has\\(${panel.replace(/[.()]/g, "\\$&")}\\)`).test(css),
-    `CSS：${panel} 打开时锁住文档滚动`);
-}
+/* ---------- 4. 模态浮层锁背景滚动 ---------- */
+assert(/html\.layer-lock, html\.layer-lock body\s*\{\s*overflow:\s*hidden/.test(css),
+  "CSS：layer-lock 锁住文档滚动");
+assert(/classList\.add\("layer-lock"\)/.test(js), "JS：模态层打开时加锁");
 assert(/#overlay[^{]*\{[^}]*overscroll-behavior:\s*contain/.test(css), "#overlay 阻断滚动链");
 assert(/\.detail \{[^}]*overscroll-behavior:\s*contain/.test(css), ".detail 阻断滚动链");
+
+/* 只有模态层锁滚动，并且"谁算模态"由 core/layers 的登记决定，不再用 :has() 反推选择器。
+   历史面板在文档流内、对比栏是常驻浮条——锁住它们会让整页失去滚动能力
+   （曾经的表现：选中过对比卡之后页面再也滚不动）。这两条断言防止回退。 */
+assert(!/html:has\(#histPanel\.show\)/.test(css), "历史面板不参与文档滚动锁（文档流内）");
+assert(!/html:has\(body\.cmp-on\)/.test(css), "对比栏不参与文档滚动锁（常驻浮条）");
+
+/* 登记表里声明 modal 的层，必须正好是「会盖住整页的两层」 */
+const srcText = (dir) => fs.readdirSync(dir, { withFileTypes: true })
+  .map(d => d.isDirectory() ? srcText(path.join(dir, d.name))
+    : /\.ts$/.test(d.name) ? fs.readFileSync(path.join(dir, d.name), "utf8") : "")
+  .join("\n");
+const layerCalls = [...srcText(path.join(here, "src")).matchAll(/registerLayer\(\{[^}]*\}\)/g)].map(m => m[0]);
+const modalIds = layerCalls.filter(s => /modal:\s*true/.test(s))
+  .map(s => (s.match(/id:\s*"([^"]+)"/) || [])[1]).sort();
+assert(modalIds.join() === "draftPanel,overlay",
+  `只有详情弹层与牌组面板是模态层（实际：${modalIds.join() || "无"}）`);
 assert(!'overlay").classList.add("show")'.includes("x") && !/\$\("overlay"\)\.classList\.add\("show"\)/.test(js),
   "弹层显示只有 setOverlayOpen 一条路径（避免漏掉滚动锁）");
 assert(!/\$\("overlay"\)\.classList\.remove\("show"\)/.test(js),

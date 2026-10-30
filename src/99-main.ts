@@ -1,5 +1,5 @@
 /* src/99-main.js —— 由 scripts/_convert.mjs 从旧脚本转换（迁移中间态）。 */
-import { decodeAndRender, looksLikeCode, renderHistory, resolveInput } from "./60-parse";
+import { closeHistoryPanel, decodeAndRender, looksLikeCode, renderHistory, resolveInput, toggleHistoryPanel } from "./60-parse";
 import { $ } from "./core/dom";
 import { closeSuggest, moveSuggest, pushRecent, resetSuggestTimer, scheduleSuggest, searchState, selectSuggest, sugState } from "./70-search";
 import { browseState, parseBrowseHash, renderBrowse, renderBrowseResults, renderGrid, renderList, setShowUnbuildable, syncBrowseHash } from "./85-views";
@@ -8,10 +8,11 @@ import { pool, poolStats, resetPool } from "./45-pool";
 import { resetConceptIndex } from "./40-concepts";
 import { resetBacklinks } from "./50-backlinks";
 import { SKILLS, resetSkillIndex } from "./47-skills";
-import { beginRenameDeck, deleteDeckById, draftClear, draftEncode, draftLoadCurrent, draftRemoveCard, draftRemoveChar, draftSetCount, duplicateDeck, loadDraft, newDeck, renderDraft, renderDraftPanel, syncFromActive } from "./80-deck";
-import { overlayBack, overlayOpen, showDetail } from "./90-detail";
+import { beginRenameDeck, closeDraftPanel, deleteDeckById, draftClear, draftEncode, draftLoadCurrent, draftRemoveCard, draftRemoveChar, draftSetCount, duplicateDeck, loadDraft, newDeck, renderDraft, renderDraftPanel, syncFromActive, toggleDraftPanel } from "./80-deck";
+import { overlayOpen, showDetail } from "./90-detail";
 import { resetEntityState, state } from "./data/state";
 import { SAMPLE, STORAGE_KEYS } from "./core/resources";
+import { closeTopLayer } from "./core/layers";
 import { setStatus, toast, copyText } from "./core/dom";
 import { shadowStateIds, shadowStateBySkill } from "./data/model";
 import { dataReady, writeCache } from "./20-data";
@@ -39,13 +40,13 @@ document.addEventListener("click", ev => {
   closeSuggest();
 });
 $("btnSample").addEventListener("click", () => { $<HTMLInputElement>("codeInput").value = SAMPLE; updateBtnLabel(); decodeAndRender(SAMPLE); });
-$("btnHistory").addEventListener("click", () => { renderHistory(); $("histPanel").classList.toggle("show"); });
+$("btnHistory").addEventListener("click", () => { renderHistory(); toggleHistoryPanel(); });
 $("histPanel").addEventListener("click", ev => {
   const item = (ev.target as HTMLElement).closest("[data-code]");
-  if (item) { $("histPanel").classList.remove("show"); $<HTMLInputElement>("codeInput").value = item.dataset.code; updateBtnLabel(); decodeAndRender(item.dataset.code); }
+  if (item) { closeHistoryPanel(); $<HTMLInputElement>("codeInput").value = item.dataset.code; updateBtnLabel(); decodeAndRender(item.dataset.code); }
 });
 document.addEventListener("click", ev => {
-  if (!(ev.target as HTMLElement).closest("#histPanel") && !(ev.target as HTMLElement).closest("#btnHistory")) $("histPanel").classList.remove("show");
+  if (!(ev.target as HTMLElement).closest("#histPanel") && !(ev.target as HTMLElement).closest("#btnHistory")) closeHistoryPanel();
 });
 /* ---------- 视图切换（含状态持久化与数据懒加载） ---------- */
 const VIEW_KEY = STORAGE_KEYS.view;
@@ -167,8 +168,8 @@ $("btnRefresh").addEventListener("click", async () => {
 document.addEventListener("click", ev => {
   const b = (ev.target as HTMLElement).closest("button");
   if (!b) return;
-  if (b.id === "draftManage") { $("draftPanel").classList.toggle("show"); renderDraftPanel(); }
-  else if (b.id === "draftClose") $("draftPanel").classList.remove("show");
+  if (b.id === "draftManage") { toggleDraftPanel(); renderDraftPanel(); }
+  else if (b.id === "draftClose") closeDraftPanel();
   else if (b.id === "draftClear") draftClear();
   else if (b.id === "draftLoad") { draftLoadCurrent(); renderDraftPanel(); }
   else if (b.id === "draftNew") {
@@ -189,7 +190,7 @@ document.addEventListener("click", ev => {
       const code = draftEncode();
       copyText(code).then(() => toast("分享码已生成并复制到剪贴板"), () => {});
       $<HTMLInputElement>("codeInput").value = code; updateBtnLabel();
-      $("draftPanel").classList.remove("show");
+      closeDraftPanel();
       decodeAndRender(code);
       toast("分享码已生成（已通过解码自校验），牌组已加载");
     } catch (e) { toast(e.message, true); }
@@ -200,15 +201,13 @@ document.addEventListener("click", ev => {
   else if (b.dataset.dec != null) draftSetCount(Number(b.dataset.dec), -1);
 });
 
-/* 全局快捷键：1/2/3 切视图，/ 聚焦卡库检索框，Esc 逐层关闭浮层（输入框聚焦时不触发）。
-   Esc 层级（自内向外）：弹层视图栈（概念下钻 → 上一视图，每次退一层）→
-   关闭弹层 → 牌组管理面板 → 历史面板 → 导出菜单 */
+/* 全局快捷键：1/2/3 切视图，/ 聚焦卡库检索框，Esc 关闭最上层浮层（输入框聚焦时不触发）。
+   Esc 的「哪一层先关」不再写在这里：各层在所属模块登记层序，由 core/layers 决定。
+   这样新增浮层不必回来改这个函数，也不会漏——此前「更多」菜单就漏了。
+   层内部的更细语义（如牌组重命名 Esc 只取消重命名）在层自己的处理里 stopPropagation，优先于此。 */
 document.addEventListener("keydown", ev => {
   if (ev.key === "Escape") {
-    if (overlayOpen()) { overlayBack(); return; }   /* 弹层内：逐层退回，栈空即关闭 */
-    if ($("draftPanel").classList.contains("show")) { $("draftPanel").classList.remove("show"); return; }
-    if ($("histPanel").classList.contains("show")) { $("histPanel").classList.remove("show"); return; }
-    $("exportMenu").classList.remove("show");
+    closeTopLayer();
     return;
   }
   if (overlayOpen()) return;

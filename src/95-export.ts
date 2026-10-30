@@ -9,6 +9,7 @@ import { decodeRaw, encodeRaw } from "./10-codec";
 import { state } from "./data/state";
 import { API, LANG, imgFull, tagZh } from "./core/resources";
 import { toast, copyText } from "./core/dom";
+import { registerLayer } from "./core/layers";
 
 /* ---------- 导出：文本 / Markdown / 结构化 JSON / CSV ---------- */
 function download(name, content, mime) {
@@ -129,8 +130,18 @@ function fileStamp() {
   return `gi-deck-${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`;
 }
 
-/* ---------- 导出菜单 / 更多菜单 ---------- */
-const openMenu = btn => {
+/* ---------- 导出菜单 / 更多菜单 ----------
+   两个下拉互斥，共用一个层：Esc 只按一次就该把「当前打开的那个」关掉，
+   而不是先关一个、再按一次关另一个。 */
+const MENU_IDS = ["exportMenu", "moreMenu"] as const;
+const menuEl = (id: string) => $(id);
+const menusOpen = () => MENU_IDS.some(id => { const el = menuEl(id); return !!(el && el.classList && el.classList.contains("show")); });
+const closeMenus = () => {
+  for (const id of MENU_IDS) { const el = menuEl(id); if (el && el.classList) el.classList.remove("show"); }
+};
+registerLayer({ id: "topMenus", isOpen: menusOpen, close: closeMenus, order: 10 });
+
+const openMenu = (btn: string) => {
   const menu = btn === "btnExport" ? "exportMenu" : "moreMenu";
   const other = menu === "exportMenu" ? "moreMenu" : "exportMenu";
   $(other).classList.remove("show");
@@ -139,7 +150,7 @@ const openMenu = btn => {
 $("btnExport").addEventListener("click", ev => { ev.stopPropagation(); openMenu("btnExport"); });
 $("btnMore").addEventListener("click", ev => { ev.stopPropagation(); openMenu("btnMore"); });
 document.addEventListener("click", ev => {
-  if (!(ev.target as HTMLElement).closest(".expwrap")) { $("exportMenu").classList.remove("show"); $("moreMenu").classList.remove("show"); }
+  if (!(ev.target as HTMLElement).closest(".expwrap")) closeMenus();
 });
 /* 更多菜单动作 */
 $("btnDataInfo").addEventListener("click", () => {
