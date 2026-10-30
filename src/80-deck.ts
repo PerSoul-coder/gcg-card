@@ -166,8 +166,8 @@ function draftSetCount(id, d) {
 function draftClear() { draft.chars = []; draft.cards.clear(); saveDraft(); renderDraft(); toast("当前牌组已清空"); }
 function draftLoadCurrent() {
   if (!state.current) { toast("请先解析一个牌组", true); return; }
-  draft.chars = [...state.current.charIds];
-  draft.cards = new Map(state.current.order.flatMap(t => state.current.groups[t].map(x => [x.id, x.count])));
+  draft.chars = [...state.current!.charIds];
+  draft.cards = new Map(state.current!.order.flatMap(t => state.current!.groups[t].map(x => [x.id, x.count])));
   saveDraft(); renderDraft(); renderDraftPanel(); toast("已载入当前牌组");
 }
 /* 构筑规则校验：生成分享码的硬性检查，也是管理面板里的实时提示 */

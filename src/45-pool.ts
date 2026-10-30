@@ -1,6 +1,7 @@
 /* src/45-pool.js —— 由 scripts/_convert.mjs 从旧脚本转换（迁移中间态）。 */
 import { deckReqsOf, diceCost, energyCost, isTestCard, reqElement, restrictionsOf } from "./30-deps";
 import { state } from "./data/state";
+import type { PoolEntry } from "./types";
 import { tagZh } from "./core/resources";
 import { TYPE_ORDER, typeZhOf, isDeckable, domainOfEntity, isShadowState, hasCardFace } from "./data/model";
 
@@ -13,7 +14,7 @@ import { TYPE_ORDER, typeZhOf, isDeckable, domainOfEntity, isShadowState, hasCar
 const POOL_TYPE_ORDER = TYPE_ORDER;
 const verTuple = v => { const m = String(v || "").match(/^v(\d+)\.(\d+)/); return m ? [+m[1], +m[2]] : [0, 0]; };
 function verCmp(a, b) { const [a1, a2] = verTuple(a), [b1, b2] = verTuple(b); return a1 - b1 || a2 - b2; }
-let pool = [];
+let pool: PoolEntry[] = [];
 /* 卡池版本：每次重建 +1。卡库的筛选结果 / 分面计数按「筛选状态 + 版本」记忆，
    数据刷新后旧缓存自动失效，不用逐个调用处手工清。 */
 let poolVersion = 0;

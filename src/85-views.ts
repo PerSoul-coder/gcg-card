@@ -20,16 +20,16 @@ import { cmpBtnHtml } from "./88-compare";
 
 /* ---------- 概览条（含费用曲线 / 充能 / 限制统计） ---------- */
 function renderSummary() {
-  const typeCounts = state.current.order.map(t => `${t} <b>${state.current.groups[t].reduce((a, x) => a + x.count, 0)}</b>`).join("　·　");
-  const elesHtml = [...new Set(state.current.chars.map(c => c.element).filter(Boolean))]
+  const typeCounts = state.current!.order.map(t => `${t} <b>${state.current!.groups[t].reduce((a, x) => a + x.count, 0)}</b>`).join("　·　");
+  const elesHtml = [...new Set(state.current!.chars.map(c => c.element).filter(Boolean))]
     .map(el => `${eleIcon(el)}${esc(ELE_ZH[el] || el)}`).join(" / ");
-  const vers = [...new Set([...state.current.chars.map(c => c.since), ...state.current.order.flatMap(t => state.current.groups[t].map(x => x.since))])].filter(Boolean).sort();
+  const vers = [...new Set([...state.current!.chars.map(c => c.since), ...state.current!.order.flatMap(t => state.current!.groups[t].map(x => x.since))])].filter(Boolean).sort();
 
   /* 费用曲线（按张数计重）：元素骰 0~4 / 5+ */
   const buckets = Array(6).fill(0);
   let enCards = 0, enMax = 0, enTotal = 0, rCards = 0, dCards = 0;
   const rCount = {}, dCount = {};
-  for (const t of state.current.order) for (const x of state.current.groups[t]) {
+  for (const t of state.current!.order) for (const x of state.current!.groups[t]) {
     buckets[Math.min(x.dice, 5)] += x.count;
     if (x.energy) { enCards += x.count; enMax = Math.max(enMax, x.energy); enTotal += x.energy * x.count; }
     for (const r of x.restrictions) { rCount[r.code] = (rCount[r.code] || 0) + x.count; rCards += x.count; }
@@ -51,7 +51,7 @@ function renderSummary() {
   const rChips = reqChips("牌组限制", dCount, dCards) + reqChips("打出限制", rCount, rCards);
 
   $("summary").innerHTML = `
-    <div class="sum-chars">${state.current.chars.map(c => `
+    <div class="sum-chars">${state.current!.chars.map(c => `
       <span class="chip"><span class="edot" style="--ec:${ELE_COLOR[c.element] || '#888'}">${ELE_ICONS[c.element] || ""}</span>${esc(c.name)}<small class="chip-en">${enPips(c.energy)}</small></span>`).join("")}
     </div>
     <div class="sum-types"><span>元素构成：<b>${elesHtml}</b></span><span>${typeCounts}</span><span>版本跨度：<b>${esc(vers.join(" ~ "))}</b></span></div>
@@ -92,7 +92,7 @@ function renderGrid() {
     return;
   }
   $("view-grid").innerHTML = `<div class="sec-title">角色牌</div>
-    <div class="char-row">${state.current.chars.map(c => `
+    <div class="char-row">${state.current!.chars.map(c => `
       <div class="char-card"><div class="imgbox" data-id="${c.id}">
         <img class="card-img" src="${imgFull(c.id)}" decoding="async" width="420" height="720" alt="${esc(c.name)}"
           onerror="this.onerror=null;this.outerHTML='<div class=fallback>${esc(c.name)}</div>'">
@@ -101,8 +101,8 @@ function renderGrid() {
       </div>
       <div class="cap">${esc(c.name)}<small>生命 ${c.hp} · 充能 ${c.energy} · ${esc(c.since || "")}</small></div></div>`).join("")}
     </div>` +
-    state.current.order.map(t => `<div class="sec-title">${t}（${state.current.groups[t].reduce((a, x) => a + x.count, 0)}）</div>
-      <div class="card-grid">${state.current.groups[t].map(tileHtml).join("")}</div>`).join("");
+    state.current!.order.map(t => `<div class="sec-title">${t}（${state.current!.groups[t].reduce((a, x) => a + x.count, 0)}）</div>
+      <div class="card-grid">${state.current!.groups[t].map(tileHtml).join("")}</div>`).join("");
 }
 
 /* ---------- 列表视图（含限制列 + 表头排序） ---------- */
@@ -135,7 +135,7 @@ function renderList() {
     const col = el ? (ELE_COLOR[el] || "var(--gold)") : R_STYLE[r.code];
     return `<span class="rpill" style="color:${col}" title="${esc(r.label)}">${el ? eleIcon(el, "inline-el") : ""}${esc(r.short)}</span>`;
   };
-  const rows = t => state.current.groups[t].filter(match)
+  const rows = t => state.current!.groups[t].filter(match)
     .sort((a, b) => listSort.dir * (sortVal[listSort.key](a) < sortVal[listSort.key](b) ? -1 : sortVal[listSort.key](a) > sortVal[listSort.key](b) ? 1 : a.name.localeCompare(b.name, "zh")))
     .map(x => `<tr data-id="${x.id}">
     <td class="cnt">${x.count > 1 ? "×" + x.count : "1"}</td>
@@ -143,7 +143,7 @@ function renderList() {
     <td>${allReqs(x).map(reqPill).join("") || '<span style="color:#4a5261">—</span>'}</td>
     <td>${esc(x.related || "—")}</td><td>${esc(x.since || "—")}</td>
     <td class="desc">${linkify(esc(x.desc))}</td></tr>`).join("");
-  const sections = state.current.order.map(t => {
+  const sections = state.current!.order.map(t => {
     if (!state.current.groups[t].some(match)) return "";
     return `<div class="sec-title">${t}</div><div class="table-wrap"><table>
       <tr>

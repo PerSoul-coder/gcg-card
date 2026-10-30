@@ -48,7 +48,7 @@ function parseShareIds(code) {
 async function decodeAndRender(code: string, opts: { noHash?: boolean; noHistory?: boolean } = {}) {
   code = code.trim();
   if (!code) return;
-  $("btnDecode").disabled = true;
+  $<HTMLInputElement>("btnDecode").disabled = true;
   setStatus(`<span class="spin"></span>解析中…`);
   try {
     await ensureData();
@@ -81,8 +81,8 @@ async function decodeAndRender(code: string, opts: { noHash?: boolean; noHistory
       }),
       groups, order,
     };
-    state.deckOrder = [...state.current.chars.map(c => c.id),
-      ...order.flatMap(t => state.current.groups[t].map(x => x.id))];
+    state.deckOrder = [...state.current!.chars.map(c => c.id),
+      ...order.flatMap(t => state.current!.groups[t].map(x => x.id))];
 
     renderSummary(); renderGrid(); renderList();
     /* 摘要只属于「卡面视图」：在卡库/列表里解析牌组不应把整块摘要顶到标签栏上方 */
@@ -90,11 +90,11 @@ async function decodeAndRender(code: string, opts: { noHash?: boolean; noHistory
     ["btnCopyCode", "btnExport"].forEach(b => $(b).disabled = false);
     setStatus(`解析成功：3 名角色 + ${cardIds.length} 张行动牌（去重 ${countMap.size} 种）`, "ok");
     if (!opts.noHash) history.replaceState(null, "", "#" + code);
-    if (!opts.noHistory) pushHistory({ code, chars: state.current.chars.map(c => ({ name: c.name, el: c.element })) });
+    if (!opts.noHistory) pushHistory({ code, chars: state.current!.chars.map(c => ({ name: c.name, el: c.element })) });
   } catch (e) {
     setStatus(`解析失败：${e.message}`, "err");
   } finally {
-    $("btnDecode").disabled = false;
+    $<HTMLInputElement>("btnDecode").disabled = false;
   }
 }
 

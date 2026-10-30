@@ -4,6 +4,7 @@ import { $ } from "./core/dom";
 import { costHtml, costText } from "./30-deps";
 import { overlayBack, overlayOpen, renderOverlay, topView } from "./90-detail";
 import { state } from "./data/state";
+import type { SkillEntry } from "./types";
 import { tagZh } from "./core/resources";
 import { esc } from "./core/dom";
 import { nameKey, shadowStateBySkill, cardArtHtml } from "./data/model";
@@ -19,7 +20,7 @@ const SKILL_TAG_ZH = {
 };
 const SKILL_TAG_ORDER = ["GCG_SKILL_TAG_A", "GCG_SKILL_TAG_E", "GCG_SKILL_TAG_Q", "GCG_SKILL_TAG_PASSIVE", "GCG_SKILL_TAG_NONE"];
 
-let SKILLS = [];
+let SKILLS: SkillEntry[] = [];
 const skillByKey = new Map();      /* "角色id:技能id" → 技能 */
 const skillByName = new Map();     /* 归一化名 → 技能[] */
 const skillsOfOwner = new Map();   /* 角色 id → 技能[]（已排序、已去重） */

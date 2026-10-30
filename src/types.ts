@@ -203,3 +203,53 @@ export interface OverlayEntry {
   pick?: unknown;
   [k: string]: unknown;
 }
+
+/* ---------- 卡池条目 ----------
+   把角色与实体卡摊平成同一种形状，供卡库、检索、对比、导出共用。
+   与统一数据集（GcgRecord）不同：这里带的是"界面要展示的字段"（元素、费用、限制），
+   已经算好，视图不再自己推导。 */
+export interface PoolEntry {
+  kind: "char" | "card";
+  id: number;
+  name: string;
+  englishName?: string;
+  element: string;
+  type: string;
+  typeRaw: string;
+  domain: "char" | "card";
+  deckable: boolean;
+  art: boolean;
+  tags: Array<string | null>;
+  tagsRaw: string[];
+  hp?: number;
+  energy?: number;
+  ver?: string;
+  share?: number | null;
+  restrictions: unknown[];
+  deckReqs: unknown[];
+  related?: string | null;
+  relatedId: number | null;
+  playCost: unknown;
+  dice: number;
+  energyCost: number;
+  desc: string;
+}
+
+/* ---------- 技能条目 ----------
+   角色技能与装备牌特技共用一种形状：装备牌特技的 ownerKind 是 "card"。 */
+export interface SkillEntry {
+  key: string;
+  name: string;
+  ownerId: number;
+  ownerName: string;
+  ownerKind: "char" | "card";
+  tagZh: string;
+  cost?: unknown;
+  effect: string;
+  desc?: string;
+  prepared: boolean;
+  prepareTurns: number;
+  stateId: number | null;
+  altCount: number;
+  hidden?: boolean;
+}

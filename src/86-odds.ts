@@ -42,7 +42,7 @@ function oddsDeckStats() {
   const byCost = Array(6).fill(0), byType = {}, uniq = [];
   let total = 0, diceTotal = 0;
   if (state.current) {
-    for (const t of state.current.order) for (const x of state.current.groups[t]) {
+    for (const t of state.current!.order) for (const x of state.current!.groups[t]) {
       total += x.count;
       diceTotal += x.dice * x.count;
       byCost[Math.min(x.dice, 5)] += x.count;

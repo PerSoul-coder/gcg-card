@@ -24,13 +24,13 @@ import { refreshSuggest } from "./70-search";
 function updateBtnLabel() {
   $("btnDecode").textContent = "解析牌组";
 }
-$("btnDecode").addEventListener("click", () => resolveInput($("codeInput").value));
+$("btnDecode").addEventListener("click", () => resolveInput($<HTMLInputElement>("codeInput").value));
 $("codeInput").addEventListener("keydown", ev => {
-  if (ev.key === "Enter") { ev.preventDefault(); resolveInput($("codeInput").value); }
+  if (ev.key === "Enter") { ev.preventDefault(); resolveInput($<HTMLInputElement>("codeInput").value); }
 });
 $("codeInput").addEventListener("input", updateBtnLabel);
 $("codeInput").addEventListener("paste", () => setTimeout(() => {
-  const v = $("codeInput").value.trim();
+  const v = $<HTMLInputElement>("codeInput").value.trim();
   if (looksLikeCode(v)) resolveInput(v);
 }, 0));
 document.addEventListener("click", ev => {
@@ -38,11 +38,11 @@ document.addEventListener("click", ev => {
   if ((ev.target as HTMLElement).closest("#suggest") || (ev.target as HTMLElement).id === "browseSearch") return;
   closeSuggest();
 });
-$("btnSample").addEventListener("click", () => { $("codeInput").value = SAMPLE; updateBtnLabel(); decodeAndRender(SAMPLE); });
+$("btnSample").addEventListener("click", () => { $<HTMLInputElement>("codeInput").value = SAMPLE; updateBtnLabel(); decodeAndRender(SAMPLE); });
 $("btnHistory").addEventListener("click", () => { renderHistory(); $("histPanel").classList.toggle("show"); });
 $("histPanel").addEventListener("click", ev => {
   const item = (ev.target as HTMLElement).closest("[data-code]");
-  if (item) { $("histPanel").classList.remove("show"); $("codeInput").value = item.dataset.code; updateBtnLabel(); decodeAndRender(item.dataset.code); }
+  if (item) { $("histPanel").classList.remove("show"); $<HTMLInputElement>("codeInput").value = item.dataset.code; updateBtnLabel(); decodeAndRender(item.dataset.code); }
 });
 document.addEventListener("click", ev => {
   if (!(ev.target as HTMLElement).closest("#histPanel") && !(ev.target as HTMLElement).closest("#btnHistory")) $("histPanel").classList.remove("show");
@@ -188,7 +188,7 @@ document.addEventListener("click", ev => {
     try {
       const code = draftEncode();
       copyText(code).then(() => toast("分享码已生成并复制到剪贴板"), () => {});
-      $("codeInput").value = code; updateBtnLabel();
+      $<HTMLInputElement>("codeInput").value = code; updateBtnLabel();
       $("draftPanel").classList.remove("show");
       decodeAndRender(code);
       toast("分享码已生成（已通过解码自校验），牌组已加载");
@@ -258,14 +258,14 @@ function routeHash() {
     })();
   }
   if (h) {   /* 分享码 */
-    $("codeInput").value = h; updateBtnLabel();
+    $<HTMLInputElement>("codeInput").value = h; updateBtnLabel();
     return (async () => {
       try { await decodeAndRender(h); restoreView(); }
       catch (e) { setStatus("加载失败：" + e.message, "err"); }
     })();
   }
   /* 空 hash：加载示例牌组，并恢复上次停留的视图 */
-  $("codeInput").value = SAMPLE; updateBtnLabel();
+  $<HTMLInputElement>("codeInput").value = SAMPLE; updateBtnLabel();
   return (async () => {
     try { await decodeAndRender(SAMPLE, { noHash: true }); restoreView(); }
     catch (e) { setStatus("加载失败：" + e.message, "err"); }

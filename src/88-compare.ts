@@ -165,7 +165,7 @@ function similarCards(id, limit = 3) {
   return out.sort((a, b) => b.score - a.score || a.name.localeCompare(b.name, "zh")).slice(0, limit);
 }
 function inCurrentDeck(id) {
-  return !!state.current && (state.current.charIds.includes(id) || state.current.cardIds.includes(id));
+  return !!state.current && (state.current!.charIds.includes(id) || state.current!.cardIds.includes(id));
 }
 /* 把对比中的一张卡换成候选卡：同步浮动对比栏与已打开的对比视图 */
 function swapCompare(fromId, toId) {
@@ -251,7 +251,7 @@ function showCompare() {
 
 /* ---------- 牌组差异：解码复用 + 纯差异模型 ---------- */
 function deckCodeNow() {
-  if (state.current && state.current.code) return state.current.code;
+  if (state.current && state.current!.code) return state.current!.code;
   try { return draftEncode(); }
   catch (e) { toast(e.message, true); return ""; }
 }
@@ -424,7 +424,7 @@ function showDeckDiff() {
     ensureData().then(showDeckDiff).catch(e => setStatus("数据加载失败：" + e.message, "err"));
     return;
   }
-  if (!deckDiffState.a && state.current?.code) deckDiffState.a = state.current.code;
+  if (!deckDiffState.a && state.current?.code) deckDiffState.a = state.current!.code;
   state.overlayStack = [{ kind: "deckdiff", ...deckDiffState }];
   renderOverlay();
   focusDeckDiffInput();
