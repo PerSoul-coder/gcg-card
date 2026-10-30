@@ -293,7 +293,7 @@ window.draftRemoveFromDetail = () => {
 };
 /* 反链跳转：详情/术语弹层内的「被引用」chips */
 document.addEventListener("click", ev => {
-  const g = ev.target.closest("[data-goto]");
+  const g = (ev.target as HTMLElement).closest("[data-goto]");
   if (!g) return;
   ev.stopPropagation();
   showDetail(Number(g.dataset.goto));
@@ -364,7 +364,7 @@ document.addEventListener("mousemove", ev => {
      弹层内不在此禁用——卡文里的术语在详情弹层里同样需要悬浮预览，
      真正要处理的是"弹层打开那一刻的残留"，由 setOverlayOpen 负责收起。 */
   if (!canHover()) { hideTip(); return; }
-  const el = ev.target.closest ? ev.target.closest(".term") : null;
+  const el = (ev.target as HTMLElement).closest ? (ev.target as HTMLElement).closest(".term") : null;
   if (!el) { hideTip(); return; }
   const entries = termEntries(el.dataset.term);
   if (!entries.length) { hideTip(); return; }
@@ -434,14 +434,14 @@ function openTermName(name) {
 }
 /* 捕获阶段处理术语点击：避免触发行/卡片的点击（卡片 → 详情） */
 document.addEventListener("click", ev => {
-  const t = ev.target.closest ? ev.target.closest(".term") : null;
+  const t = (ev.target as HTMLElement).closest ? (ev.target as HTMLElement).closest(".term") : null;
   if (!t) return;
   ev.stopPropagation();
   openTermName(t.dataset.term);
 }, true);
 /* 技能入口：角色详情里的技能行、概念页里的「查看技能」chip */
 document.addEventListener("click", ev => {
-  const el = ev.target.closest ? ev.target.closest("[data-skill]") : null;
+  const el = (ev.target as HTMLElement).closest ? (ev.target as HTMLElement).closest("[data-skill]") : null;
   if (!el) return;
   ev.stopPropagation();
   showSkill(el.dataset.skill);
@@ -457,7 +457,7 @@ document.addEventListener("keydown", ev => {
   if (ev.key === "ArrowRight") window.modalStep(1);
 });
 ["view-grid", "view-list"].forEach(v => $(v).addEventListener("click", ev => {
-  const el = ev.target.closest("[data-id]");
+  const el = (ev.target as HTMLElement).closest("[data-id]");
   if (el) showDetail(Number(el.dataset.id));
 }));
 

@@ -35,17 +35,17 @@ $("codeInput").addEventListener("paste", () => setTimeout(() => {
 }, 0));
 document.addEventListener("click", ev => {
   if (!sugState.open) return;
-  if (ev.target.closest("#suggest") || ev.target.id === "browseSearch") return;
+  if ((ev.target as HTMLElement).closest("#suggest") || (ev.target as HTMLElement).id === "browseSearch") return;
   closeSuggest();
 });
 $("btnSample").addEventListener("click", () => { $("codeInput").value = SAMPLE; updateBtnLabel(); decodeAndRender(SAMPLE); });
 $("btnHistory").addEventListener("click", () => { renderHistory(); $("histPanel").classList.toggle("show"); });
 $("histPanel").addEventListener("click", ev => {
-  const item = ev.target.closest("[data-code]");
+  const item = (ev.target as HTMLElement).closest("[data-code]");
   if (item) { $("histPanel").classList.remove("show"); $("codeInput").value = item.dataset.code; updateBtnLabel(); decodeAndRender(item.dataset.code); }
 });
 document.addEventListener("click", ev => {
-  if (!ev.target.closest("#histPanel") && !ev.target.closest("#btnHistory")) $("histPanel").classList.remove("show");
+  if (!(ev.target as HTMLElement).closest("#histPanel") && !(ev.target as HTMLElement).closest("#btnHistory")) $("histPanel").classList.remove("show");
 });
 /* ---------- 视图切换（含状态持久化与数据懒加载） ---------- */
 const VIEW_KEY = STORAGE_KEYS.view;
@@ -72,8 +72,8 @@ document.querySelectorAll(".tab").forEach(t => t.addEventListener("click", () =>
 
 /* ---------- 卡库检索框：输入即做第二阶段检索 ---------- */
 $("view-browse").addEventListener("input", ev => {
-  if (ev.target.id !== "browseSearch") return;
-  searchState.q = ev.target.value;
+  if ((ev.target as HTMLElement).id !== "browseSearch") return;
+  searchState.q = (ev.target as HTMLElement).value;
   searchState.filter = "";
   renderBrowseResults();
   syncBrowseHash();
@@ -82,10 +82,10 @@ $("view-browse").addEventListener("input", ev => {
   scheduleSuggest();
 });
 $("view-browse").addEventListener("focusin", ev => {
-  if (ev.target.id === "browseSearch" && ev.target.value.trim()) refreshSuggest();
+  if ((ev.target as HTMLElement).id === "browseSearch" && (ev.target as HTMLElement).value.trim()) refreshSuggest();
 });
 $("view-browse").addEventListener("keydown", ev => {
-  if (ev.target.id !== "browseSearch") return;
+  if ((ev.target as HTMLElement).id !== "browseSearch") return;
   if (ev.key === "ArrowDown" || ev.key === "ArrowUp") {
     if (sugState.open && sugState.items.length) {
       ev.preventDefault();
@@ -109,7 +109,7 @@ $("view-browse").addEventListener("keydown", ev => {
 });
 /* mousedown 而非 click：在输入框失焦前完成选择 */
 $("view-browse").addEventListener("mousedown", ev => {
-  const it = ev.target.closest(".sug-item");
+  const it = (ev.target as HTMLElement).closest(".sug-item");
   if (!it) return;
   ev.preventDefault();
   selectSuggest(Number(it.dataset.i));
@@ -165,7 +165,7 @@ $("btnRefresh").addEventListener("click", async () => {
 
 /* 草稿栏 / 牌组面板（innerHTML 重渲染 → 事件委托） */
 document.addEventListener("click", ev => {
-  const b = ev.target.closest("button");
+  const b = (ev.target as HTMLElement).closest("button");
   if (!b) return;
   if (b.id === "draftManage") { $("draftPanel").classList.toggle("show"); renderDraftPanel(); }
   else if (b.id === "draftClose") $("draftPanel").classList.remove("show");
@@ -212,7 +212,7 @@ document.addEventListener("keydown", ev => {
     return;
   }
   if (overlayOpen()) return;
-  const tag = (ev.target.tagName || "").toLowerCase();
+  const tag = ((ev.target as HTMLElement).tagName || "").toLowerCase();
   if (tag === "input" || tag === "textarea") return;
   if (ev.key === "1") switchView("grid");
   if (ev.key === "2") switchView("list");

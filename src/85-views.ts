@@ -60,15 +60,15 @@ function renderSummary() {
 }
 /* 费用曲线整体可点：键盘 Enter / 空格与点击一致 */
 $("summary").addEventListener("keydown", ev => {
-  if ((ev.key === "Enter" || ev.key === " ") && ev.target.closest("[data-odds]")) {
+  if ((ev.key === "Enter" || ev.key === " ") && (ev.target as HTMLElement).closest("[data-odds]")) {
     ev.preventDefault();
     showOdds();
   }
 });
 /* 点击概览中的限制统计 → 跳到列表视图并过滤 */
 $("summary").addEventListener("click", ev => {
-  if (ev.target.closest("[data-odds]")) { showOdds(); return; }
-  const a = ev.target.closest("[data-filter]");
+  if ((ev.target as HTMLElement).closest("[data-odds]")) { showOdds(); return; }
+  const a = (ev.target as HTMLElement).closest("[data-filter]");
   if (!a) return;
   listFilter = a.dataset.filter;
   document.querySelector('.tab[data-view="list"]').click();
@@ -161,8 +161,8 @@ function renderList() {
       <span class="hint">点击行看详情 · 点表头排序 · 快捷键 1/2 切视图 · / 聚焦筛选 · Ctrl+P 打印</span></div>` +
     (sections || `<div style="color:var(--dim);padding:30px;text-align:center">无匹配卡牌</div>`);
   $("listSearch").addEventListener("input", e => {
-    listFilter = e.target.value;
-    const p = e.target.selectionStart;
+    listFilter = (e.target as HTMLElement).value;
+    const p = (e.target as HTMLElement).selectionStart;
     renderList();
     const n = $("listSearch");
     n.focus(); n.setSelectionRange(p, p);
@@ -813,45 +813,45 @@ function toggleNbGroup(kind) {
 }
 /* 筛选交互：chip 再点一次 = 取消；select/dir/reset 即时重渲染并同步 hash */
 $("view-browse").addEventListener("click", ev => {
-  const add = ev.target.closest("[data-add]");
+  const add = (ev.target as HTMLElement).closest("[data-add]");
   if (add) { ev.stopPropagation(); draftAdd(Number(add.dataset.add)); return; }
-  const nb = ev.target.closest("[data-nb]");
+  const nb = (ev.target as HTMLElement).closest("[data-nb]");
   if (nb) { ev.stopPropagation(); toggleNbGroup(nb.dataset.nb); return; }
-  if (ev.target.closest("[data-btoggle]")) {
+  if ((ev.target as HTMLElement).closest("[data-btoggle]")) {
     browseExpanded = !browseExpanded;
     try { localStorage.setItem(BROWSE_EXP_KEY, browseExpanded ? "1" : "0"); } catch (e) {}
     renderBrowse(); return;
   }
   /* 全局开关：不可构筑项平铺 / 收进分组 */
-  if (ev.target.closest("[data-bub]")) {
+  if ((ev.target as HTMLElement).closest("[data-bub]")) {
     setShowUnbuildable(!showUnbuildable);
     renderBrowse();
     syncBrowseHash();
     return;
   }
-  const chip = ev.target.closest("button[data-bg]");
+  const chip = (ev.target as HTMLElement).closest("button[data-bg]");
   if (chip) {
     const g = chip.dataset.bg;
     browseState[g] = browseState[g] === chip.dataset.bv ? "" : chip.dataset.bv;
     renderBrowse(); syncBrowseHash(); return;
   }
-  if (ev.target.closest("[data-breset]")) {
+  if ((ev.target as HTMLElement).closest("[data-breset]")) {
     Object.assign(browseState, { type: "", el: "", cost: "", energy: "", tag: "", ver: "", sort: "name", dir: 1 });
     renderBrowse(); syncBrowseHash(); return;
   }
-  if (ev.target.closest("[data-sclear]")) { clearBrowseQuery(); return; }
-  if (ev.target.closest("[data-bdir]")) { browseState.dir = -browseState.dir; renderBrowse(); syncBrowseHash(); return; }
+  if ((ev.target as HTMLElement).closest("[data-sclear]")) { clearBrowseQuery(); return; }
+  if ((ev.target as HTMLElement).closest("[data-bdir]")) { browseState.dir = -browseState.dir; renderBrowse(); syncBrowseHash(); return; }
   /* 检索结果区：范围开关 / 分类 chips / 热门词 / 概念 / 详情 */
-  const scopeBtn = ev.target.closest("[data-scope]");
+  const scopeBtn = (ev.target as HTMLElement).closest("[data-scope]");
   if (scopeBtn) { toggleSearchScope(scopeBtn.dataset.scope); return; }
-  if (ev.target.closest("[data-scope-clear]")) { clearBrowseFilters(); return; }
-  const q = ev.target.closest("[data-q]");
+  if ((ev.target as HTMLElement).closest("[data-scope-clear]")) { clearBrowseFilters(); return; }
+  const q = (ev.target as HTMLElement).closest("[data-q]");
   if (q) { applyBrowseQuery(q.dataset.q); return; }
-  const f = ev.target.closest("[data-f]");
+  const f = (ev.target as HTMLElement).closest("[data-f]");
   if (f) { searchState.filter = f.dataset.f; renderBrowseResults(); return; }
-  const term = ev.target.closest("[data-term]");
+  const term = (ev.target as HTMLElement).closest("[data-term]");
   if (term) { openTermName(term.dataset.term); return; }
-  const tile = ev.target.closest("[data-id]");
+  const tile = (ev.target as HTMLElement).closest("[data-id]");
   if (tile) showDetail(Number(tile.dataset.id));
 });
 function applyBrowseQuery(q) {
@@ -871,9 +871,9 @@ function clearBrowseQuery() {
   if (input) input.focus();
 }
 $("view-browse").addEventListener("change", ev => {
-  const sel = ev.target.closest("[data-bg]");
+  const sel = (ev.target as HTMLElement).closest("[data-bg]");
   if (sel && sel.tagName === "SELECT") { browseState[sel.dataset.bg] = sel.value; renderBrowse(); syncBrowseHash(); return; }
-  const s = ev.target.closest("[data-bs]");
+  const s = (ev.target as HTMLElement).closest("[data-bs]");
   if (s) { browseState.sort = s.value; renderBrowse(); syncBrowseHash(); }
 });
 

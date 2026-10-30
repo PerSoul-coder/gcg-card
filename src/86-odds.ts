@@ -154,7 +154,7 @@ function showOdds() {
 
 /* ---------- 交互 ---------- */
 document.addEventListener("change", ev => {
-  const sel = ev.target.closest ? ev.target.closest("[data-oddspick]") : null;
+  const sel = (ev.target as HTMLElement).closest ? (ev.target as HTMLElement).closest("[data-oddspick]") : null;
   if (!sel) return;
   const top = topView();
   if (!top || top.kind !== "odds") return;

@@ -433,7 +433,7 @@ function showDeckDiff() {
 /* ---------- 交互 ---------- */
 /* 卡块上的「⇄」用捕获阶段拦截：避免继续触发卡片点击（打开详情） */
 document.addEventListener("click", ev => {
-  const b = ev.target.closest ? ev.target.closest("[data-cmp]") : null;
+  const b = (ev.target as HTMLElement).closest ? (ev.target as HTMLElement).closest("[data-cmp]") : null;
   if (!b) return;
   ev.preventDefault();
   ev.stopPropagation();
@@ -444,7 +444,7 @@ document.addEventListener("click", ev => {
 }, true);
 
 document.addEventListener("click", ev => {
-  const rm = ev.target.closest ? ev.target.closest("[data-cmprm]") : null;
+  const rm = (ev.target as HTMLElement).closest ? (ev.target as HTMLElement).closest("[data-cmprm]") : null;
   if (rm) {
     const id = Number(rm.dataset.cmprm);
     toggleCompare(id);
@@ -456,9 +456,9 @@ document.addEventListener("click", ev => {
     }
     return;
   }
-  if (ev.target.closest("[data-cmpclear]")) { compareState.ids = []; syncCompareUI(); return; }
-  if (ev.target.closest("[data-cmpopen]")) { showCompare(); return; }
-  if (ev.target.closest("[data-cdiff]")) {
+  if ((ev.target as HTMLElement).closest("[data-cmpclear]")) { compareState.ids = []; syncCompareUI(); return; }
+  if ((ev.target as HTMLElement).closest("[data-cmpopen]")) { showCompare(); return; }
+  if ((ev.target as HTMLElement).closest("[data-cdiff]")) {
     const top = topView();
     if (top && top.kind === "compare") {
       top.onlyDiff = !top.onlyDiff;
@@ -467,33 +467,33 @@ document.addEventListener("click", ev => {
     }
     return;
   }
-  if (ev.target.closest("[data-csimtoggle]")) {
+  if ((ev.target as HTMLElement).closest("[data-csimtoggle]")) {
     const top = topView();
     if (top && top.kind === "compare") { top.showSim = !top.showSim; renderOverlay(); }
     return;
   }
-  const swap = ev.target.closest ? ev.target.closest("[data-csimswap]") : null;
+  const swap = (ev.target as HTMLElement).closest ? (ev.target as HTMLElement).closest("[data-csimswap]") : null;
   if (swap) {
     const toId = Number(swap.dataset.simto);
     if (swapCompare(swap.dataset.csimswap, toId)) toast(`已换入「${compareName(toId)}」`);
     else toast("该卡已在对比中", true);
     return;
   }
-  if (ev.target.closest("[data-dd-run]")) {
+  if ((ev.target as HTMLElement).closest("[data-dd-run]")) {
     const top = topView();
     if (!top || top.kind !== "deckdiff") return;
     runDeckDiff(top);
     renderOverlay();
     return;
   }
-  if (ev.target.closest("[data-dd-swap]")) {
+  if ((ev.target as HTMLElement).closest("[data-dd-swap]")) {
     const top = topView();
     if (!top || top.kind !== "deckdiff") return;
     swapDeckDiff(top);
     renderOverlay();
     return;
   }
-  if (ev.target.closest("[data-dd-clear]")) {
+  if ((ev.target as HTMLElement).closest("[data-dd-clear]")) {
     const top = topView();
     if (!top || top.kind !== "deckdiff") return;
     clearDeckDiff(top);
@@ -501,7 +501,7 @@ document.addEventListener("click", ev => {
     focusDeckDiffInput();
     return;
   }
-  const use = ev.target.closest ? ev.target.closest("[data-dd-use]") : null;
+  const use = (ev.target as HTMLElement).closest ? (ev.target as HTMLElement).closest("[data-dd-use]") : null;
   if (use) {
     const top = topView();
     if (!top || top.kind !== "deckdiff") return;
@@ -513,7 +513,7 @@ document.addEventListener("click", ev => {
     renderOverlay();
     return;
   }
-  if (ev.target.closest("[data-dd-all]")) {
+  if ((ev.target as HTMLElement).closest("[data-dd-all]")) {
     const top = topView();
     if (top && top.kind === "deckdiff") {
       top.showSame = !top.showSame;
@@ -526,7 +526,7 @@ document.addEventListener("click", ev => {
 /* 输入框只改状态、不重渲染，避免每敲一个字符就丢焦点。
    已有结果时给出「已修改」提示，防止看着旧结果以为是最新的。 */
 document.addEventListener("input", ev => {
-  const inp = ev.target.closest ? ev.target.closest("[data-dd]") : null;
+  const inp = (ev.target as HTMLElement).closest ? (ev.target as HTMLElement).closest("[data-dd]") : null;
   if (!inp) return;
   const top = topView();
   if (!top || top.kind !== "deckdiff") return;
@@ -540,7 +540,7 @@ document.addEventListener("input", ev => {
 /* Enter 直接对比：长分享码粘贴后不用再挪去点按钮 */
 document.addEventListener("keydown", ev => {
   if (ev.key !== "Enter") return;
-  const inp = ev.target.closest ? ev.target.closest("[data-dd]") : null;
+  const inp = (ev.target as HTMLElement).closest ? (ev.target as HTMLElement).closest("[data-dd]") : null;
   if (!inp) return;
   const top = topView();
   if (!top || top.kind !== "deckdiff") return;

@@ -139,7 +139,7 @@ const openMenu = btn => {
 $("btnExport").addEventListener("click", ev => { ev.stopPropagation(); openMenu("btnExport"); });
 $("btnMore").addEventListener("click", ev => { ev.stopPropagation(); openMenu("btnMore"); });
 document.addEventListener("click", ev => {
-  if (!ev.target.closest(".expwrap")) { $("exportMenu").classList.remove("show"); $("moreMenu").classList.remove("show"); }
+  if (!(ev.target as HTMLElement).closest(".expwrap")) { $("exportMenu").classList.remove("show"); $("moreMenu").classList.remove("show"); }
 });
 /* 更多菜单动作 */
 $("btnDataInfo").addEventListener("click", () => {
@@ -153,7 +153,7 @@ $("btnDeckDiff").addEventListener("click", () => { $("moreMenu").classList.remov
 $("btnOdds").addEventListener("click", () => { $("moreMenu").classList.remove("show"); showOdds(); });
 $("btnHelp").addEventListener("click", () => { $("moreMenu").classList.remove("show"); showHelp(); });
 $("exportMenu").addEventListener("click", ev => {
-  const b = ev.target.closest("[data-exp]");
+  const b = (ev.target as HTMLElement).closest("[data-exp]");
   if (!b) return;
   $("exportMenu").classList.remove("show");
   const act = b.dataset.exp;

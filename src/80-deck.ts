@@ -293,7 +293,7 @@ function commitDeckRename(inp) {
   saveDecks(); renderDraft(); renderDraftPanel();
 }
 $("draftPanel").addEventListener("keydown", ev => {
-  const inp = ev.target.closest("[data-dkren-input]");
+  const inp = (ev.target as HTMLElement).closest("[data-dkren-input]");
   if (!inp) return;
   if (ev.key === "Enter") { commitDeckRename(inp); inp.blur(); }
   else if (ev.key === "Escape") {
@@ -302,13 +302,13 @@ $("draftPanel").addEventListener("keydown", ev => {
   }
 });
 $("draftPanel").addEventListener("focusout", ev => {
-  const inp = ev.target.closest("[data-dkren-input]");
+  const inp = (ev.target as HTMLElement).closest("[data-dkren-input]");
   if (inp) commitDeckRename(inp);
 });
 /* 点击牌组项切换活动牌组（点在按钮/输入框上不切换） */
 document.addEventListener("click", ev => {
-  const item = ev.target.closest("[data-deck]");
-  if (!item || ev.target.closest("button") || ev.target.closest("input")) return;
+  const item = (ev.target as HTMLElement).closest("[data-deck]");
+  if (!item || (ev.target as HTMLElement).closest("button") || (ev.target as HTMLElement).closest("input")) return;
   activeDeckId = Number(item.dataset.deck);
   syncFromActive(); renderDraft(); renderDraftPanel();
 });
