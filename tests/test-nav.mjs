@@ -58,6 +58,9 @@ const conceptsExtra = JSON.parse(
     .replace(/^export const CONCEPTS_EXTRA = /, "").replace(/;\s*$/, "")
 );
 
+/* 生产代码不向 window 挂函数：全局暴露只应发生在测试进程里（test-api） */
+assert(!/^window.[A-Za-z_$]+s*=/m.test(readAppSource()), "生产代码不向 window 挂函数");
+
 const harness = `
 ;(async () => {
   await decodeAndRender(SAMPLE, { noHash: true });
@@ -68,6 +71,13 @@ const harness = `
   assert(deckIds.length === 22, "牌组顺序索引：" + deckIds.length + " 项（3 角色 + 19 行动牌）");
   overlayClose();
   showDetail(deckIds[3]);
+  /* 详情页的操作按钮：模板只输出 data-act，由 #detail 上的委托分发。
+     以前是 onclick="fn()" 配 window.fn——模板字符串能调到任何东西，
+     等于把模块边界重新打开，重构时也没法靠类型发现遗漏。 */
+  const detailHtml = document.getElementById("detail").innerHTML;
+  assert(/data-act="close"/.test(detailHtml), "详情页关闭按钮带 data-act（不依赖全局函数）");
+  assert(/data-act="step"/.test(detailHtml), "详情页翻页按钮带 data-act");
+  assert(!/onclick=/.test(detailHtml), "详情页不含内联 onclick");
   const t1 = topView();
   assert(t1.kind === "detail" && t1.ids.length === deckIds.length && t1.idx === 3,
     "卡面视图打开详情：翻页上下文 = 牌组顺序（位置 4/" + deckIds.length + "）");

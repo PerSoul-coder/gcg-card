@@ -1,5 +1,6 @@
 /* src/88-compare.js —— 由 scripts/_convert.mjs 从旧脚本转换（迁移中间态）。 */
 import { cardElement, charElement, pool } from "./45-pool";
+import type { DeckDiffEntry, OverlayEntry, PoolEntry } from "./types";
 import { $ } from "./core/dom";
 import { costText, deckReqsOf, diceCost, energyCost, restrictionsOf } from "./30-deps";
 import { linkify } from "./40-concepts";
@@ -8,6 +9,7 @@ import { draftEncode } from "./80-deck";
 import { parseShareIds } from "./60-parse";
 import { dataReady, ensureData } from "./20-data";
 import { state } from "./data/state";
+import type { RawEntity } from "./data/state";
 import { ELE_ZH, tagZh, eleIcon } from "./core/resources";
 import { esc, setStatus, toast } from "./core/dom";
 import { TYPE_ZH, typeZhOf, cardArtHtml } from "./data/model";
@@ -20,9 +22,9 @@ import { navBar, tip } from "./90-detail";
    · 选择不写入 localStorage，刷新即清空，避免与牌组数据混淆；
    · 对比面板压入 state.overlayStack，可继续点卡名查看详情，返回时回到对比。 */
 const COMPARE_MAX = 4;
-const compareState = { ids: [] };
+const compareState: { ids: number[] } = { ids: [] };
 /* 面板偏好只存内存：仅看差异记住上次选择，相似卡区块每次重新展开 */
-const comparePrefs = { onlyDiff: false };
+const comparePrefs: { onlyDiff: boolean } = { onlyDiff: false };
 
 function compareName(id) {
   return state.charById.get(id)?.name || state.entById.get(id)?.name || `#${id}`;
@@ -75,9 +77,12 @@ function fieldVal(html, text) {
   return { html: html || "—", text: String(text ?? "").replace(/\s+/g, "") };
 }
 function compareFields(id) {
-  const c = state.charById.get(id), e = state.entById.get(id);
-  if (!c && !e) return null;
-  const isChar = !!c;
+  const cf = state.charById.get(id), ef = state.entById.get(id);
+  if (!cf && !ef) return null;
+  /* 到这里至少有一个存在，isChar 决定用哪个：分支内取到的那个一定有值，
+     另一个分支不会读到它。断言收在这里，省得下游几十处都写 ! */
+  const isChar = !!cf;
+  const c = cf as RawEntity, e = ef as RawEntity;
   const raw = c || e;
   const el = isChar ? charElement(c) : cardElement(e);
   const tags = (raw.tags || []).filter(t => !t.startsWith("GCG_TAG_ELEMENT_")).map(tagZh).filter(Boolean);
@@ -129,13 +134,13 @@ function compareRows(ids) { return compareData(ids).rows; }
 /* ---------- 相似卡替换建议 ----------
    候选来自全量卡池（可构筑卡），行动牌要求同类型，再按同费用 / 同角色 /
    标签重合加权；角色牌按同元素与标签重合。只给建议，不改变牌组。 */
-function simMeta(x) {
+function simMeta(x: PoolEntry): string {
   if (x.kind === "char") return `角色 · 生命 ${x.hp} · 充能 ${x.energy}`;
   return `${x.type}${costText(x.playCost) ? " · " + costText(x.playCost) : " · 无费用"}`;
 }
-function simScore(base, cand) {
+function simScore(base: PoolEntry, cand: PoolEntry) {
   let score = 0;
-  const why = [];
+  const why: string[] = [];
   if (base.kind === "card") {
     if (base.typeRaw === cand.typeRaw) { score += 40; why.push("同类型"); }
     if (base.dice === cand.dice) { score += 22; why.push("同费用"); }
@@ -151,11 +156,11 @@ function simScore(base, cand) {
   if (!why.length) why.push(base.kind === "card" ? "同类型" : "同类别");
   return { score, why };
 }
-function similarCards(id, limit = 3) {
+function similarCards(id: number, limit = 3) {
   id = Number(id);
   const base = pool.find(x => x.id === id);
   if (!base) return [];
-  const out = [];
+  const out: Array<{ id: number; name: string; score: number; why: string; meta: string }> = [];
   for (const x of pool) {
     if (x.id === id || x.share == null || x.kind !== base.kind) continue;
     if (base.kind === "card" && x.typeRaw !== base.typeRaw) continue;
@@ -239,7 +244,7 @@ function renderCompareView(v) {
 function showCompare() {
   const ids = compareState.ids.filter(id => state.charById.has(id) || state.entById.has(id));
   if (ids.length < 2) { toast("至少选择 2 张卡牌才能对比", true); return; }
-  const view = { kind: "compare", ids: [...ids], onlyDiff: comparePrefs.onlyDiff, showSim: false };
+  const view: OverlayEntry = { kind: "compare", ids: [...ids], onlyDiff: comparePrefs.onlyDiff, showSim: false };
   const top = topView();
   if (overlayOpen() && top) {
     /* 从详情打开时压栈：返回键回到那张卡，而不是把详情上下文丢掉 */
@@ -253,7 +258,7 @@ function showCompare() {
 function deckCodeNow() {
   if (state.current && state.current!.code) return state.current!.code;
   try { return draftEncode(); }
-  catch (e) { toast(e.message, true); return ""; }
+  catch (e) { toast((e as Error).message, true); return ""; }
 }
 function deckDist(d) {
   const cost = Array(6).fill(0), type = {};
@@ -279,7 +284,7 @@ function diffDecks(codeA, codeB) {
   const rows = [...ids].map(id => {
     const e = state.entById.get(id);
     const a = A.countMap.get(id) || 0, b = B.countMap.get(id) || 0;
-    return { id, name: e?.name || `#${id}`, type: TYPE_ZH[e?.type] || e?.type || "", a, b, delta: b - a };
+    return { id, name: e?.name || `#${id}`, type: TYPE_ZH[e?.type || ""] || e?.type || "", a, b, delta: b - a };
   }).sort((x, y) => (x.type.localeCompare(y.type, "zh") || x.name.localeCompare(y.name, "zh")));
   return {
     A, B, rows,
@@ -343,7 +348,7 @@ function renderDeckDiffRes(res, showSame) {
 }
 /* 牌组对比的输入与结果只在内存保留：关掉再打开继续上一次的对比，
    避免每次都要重新粘贴两串长分享码。 */
-const deckDiffState = { a: "", b: "", res: null, err: "", showSame: false, dirty: false };
+const deckDiffState: DeckDiffEntry = { kind: "deckdiff", a: "", b: "", res: null, err: "", showSame: false, dirty: false };
 function saveDeckDiff(v) {
   if (!v || v.kind !== "deckdiff") return;
   deckDiffState.a = v.a || "";
@@ -362,7 +367,7 @@ function runDeckDiff(v) {
     v.err = "";
   } catch (e) {
     v.res = null;
-    v.err = e.message;
+    v.err = (e as Error).message;
   }
   saveDeckDiff(v);
   return v;
@@ -416,16 +421,16 @@ function focusDeckDiffInput() {
   /* A 已由当前牌组预填时，直接把光标放到 B，少一次点击 */
   const which = !top.a ? "a" : (!top.b ? "b" : null);
   if (!which) return;
-  const el = document.querySelector(`[data-dd="${which}"]`);
+  const el = document.querySelector(`[data-dd="${which}"]`) as HTMLElement | null;
   if (el && typeof el.focus === "function") el.focus();
 }
 function showDeckDiff() {
   if (!dataReady) {
-    ensureData().then(showDeckDiff).catch(e => setStatus("数据加载失败：" + e.message, "err"));
+    ensureData().then(showDeckDiff).catch((e: Error) => setStatus("数据加载失败：" + e.message, "err"));
     return;
   }
   if (!deckDiffState.a && state.current?.code) deckDiffState.a = state.current!.code;
-  state.overlayStack = [{ kind: "deckdiff", ...deckDiffState }];
+  state.overlayStack = [{ ...deckDiffState }];
   renderOverlay();
   focusDeckDiffInput();
 }
@@ -507,7 +512,7 @@ document.addEventListener("click", ev => {
     if (!top || top.kind !== "deckdiff") return;
     const code = deckCodeNow();
     if (!code) return;
-    top[use.dataset.ddUse] = code;
+    top[use.dataset.ddUse === "a" ? "a" : "b"] = code;
     top.dirty = !!top.res;
     saveDeckDiff(top);
     renderOverlay();
@@ -530,7 +535,7 @@ document.addEventListener("input", ev => {
   if (!inp) return;
   const top = topView();
   if (!top || top.kind !== "deckdiff") return;
-  top[inp.dataset.dd] = inp.value;
+  top[(inp as HTMLInputElement).dataset.dd === "a" ? "a" : "b"] = (inp as HTMLInputElement).value;
   top.dirty = !!top.res;
   saveDeckDiff(top);
   const hint = document.querySelector ? document.querySelector("[data-dd-dirty]") : null;

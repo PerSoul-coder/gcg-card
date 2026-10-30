@@ -59,7 +59,7 @@ async function fetchCategory(cat, { forceNetwork = false } = {}) {
     const builtin = BUILTIN_DATA && BUILTIN_DATA[cat];
     if (Array.isArray(builtin) && builtin.length) { dataOrigins.add("builtin"); return builtin; }
   }
-  let lastErr = null;
+  let lastErr: unknown = null;
   for (let attempt = 0; attempt < 2; attempt++) {          /* 网络失败重试一次 */
     try {
       const j = await fetchJson(`${API}/data/latest/${LANG}/${cat}`);
@@ -70,14 +70,14 @@ async function fetchCategory(cat, { forceNetwork = false } = {}) {
       return data;
     } catch (e) { lastErr = e; }
   }
-  throw new Error(`数据获取失败 ${cat}: ${lastErr && lastErr.message}`);
+  throw new Error(`数据获取失败 ${cat}: ${lastErr instanceof Error ? lastErr.message : String(lastErr ?? "")}`);
 }
 
 /* 拉取层入口：保证 state.CHAR/state.ENT/state.KW 与派生索引就绪。
    单 flight：并发调用（解析/切视图/深链同时触发）只发一次请求，失败不缓存、
    下次调用可重试；「刷新数据」通过重置 dataFlight 强制重新拉取。 */
 let dataReady = false;
-let dataFlight = null;
+let dataFlight: Promise<void> | null = null;
 
 /** 重置加载状态（供「刷新数据」使用）。
  *  以前由入口直接给这两个模块变量赋值——ESM 下这种跨模块写入不再允许，
@@ -86,7 +86,7 @@ export function resetDataState(): void {
   dataReady = false;
   dataFlight = null;
 }
-function ensureData(forceNetwork = false) {
+function ensureData(forceNetwork = false): Promise<void> {
   if (dataReady && !forceNetwork) return Promise.resolve();
   if (!dataFlight) {
     dataFlight = loadData(forceNetwork).finally(() => { dataFlight = null; });

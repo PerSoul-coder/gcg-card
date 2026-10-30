@@ -26,7 +26,7 @@ import { dataReady, ensureData } from "./20-data";
    同一分数内：角色 > 卡牌 > 概念；可构筑版本 > 历史变体；短名优先。
    范围开关（标题/拼音/描述）只决定哪些字段参与命中，不改变上述层级分数；
    检索语料始终是"当前牌库"（受牌库筛选约束），概念仅在筛选时按引用关系收敛。 */
-const searchState = { q: "", results: [], filter: "", corpusKey: "" };
+const searchState: { q: string; results: SearchHit[]; filter: string; corpusKey: string } = { q: "", results: [], filter: "", corpusKey: "" };
 /* 搜索范围：只决定关键词去哪些字段里找，与牌库筛选（缩小卡池）是两套独立状态 */
 function loadSearchScope() {
   try {

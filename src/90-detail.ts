@@ -10,6 +10,8 @@ import { cardElement, charElement } from "./45-pool";
 import { R_STYLE, deckReqsOf, reqElement, restrictionsOf } from "./30-deps";
 import { termEntries } from "./40-concepts";
 import { state } from "./data/state";
+import type { OverlayEntry } from "./types";
+import type { RawEntity } from "./data/state";
 import { ELE_ZH, ELE_COLOR, tagZh, eleIcon, enPips } from "./core/resources";
 import { esc, toast, copyText } from "./core/dom";
 import { registerLayer, syncScrollLock } from "./core/layers";
@@ -53,7 +55,7 @@ function backlinkHtml(name: string, selfId: number | null = null) {
   return `<div class="drel"><b>被引用</b><span class="blchips">${chips}${more}</span></div>`;
 }
 /* 角色天赋牌 chips（卡牌详情中排除自身，避免自指） */
-function charTalentChips(charId, excludeId) {
+function charTalentChips(charId: number, excludeId: number | null = null): string {
   const list = state.ENT.filter(x => x.relatedCharacterId === charId && (x.tags || []).includes("GCG_TAG_TALENT"));
   if (!list.length) return "";
   return `<div class="drel"><b>天赋牌</b><span class="blchips">` + list.map(x =>
@@ -64,17 +66,17 @@ function draftHas(id) { return state.charById.has(id) ? draft.chars.includes(id)
    同名卡可以放 2 张（秘传 1 张，见 80-deck 的 copyLimit），所以这里不能做成
    「加入 / 移出」二选一——那只允许加 1 张。已加入时按钮写「再加一张 ×1/2」，
    加满才禁用；移出另作次级入口，一次清掉这张卡的全部份数。 */
-function deckActionHtml(id, joinable, c) {
+function deckActionHtml(id: number, joinable: boolean, c: RawEntity | null): string {
   if (!joinable) return "";
   if (c) {
     const has = draft.chars.includes(id);
-    return `<button class="jbtn${has ? " in" : ""}" title="${has ? "点击移出当前牌组" : "加入当前牌组（共 3 个角色槽）"}" onclick="draftToggleModal()">${has ? "移出牌组" : "加入牌组"}</button>`;
+    return `<button class="jbtn${has ? " in" : ""}" title="${has ? "点击移出当前牌组" : "加入当前牌组（共 3 个角色槽）"}" data-act="draftToggle">${has ? "移出牌组" : "加入牌组"}</button>`;
   }
   const n = draft.cards.get(id) || 0, max = copyLimit(id);
   const add = n < max
-    ? `<button class="jbtn${n ? " in" : ""}" title="加入当前牌组（同名上限 ${max} 张）" onclick="draftToggleModal()">${n ? `＋ 再加一张 ${n}/${max}` : "＋ 加入牌组"}</button>`
+    ? `<button class="jbtn${n ? " in" : ""}" title="加入当前牌组（同名上限 ${max} 张）" data-act="draftToggle">${n ? `＋ 再加一张 ${n}/${max}` : "＋ 加入牌组"}</button>`
     : `<button class="jbtn in" disabled title="同名卡上限 ${max} 张，已加满">✓ 已满 ${n}/${max}</button>`;
-  const out = n ? `<button class="lbtn" title="从当前牌组移出（共 ${n} 张）" onclick="draftRemoveFromDetail()">移出</button>` : "";
+  const out = n ? `<button class="lbtn" title="从当前牌组移出（共 ${n} 张）" data-act="draftRemove">移出</button>` : "";
   return add + out;
 }
 /* ---------- 弹层导航模型 ----------
@@ -109,7 +111,7 @@ function pagerContextFor(id) {
   }
   return state.deckOrder.includes(id) ? state.deckOrder : [id];
 }
-function detailView(id, ids) {
+function detailView(id: number, ids?: number[]): OverlayEntry {
   const list = ids && ids.length ? ids.slice() : [id];
   const i = list.indexOf(id);
   return { kind: "detail", id, ids: list, idx: i < 0 ? 0 : i };
@@ -145,7 +147,7 @@ function renderOverlay(resetScroll = false) {
 }
 /* 打开详情：弹层已开（反链 / 关联 / 术语身份跳转）→ 压栈，返回可回上一张；
    未开 → 重置栈。同 id 连续点击不重复压栈。 */
-function showDetail(id, ids) {
+function showDetail(id: number, ids?: number[]) {
   id = Number(id);
   const top = topView();
   if (overlayOpen() && top && top.kind === "detail" && top.id === id) return;
@@ -165,14 +167,11 @@ registerLayer({ id: "overlay", isOpen: overlayOpen, close: overlayBack, order: 5
 function modalStep(d) {
   const top = topView();
   if (!top || top.kind !== "detail") return;
-  const n = top.idx + d;
-  if (n < 0 || n >= top.ids.length) return;
-  top.id = top.ids[n]; top.idx = n;
+  const n = (top.idx || 0) + d;
+  if (n < 0 || n >= top.ids!.length) return;
+  top.id = top.ids![n]; top.idx = n;
   renderOverlay(true);
 }
-window.overlayBack = overlayBack;
-window.overlayClose = overlayClose;
-window.modalStep = modalStep;
 /* 视图标签（返回钮文字）：概念名 / 卡牌名 */
 function viewLabel(v) {
   if (!v) return "";
@@ -188,17 +187,17 @@ function viewLabel(v) {
 function navBar(extra = "") {
   const prev = state.overlayStack.length > 1 ? state.overlayStack[state.overlayStack.length - 2] : null;
   const back = prev
-    ? `<button class="lbtn tm-back" title="返回「${esc(viewLabel(prev))}」" onclick="overlayBack()">‹ ${esc(viewLabel(prev))}</button>` : "";
+    ? `<button class="lbtn tm-back" title="返回「${esc(viewLabel(prev))}」" data-act="back">‹ ${esc(viewLabel(prev))}</button>` : "";
   return `<div class="navbtns">${back}${extra}
-      <button title="关闭 (Esc)" onclick="overlayClose()">✕</button></div>`;
+      <button title="关闭 (Esc)" data-act="close">✕</button></div>`;
 }
 /* 翻页控件：同级列表不足 2 张时不出现（避免"永远禁用"的误导），多张时显示位置「3/22」 */
-function pagerHtml(v) {
+function pagerHtml(v: OverlayEntry): string {
   if (v.ids.length < 2) return "";
   return `<span class="pgbar" title="同一列表内翻页（← →）">
-      <button title="上一张 (←)" ${v.idx <= 0 ? "disabled" : ""} onclick="modalStep(-1)">‹</button>
+      <button title="上一张 (←)" ${v.idx <= 0 ? "disabled" : ""} data-act="step" data-d="-1">‹</button>
       <span class="pgnum">${v.idx + 1}/${v.ids.length}</span>
-      <button title="下一张 (→)" ${v.idx >= v.ids.length - 1 ? "disabled" : ""} onclick="modalStep(1)">›</button>
+      <button title="下一张 (→)" ${v.idx >= v.ids.length - 1 ? "disabled" : ""} data-act="step" data-d="1">›</button>
     </span>`;
 }
 function renderDetailView(v) {
@@ -216,11 +215,11 @@ function renderDetailView(v) {
   /* 已选 2 张及以上时，详情里就能直接打开对比面板；返回仍回到这张卡 */
   const cmpOpenBtn = compareState.ids.length >= 2
     ? `<button class="lbtn" data-cmpopen="1" title="打开卡牌对比面板">⇄ ${compareState.ids.length}</button>` : "";
-  const nav = navBar(`${pagerHtml(v)}${joinBtn}${cmpBtn}${cmpOpenBtn}<button class="lbtn" title="复制该卡链接" onclick="copyCardLink()">复制链接</button>`);
+  const nav = navBar(`${pagerHtml(v)}${joinBtn}${cmpBtn}${cmpOpenBtn}<button class="lbtn" title="复制该卡链接" data-act="copyLink">复制链接</button>`);
   let html;
   if (c) {
     const el = charElement(c);
-    const tags = c.tags.filter(t => !t.startsWith("GCG_TAG_ELEMENT")).map(tagZh).filter(Boolean);
+    const tags = (c.tags || []).filter(t => !t.startsWith("GCG_TAG_ELEMENT")).map(tagZh).filter(Boolean);
     html = `${nav}<div class="dimg">${cardArtHtml(id, { kind: "detail", alt: c.name })}</div>
       <div class="dinfo"><h2>${esc(c.name)}</h2>
       <div class="meta">${el ? `<span class="tagpill">${eleIcon(el)}${esc(ELE_ZH[el] || el)}</span>` : ""}${tags.map(t => `<span class="tagpill">${esc(t)}</span>`).join("")}<span class="tagpill">生命 ${c.hp}</span><span class="tagpill">充能上限 ${enPips(c.maxEnergy)}</span><span class="tagpill">${esc(c.sinceVersion || "")}</span></div>
@@ -228,7 +227,7 @@ function renderDetailView(v) {
       ${skillsHtml(id)}
       ${charTalentChips(id)}${backlinkHtml(c.name, id)}</div>`;
   } else if (e) {
-    const tags = e.tags.map(tagZh).filter(Boolean);
+    const tags = (e.tags || []).map(tagZh).filter(Boolean);
     const dreqs = deckReqsOf(e);
     const eEl = cardElement(e);
     const rs = restrictionsOf(e);
@@ -259,13 +258,13 @@ function renderDetailView(v) {
   } else html = nav;
   $("detail").innerHTML = html;
 }
-window.copyCardLink = () => {
+function copyCardLink(): void {
   const top = topView();
   if (!top || top.kind !== "detail") return;
   copyText(location.href.split("#")[0] + "#card=" + top.id)
     .then(() => toast("链接已复制（打开即显示该卡详情）"), () => toast("复制失败", true));
 };
-window.draftToggleModal = () => {
+function draftToggleModal(): void {
   const top = topView();
   if (!top || top.kind !== "detail") return;
   const id = top.id;
@@ -279,12 +278,27 @@ window.draftToggleModal = () => {
   renderOverlay();
 };
 /* 详情里的次级「移出」：把这张牌的全部份数从当前牌组去掉 */
-window.draftRemoveFromDetail = () => {
+function draftRemoveFromDetail(): void {
   const top = topView();
   if (!top || top.kind !== "detail") return;
   if (state.charById.has(top.id)) draftRemoveChar(top.id); else draftRemoveCard(top.id);
   renderOverlay();
 };
+/* 弹层内的操作按钮：模板只输出 data-act，具体调用在这里分发。
+   以前是 onclick="fn()" 配 window.fn——模板字符串能调到任何东西，
+   等于把模块边界又打开了一次，重构时也没法靠类型发现遗漏。 */
+$("detail").addEventListener("click", ev => {
+  const b = (ev.target as HTMLElement).closest("[data-act]") as HTMLElement | null;
+  if (!b) return;
+  switch (b.dataset.act) {
+    case "back": overlayBack(); break;
+    case "close": overlayClose(); break;
+    case "step": modalStep(Number(b.dataset.d) || 1); break;
+    case "copyLink": copyCardLink(); break;
+    case "draftToggle": draftToggleModal(); break;
+    case "draftRemove": draftRemoveFromDetail(); break;
+  }
+});
 /* 反链跳转：详情/术语弹层内的「被引用」chips */
 document.addEventListener("click", ev => {
   const g = (ev.target as HTMLElement).closest("[data-goto]");
@@ -296,7 +310,7 @@ document.addEventListener("click", ev => {
 /* ---------- 帮助面板（快捷键与说明，复用详情弹层容器） ---------- */
 function showHelp() {
   state.overlayStack = [];   /* 帮助不是视图栈的一层：先清栈，关闭时不会退回旧页面 */
-  $("detail").innerHTML = `<div class="navbtns"><button title="关闭 (Esc)" onclick="overlayClose()">✕</button></div>
+  $("detail").innerHTML = `<div class="navbtns"><button title="关闭 (Esc)" data-act="close">✕</button></div>
     <div class="dinfo"><h2>快捷键与说明</h2>
     <div class="dtext">
 <b>快捷键</b>

@@ -11,6 +11,7 @@ import { openTermName, showDetail } from "./90-detail";
 import { state } from "./data/state";
 import { STORAGE_KEYS, imgFull, ELE_ZH, ELE_COLOR, ENERGY_ICON, ELE_ICONS, eleIcon, enPips } from "./core/resources";
 import { esc } from "./core/dom";
+import type { PoolEntry, SearchHit } from "./types";
 import { TYPE_ZH, typeZhOf, isDeckable, isFieldEntity, cardArtHtml } from "./data/model";
 import { costHtml, costText } from "./30-deps";
 import { linkify } from "./40-concepts";
@@ -52,7 +53,7 @@ function renderSummary() {
 
   $("summary").innerHTML = `
     <div class="sum-chars">${state.current!.chars.map(c => `
-      <span class="chip"><span class="edot" style="--ec:${ELE_COLOR[c.element] || '#888'}">${ELE_ICONS[c.element] || ""}</span>${esc(c.name)}<small class="chip-en">${enPips(c.energy)}</small></span>`).join("")}
+      <span class="chip"><span class="edot" style="--ec:${ELE_COLOR[c.element || ""] || '#888'}">${ELE_ICONS[c.element || ""] || ""}</span>${esc(c.name)}<small class="chip-en">${enPips(c.energy || 0)}</small></span>`).join("")}
     </div>
     <div class="sum-types"><span>元素构成：<b>${elesHtml}</b></span><span>${typeCounts}</span><span>版本跨度：<b>${esc(vers.join(" ~ "))}</b></span></div>
     <div class="sum-extra">${energyChip}${rChips}<button class="sum-odds" data-odds="1" title="查看费用曲线与关键牌起手 / 前几回合的抽到概率">抽牌概率与费用曲线 ›</button></div>
@@ -70,8 +71,8 @@ $("summary").addEventListener("click", ev => {
   if ((ev.target as HTMLElement).closest("[data-odds]")) { showOdds(); return; }
   const a = (ev.target as HTMLElement).closest("[data-filter]");
   if (!a) return;
-  listFilter = a.dataset.filter;
-  document.querySelector('.tab[data-view="list"]').click();
+  listFilter = a.dataset.filter || "";
+  (document.querySelector('.tab[data-view="list"]') as HTMLElement | null)?.click();
   renderList();
 });
 
@@ -97,7 +98,7 @@ function renderGrid() {
         <img class="card-img" src="${imgFull(c.id)}" decoding="async" width="420" height="720" alt="${esc(c.name)}"
           onerror="this.onerror=null;this.outerHTML='<div class=fallback>${esc(c.name)}</div>'">
         <span class="el-badge" style="background:${ELE_COLOR[c.element] || '#888'}"><span class="badge-ico">${ELE_ICONS[c.element] || ""}</span>${ELE_ZH[c.element] || c.element}</span>
-        <span class="en-badge">${enPips(c.energy)}</span>
+        <span class="en-badge">${enPips(c.energy || 0)}</span>
       </div>
       <div class="cap">${esc(c.name)}<small>生命 ${c.hp} · 充能 ${c.energy} · ${esc(c.since || "")}</small></div></div>`).join("")}
     </div>` +
@@ -144,7 +145,7 @@ function renderList() {
     <td>${esc(x.related || "—")}</td><td>${esc(x.since || "—")}</td>
     <td class="desc">${linkify(esc(x.desc))}</td></tr>`).join("");
   const sections = state.current!.order.map(t => {
-    if (!state.current.groups[t].some(match)) return "";
+    if (!state.current!.groups[t].some(match)) return "";
     return `<div class="sec-title">${t}</div><div class="table-wrap"><table>
       <tr>
         <th class="sortable" data-key="count">数量${arrow("count")}</th>
@@ -161,14 +162,14 @@ function renderList() {
       <span class="hint">点击行看详情 · 点表头排序 · 快捷键 1/2 切视图 · / 聚焦筛选 · Ctrl+P 打印</span></div>` +
     (sections || `<div style="color:var(--dim);padding:30px;text-align:center">无匹配卡牌</div>`);
   $("listSearch").addEventListener("input", e => {
-    listFilter = (e.target as HTMLElement).value;
-    const p = (e.target as HTMLElement).selectionStart;
+    listFilter = (e.target as HTMLInputElement).value;
+    const p = (e.target as HTMLInputElement).selectionStart;
     renderList();
-    const n = $("listSearch");
-    n.focus(); n.setSelectionRange(p, p);
+    const n = $<HTMLInputElement>("listSearch");
+    n.focus(); n.setSelectionRange(p || 0, p || 0);
   });
   document.querySelectorAll("#view-list th.sortable").forEach(th => th.addEventListener("click", () => {
-    const k = th.dataset.key;
+    const k = th.dataset.key || "";
     listSort = { key: k, dir: listSort.key === k ? -listSort.dir : (k === "name" ? 1 : -1) };
     renderList();
   }));
@@ -188,8 +189,10 @@ function searchTile(r) {
       <div class="tmeta">${esc(KIND_ZH[k] || "概念")} ${matchChip(r)}</div></div>`;
   }
   const isChar = r.kind === "char";
-  const raw = isChar ? state.charById.get(r.id) : state.entById.get(r.id);
-  const ele = isChar ? (raw.tags.find(t => t.startsWith("GCG_TAG_ELEMENT")) || "").replace("GCG_TAG_ELEMENT_", "") : cardElement(raw);
+  /* kind 为角色/卡牌时 id 必定存在（概念命中走上面分支），这里取到的是原始记录 */
+  const raw = isChar ? state.charById.get(r.id!) : state.entById.get(r.id!);
+  if (!raw) return "";   /* 数据里出现检索命中但卡池缺记录：宁可空着也不渲染半张卡 */
+  const ele = isChar ? ((raw!.tags || []).find(t => t.startsWith("GCG_TAG_ELEMENT")) || "").replace("GCG_TAG_ELEMENT_", "") : cardElement(raw);
   const meta = isChar ? `${eleIcon(ele)} ${ELE_ZH[ele] || ele} · 生命 ${raw.hp} · 充能 ${raw.maxEnergy}`
     : `${ele ? eleIcon(ele) + " · " : ""}${esc(typeZhOf(raw))}${costText(raw.playCost) ? " · " + esc(costText(raw.playCost)) : ""}`;
   /* 依赖徽标：与卡面/卡库同一套渲染（牌组限制 + 打出限制） */
@@ -234,11 +237,11 @@ function browseSearchResultsHtml() {
   const buildCards = cards.filter(r => r.buildable !== false);
   const otherCards = cards.filter(r => r.buildable === false);
   /* 「显示不可构筑」是全局开关：打开时检索结果也平铺，不再折叠 */
-  const groups = [
+  const groups: Array<[string, SearchHit[]]> = ([
     ["角色", shown.filter(r => r.kind === "char")],
     ["行动牌", showUnbuildable ? cards : buildCards],
     ["概念", shown.filter(r => r.kind === "concept")],
-  ].filter(([, list]) => list.length);
+  ] as Array<[string, SearchHit[]]>).filter(([, list]) => list.length);
   const otherBlock = !showUnbuildable && otherCards.length ? `<div class="nbgroup${nbOpen.search ? " open" : ""}">
       <button class="nbhead" data-nb="search" aria-expanded="${nbOpen.search}">
         <span class="nbmark" aria-hidden="true">${nbOpen.search ? "▾" : "▸"}</span>
@@ -264,15 +267,29 @@ function browseSearchResultsHtml() {
 /* ---------- 卡库浏览：多维筛选 / 排序 / 分片渲染 ----------
    筛选维度：类别 / 元素（角色及其天赋）/ 骰子费用 / 充能 / 标签 / 版本。
    计数为 facet 计数：每个可选值按"其余维度全部生效"统计，点进去不会把人带向空结果。 */
-const browseState = { type: "", el: "", cost: "", energy: "", tag: "", ver: "", sort: "name", dir: 1 };
-const BROWSE_DIMS = ["type", "el", "cost", "energy", "tag", "ver"];
+/** 卡库筛选状态：六个维度 + 排序。u（是否显示不可构筑）是全局开关，不在这里。 */
+interface BrowseState { type: string; el: string; cost: string; energy: string; tag: string; ver: string; sort: string; dir: number }
+const browseState: BrowseState = { type: "", el: "", cost: "", energy: "", tag: "", ver: "", sort: "name", dir: 1 };
+const BROWSE_DIMS: FacetDim[] = ["type", "el", "cost", "energy", "tag", "ver"];
 /* 每页 40 张：一次插入 60 张带图片的瓦片本身就是一次 50ms 级的长任务，
    拆小后每次追加更短，滚动时不至于被"补货"卡住一帧以上。 */
 const BROWSE_PAGE = 40;
 /* 视口上下各保留 4 页（≈160 张）瓦片实例：再远的页清空内容只留等高占位（见 pagerSweep） */
 const PAGE_KEEP = 4;
 /* 两个分页网格的运行时状态（主网格 / 折叠分组） */
-let bPager = null, nbPager = null;
+/** 分页网格：按页挂载 / 卸载，视口外整页移除，避免 1480 张卡同时驻留 DOM。 */
+interface PagerPageRec { el: HTMLElement; h: number; filled: boolean }
+interface Pager {
+  grid: HTMLElement;
+  sentinel: HTMLElement | null;
+  items: PoolEntry[];
+  tileFn: (x: PoolEntry, inGroup: boolean) => string;
+  tag: string;
+  pages: PagerPageRec[];
+  gridTop: number | null;
+  offsets: number[] | null;
+}
+let bPager: Pager | null = null, nbPager: Pager | null = null;
 /* 视口尺寸：测试与 SSR 环境没有 window/innerHeight，统一从这里取，避免各处 try */
 function viewH() { try { return window.innerHeight || innerHeight || 800; } catch (e) { return 800; } }
 function viewTop() { try { return window.scrollY || window.pageYOffset || 0; } catch (e) { return 0; } }
@@ -306,13 +323,23 @@ function browseCmp(a, b, key, dir) {
    一次筛选只该算一次。滚动追加、计数刷新、翻页上下文、加牌后的徽标同步都会回头
    要这份数据，1480 条的 filter + localeCompare 排序在滚动路径上重复跑就是白烧帧。
    key 里带 poolVersion：数据刷新重建卡池后自动失效。 */
-const _browseMemo = { filter: { key: "", list: null }, facets: { key: "", data: null }, split: { key: "", data: null } };
+/* 按「筛选状态 + 卡池版本」记忆结果：翻页/重渲染时不必重算 1480 条。
+   data 的具体形状随用途不同（分面计数 / 可构筑拆分），因此用 unknown 并在取用处收窄。 */
+type FacetCell = { b: number; o: number; n: number };
+type FacetDim = "type" | "el" | "cost" | "energy" | "tag" | "ver";
+type Facets = Record<FacetDim, Record<string, FacetCell>>;
+interface BrowseSplit { all: PoolEntry[]; build: PoolEntry[]; other: PoolEntry[] }
+const _browseMemo: {
+  filter: { key: string; list: PoolEntry[] | null };
+  facets: { key: string; data: Facets | null };
+  split: { key: string; data: BrowseSplit | null };
+} = { filter: { key: "", list: null }, facets: { key: "", data: null }, split: { key: "", data: null } };
 function browseStateKey(st = browseState) {
   return [st.type, st.el, st.cost, st.energy, st.tag, st.ver, st.sort, st.dir].join("\u0001") + "@" + poolVersion;
 }
-function browseFilter(st = browseState) {
+function browseFilter(st = browseState): PoolEntry[] {
   const key = browseStateKey(st);
-  if (_browseMemo.filter.key === key) return _browseMemo.filter.list;
+  if (_browseMemo.filter.key === key) return _browseMemo.filter.list || [];
   const list = pool.filter(x => passFilter(x, st)).sort((a, b) => browseCmp(a, b, st.sort, st.dir));
   _browseMemo.filter = { key, list };
   return list;
@@ -329,17 +356,17 @@ let showUnbuildable = false;
 try { showUnbuildable = localStorage.getItem(STORAGE_KEYS.browseUnbuildable) === "1"; } catch (e) {}
 /* persist=false：分享链接带来的视图只改当前这一屏，不覆盖本机默认偏好——
    否则点开别人的链接会悄悄改掉自己的习惯 */
-function setShowUnbuildable(v, persist) {
+function setShowUnbuildable(v: boolean, persist = true) {
   showUnbuildable = !!v;
   if (persist === false) return;
   try { localStorage.setItem(STORAGE_KEYS.browseUnbuildable, showUnbuildable ? "1" : "0"); } catch (e) {}
 }
 const nbOpen = { browse: false, search: false };
 try { nbOpen.browse = localStorage.getItem(STORAGE_KEYS.browseOther) === "1"; } catch (e) {}
-function browseSplit(st = browseState) {
+function browseSplit(st = browseState): BrowseSplit {
   const key = browseStateKey(st);
-  if (_browseMemo.split.key === key) return _browseMemo.split.data;
-  const all = browseFilter(st), build = [], other = [];
+  if (_browseMemo.split.key === key) return _browseMemo.split.data!;
+  const all = browseFilter(st), build: PoolEntry[] = [], other: PoolEntry[] = [];
   for (const x of all) (isBuildableEntry(x) ? build : other).push(x);
   const data = { all, build, other };
   _browseMemo.split = { key, data };
@@ -363,11 +390,11 @@ function otherGroupHtml(list, open) {
    undefined 会被当成激活的筛选项。
    每个格子区分可构筑 / 不可构筑：类型 chip 因此能直接说出「0 / 367」这种
    "这一类里没有能用的牌"的信息，而不是给一个看得见点进去全是实体的数字。 */
-function facetCounts(st = browseState) {
+function facetCounts(st = browseState): Facets {
   const key = browseStateKey(st);
-  if (_browseMemo.facets.key === key) return _browseMemo.facets.data;
-  const out = { type: {}, el: {}, cost: {}, energy: {}, tag: {}, ver: {} };
-  const bump = (dim, k, build) => {
+  if (_browseMemo.facets.key === key) return _browseMemo.facets.data!;
+  const out: Facets = { type: {}, el: {}, cost: {}, energy: {}, tag: {}, ver: {} };
+  const bump = (dim: FacetDim, k: string, build: boolean) => {
     const cell = out[dim][k] || (out[dim][k] = { b: 0, o: 0, n: 0 });
     if (build) cell.b++; else cell.o++;
     cell.n++;
@@ -377,7 +404,7 @@ function facetCounts(st = browseState) {
     for (const x of pool) {
       if (!passFilter(x, st2)) continue;
       const build = isBuildableEntry(x);
-      if (dim === "tag") { for (const t of x.tags) bump("tag", t, build); continue; }
+      if (dim === "tag") { for (const t of x.tags) if (t) bump("tag", t, build); continue; }
       const k = facetKey(x, dim);
       if (k != null) bump(dim, k, build);
     }
@@ -391,7 +418,7 @@ const fcn = (map, k) => (map && map[k] ? map[k].n : 0);
    解析时容忍有无前导 #（init 传入的是剥掉 # 的串）。
    u=1 表示「显示不可构筑」开关打开；只有真正打开时才写，避免每条链接都拖一个 u=0。 */
 function browseHash(st = browseState) {
-  const p = [];
+  const p: string[] = [];
   if (st.type) p.push("t=" + st.type);
   if (st.el) p.push("e=" + st.el);
   if (st.cost !== "") p.push("c=" + st.cost);
@@ -423,7 +450,6 @@ function parseBrowseHash(hash) {
     else if (k === "s") st.sort = v;
     else if (k === "d") st.dir = -1;
     else if (k === "u") st.u = v === "1" || v === "on" || v === "true";
-    else if (k === "q") st.q = decodeURIComponent(v);
   }
   return st;
 }
@@ -433,15 +459,17 @@ function syncBrowseHash() {
 }
 /* chip 计数：数字 = 只显示总数；{b,o} = 双计数（可构筑 / 不可构筑）。
    只有真存在不可构筑项时才出现第二种数字，否则 chip 会全长成一串「12/0」。 */
-function browseChip(group, val, label, n, active, title) {
+/* n 有两种形态：纯计数（number），或「可构筑 / 对局实体」双计数（{b,o}）。 */
+function browseChip(group: string, val: string, label: string, n: number | { b: number; o: number } | null, active: boolean, title = "") {
   let cnt = "";
   if (n != null && typeof n === "object") {
     cnt = `<b>${n.b}</b>${n.o ? `<i class="fco" title="其中 ${n.o} 项是对局实体或历史变体，不可加入牌组">/${n.o}</i>` : ""}`;
   } else if (n != null) cnt = `<b>${n}</b>`;
   const zero = n != null && typeof n === "object" && !n.b && n.o ? " zb" : "";
-  return `<button class="fchip${active ? " on" : ""}${zero}" data-bg="${group}" data-bv="${esc(String(val))}" title="${esc(title || "")}">${label}${cnt}</button>`;
+  return `<button class="fchip${active ? " on" : ""}${zero}" data-bg="${group}" data-bv="${esc(String(val))}" title="${esc(title)}">${label}${cnt}</button>`;
 }
-const sumCells = map => Object.values(map || {}).reduce((a, c) => ({ b: a.b + c.b, o: a.o + c.o }), { b: 0, o: 0 });
+const sumCells = (map?: Record<string, { b: number; o: number }>) =>
+  Object.values(map || {}).reduce((a, c) => ({ b: a.b + c.b, o: a.o + c.o }), { b: 0, o: 0 });
 function browseTile(x, inGroup) {
   const elCol = x.element ? ELE_COLOR[x.element] : "";
   const badges = depBadges(allReqs(x));
@@ -470,7 +498,7 @@ function syncTileQty() {
     const n = state.charById.has(id) ? 0 : (draft.cards.get(id) || 0);
     const box = el.querySelector(".imgbox");
     if (!box) continue;
-    let b = box.querySelector(".qcnt");
+    let b = box.querySelector(".qcnt") as HTMLElement | null;
     if (!n) { if (b) b.remove(); continue; }
     if (!b) {
       b = document.createElement("span");
@@ -494,8 +522,8 @@ export function setBrowseExpanded(v: boolean): void {
 }
 /* 已激活筛选 chips（折叠态展示，点击即移除该维度） */
 function activeBrowseChips(st) {
-  const chips = [];
-  const push = (g, label, val) => chips.push(browseChip(g, val, label, null, true, "点击移除该筛选"));
+  const chips: string[] = [];
+  const push = (g: string, label: string, val: string) => chips.push(browseChip(g, val, label, null, true, "点击移除该筛选"));
   if (st.type) push("type", TYPE_ZH[st.type] || st.type, st.type);
   if (st.el) push("el", eleIcon(st.el) + (ELE_ZH[st.el] || st.el), st.el);
   if (st.cost !== "") push("cost", "骰子 " + (st.cost === "5" ? "5+" : st.cost), st.cost);
@@ -504,7 +532,7 @@ function activeBrowseChips(st) {
   if (st.ver) push("ver", st.ver, st.ver);
   return chips.join("");
 }
-function browseBarHtml(st, facets) {
+function browseBarHtml(st: BrowseState, facets: Facets) {
   const buildN = poolStats.buildable, otherN = poolStats.total - poolStats.buildable;
   const typeRow = browseChip("type", "", "全部", { b: buildN, o: otherN }, !st.type, "可构筑 / 对局实体与历史变体（后者默认折叠，可用右侧开关平铺）") +
     POOL_TYPE_ORDER.filter(t => poolStats.byType[t]).map(t =>
@@ -640,14 +668,14 @@ const dirtyBrowse = () => browseState.type || browseState.el || browseState.cost
    这里每页 BROWSER_PAGE 张，滚离视口超过 PAGE_KEEP 页就把该页清空、保留等高占位，
    滚回来再挂载。占位高度在页挂载时测一次（页内容与图片占位比例固定，重挂高度一致），
    滚动过程中只读缓存的页偏移，不做布局查询。 */
-function makePager(grid, sentinel, items, tileFn, tag) {
+function makePager(grid: HTMLElement, sentinel: HTMLElement | null, items: PoolEntry[], tileFn: (x: PoolEntry, inGroup: boolean) => string, tag: string): Pager {
   return { grid, sentinel, items, tileFn, tag, pages: [], gridTop: null, offsets: null };
 }
 function measureH(el) {
   const r = el && el.getBoundingClientRect ? el.getBoundingClientRect() : null;
   return r && r.height ? Math.round(r.height) : 0;
 }
-function pagerPage(pg, i) {
+function pagerPage(pg: Pager, i: number): PagerPageRec {
   let rec = pg.pages[i];
   if (rec) return rec;
   const el = document.createElement("div");
@@ -658,7 +686,7 @@ function pagerPage(pg, i) {
   pg.offsets = null;
   return rec;
 }
-function pagerFill(pg, i) {
+function pagerFill(pg: Pager, i: number): boolean {
   const rec = pagerPage(pg, i);
   if (rec.filled) return false;
   const from = i * BROWSE_PAGE, to = Math.min(from + BROWSE_PAGE, pg.items.length);
@@ -672,7 +700,7 @@ function pagerFill(pg, i) {
   pg.offsets = null;
   return true;
 }
-function pagerSentinel(pg) {
+function pagerSentinel(pg: Pager): void {
   const s = pg.sentinel;
   if (!s) return;
   const shown = Math.min(pg.pages.length * BROWSE_PAGE, pg.items.length);
@@ -720,8 +748,8 @@ function pagerSweep(pg) {
     pg.offsets = null;
   }
   if (!pg.offsets) {
-    const offs = [];
-    let y = pg.gridTop;
+    const offs: number[] = [];
+    let y = pg.gridTop || 0;
     for (const rec of pg.pages) { offs.push(y); y += rec.h || 0; }
     pg.offsets = offs;
   }
@@ -787,8 +815,8 @@ if (typeof window.addEventListener === "function") {
   }, { passive: true });
 }
 /* 哨兵观察：进入提前加载区就补页。IO 只在交叉状态变化时回调，比滚动里测量便宜 */
-let browseIO = null;
-const ioPagers = new WeakMap();
+let browseIO: IntersectionObserver | null = null;
+const ioPagers = new WeakMap<Element, Pager>();
 function observeSentinel(pg) {
   if (!pg || !pg.sentinel || !hasIO) return;
   if (!browseIO) {
@@ -831,8 +859,8 @@ $("view-browse").addEventListener("click", ev => {
   }
   const chip = (ev.target as HTMLElement).closest("button[data-bg]");
   if (chip) {
-    const g = chip.dataset.bg;
-    browseState[g] = browseState[g] === chip.dataset.bv ? "" : chip.dataset.bv;
+    const g = (chip.dataset.bg || "") as keyof BrowseState;
+    Object.assign(browseState, { [g]: browseState[g] === chip.dataset.bv ? "" : (chip.dataset.bv || "") });
     renderBrowse(); syncBrowseHash(); return;
   }
   if ((ev.target as HTMLElement).closest("[data-breset]")) {
@@ -846,16 +874,16 @@ $("view-browse").addEventListener("click", ev => {
   if (scopeBtn) { toggleSearchScope(scopeBtn.dataset.scope); return; }
   if ((ev.target as HTMLElement).closest("[data-scope-clear]")) { clearBrowseFilters(); return; }
   const q = (ev.target as HTMLElement).closest("[data-q]");
-  if (q) { applyBrowseQuery(q.dataset.q); return; }
+  if (q) { applyBrowseQuery(q.dataset.q || ""); return; }
   const f = (ev.target as HTMLElement).closest("[data-f]");
-  if (f) { searchState.filter = f.dataset.f; renderBrowseResults(); return; }
+  if (f) { searchState.filter = f.dataset.f || ""; renderBrowseResults(); return; }
   const term = (ev.target as HTMLElement).closest("[data-term]");
   if (term) { openTermName(term.dataset.term); return; }
   const tile = (ev.target as HTMLElement).closest("[data-id]");
   if (tile) showDetail(Number(tile.dataset.id));
 });
-function applyBrowseQuery(q) {
-  const input = $("browseSearch");
+function applyBrowseQuery(q: string) {
+  const input = $<HTMLInputElement>("browseSearch");
   if (input) input.value = q;
   searchState.q = q;
   searchState.filter = "";
@@ -872,9 +900,12 @@ function clearBrowseQuery() {
 }
 $("view-browse").addEventListener("change", ev => {
   const sel = (ev.target as HTMLElement).closest("[data-bg]");
-  if (sel && sel.tagName === "SELECT") { browseState[sel.dataset.bg] = sel.value; renderBrowse(); syncBrowseHash(); return; }
+  if (sel && sel.tagName === "SELECT") {
+    Object.assign(browseState, { [(sel.dataset.bg || "") as keyof BrowseState]: (sel as HTMLSelectElement).value });
+    renderBrowse(); syncBrowseHash(); return;
+  }
   const s = (ev.target as HTMLElement).closest("[data-bs]");
-  if (s) { browseState.sort = s.value; renderBrowse(); syncBrowseHash(); }
+  if (s) { browseState.sort = (s as HTMLSelectElement).value; renderBrowse(); syncBrowseHash(); }
 });
 
 export { renderSummary, tileHtml, renderGrid, listFilter, listSort, sortVal, renderList, hlName, searchTile, browseSearchResultsHtml, browseState, BROWSE_DIMS, BROWSE_PAGE, PAGE_KEEP, bPager, nbPager, viewH, viewTop, facetKey, passFilter, browseCmp, _browseMemo, browseStateKey, browseFilter, isBuildableEntry, showUnbuildable, setShowUnbuildable, nbOpen, browseSplit, otherGroupHtml, facetCounts, fcn, browseHash, parseBrowseHash, syncBrowseHash, browseChip, sumCells, browseTile, syncTileQty, BROWSE_EXP_KEY, browseExpanded, activeBrowseChips, browseBarHtml, browseSearchHtml, renderBrowse, renderBrowseResults, updateBrowseCount, browseVisibleIds, dirtyBrowse, makePager, measureH, pagerPage, pagerFill, pagerSentinel, pagerGrow, pagerFillAhead, pagerSweep, appendBrowseTiles, appendOtherTiles, browseTick, hasIO, browseMaybeMore, browseIO, ioPagers, observeSentinel, unobserveSentinel, toggleNbGroup, applyBrowseQuery, clearBrowseQuery };

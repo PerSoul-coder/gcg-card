@@ -34,7 +34,7 @@ export function resetPool(): void {
 }
 const charElement = c => (c.tags.find(t => t.startsWith("GCG_TAG_ELEMENT")) || "").replace("GCG_TAG_ELEMENT_", "");
 /* 卡牌所属元素：天赋牌随关联角色；元素共鸣等牌取牌组限制里的元素门槛 */
-function cardElement(e, rel, dreqs) {
+function cardElement(e, rel = null, dreqs = null) {
   const c = rel || (e && e.relatedCharacterId != null ? state.charById.get(e.relatedCharacterId) : null);
   if (c) return charElement(c);
   return reqElement((dreqs || deckReqsOf(e)).find(r => r.code === "deckEl"));

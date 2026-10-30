@@ -180,8 +180,9 @@ export interface ParsedCard {
   energy: number;
   related?: string | null;
   relatedId: number | null;
-  restrictions: unknown;
-  deckReqs: unknown;
+  /** 打出限制与牌组构筑限制：解析阶段就按领域类型收好，视图只负责渲染。 */
+  restrictions: ReqBadge[];
+  deckReqs: ReqBadge[];
   desc: string;
   since?: string;
 }
@@ -196,17 +197,35 @@ export interface ParsedDeck {
 }
 
 /** 弹层栈的一层。detail / term 可继续下钻，odds 与 deckdiff 是互斥的整屏弹层。 */
-export interface OverlayEntry {
-  kind: "detail" | "term" | "skill" | "compare" | "odds" | "deckdiff";
-  id?: number;
-  key?: string;
-  pick?: unknown;
+/** 牌组差异视图：两段分享码 + 解析结果 + 两个显示开关。 */
+export interface DeckDiffEntry {
+  kind: "deckdiff";
+  a: string;
+  b: string;
+  res: unknown;
+  err: string;
+  showSame: boolean;
+  dirty: boolean;
+}
+
+interface OverlayBase {
   /** 弹层滚动位置：视图切换时保存/恢复，避免 innerHTML 重建后回到顶部。 */
   scrollTop?: number;
   /** 对比视图的横向滚动位置。 */
   cmpLeft?: number;
-  [k: string]: unknown;
 }
+
+/* 弹层视图栈的一层。
+   做成判别联合而不是「一堆可选字段」：栈是异质的，上一层的 id 与下一层无关。
+   可选项堆在一起时，读 top.ids 只能靠非空断言「此刻一定是 detail」——
+   而这件事本该由 kind 收窄来保证。 */
+export type OverlayEntry =
+  | (OverlayBase & { kind: "detail"; id: number; ids: number[]; idx: number })
+  | (OverlayBase & { kind: "term"; name: string })
+  | (OverlayBase & { kind: "skill"; key: string })
+  | (OverlayBase & { kind: "compare"; ids: number[]; onlyDiff: boolean; showSim: boolean })
+  | (OverlayBase & { kind: "odds"; pick?: unknown })
+  | (OverlayBase & DeckDiffEntry);
 
 /* ---------- 卡池条目 ----------
    把角色与实体卡摊平成同一种形状，供卡库、检索、对比、导出共用。
