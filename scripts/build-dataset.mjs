@@ -9,7 +9,8 @@
  *   gi-data/keywords.json          piovium 规则术语
  *   gi-data/concepts-extra.json    genshin-db 补充概念
  *   gi-data/pinyin.js              构建期拼音索引（复用，不重复生成）
- *   src/00-resources.js + 12-model.js  唯一分类与译名定义（用 vm 取常量，避免第二份真源）
+ *   src/core/resources.ts          译名表与标签翻译（TS，用 esbuild 打包后注入 vm）
+ *   src/12-model.js                类型语义与身份判定（用 vm 取常量，避免第二份真源）
  *
  * 输出：
  *   gi-data/dataset.json           归一化记录（调试 / 单文件内联 / Node 测试兜底）
@@ -22,6 +23,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import zlib from "node:zlib";
+import * as esbuild from "esbuild";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -30,6 +32,18 @@ const readJson = p => JSON.parse(read(p));
 const dataOf = j => (Array.isArray(j) ? j : (j && j.data) || []);
 
 /* ---------- 1. 取唯一分类定义（不复制 TYPE_SPEC / TAG_ZH） ---------- */
+/* resources 已迁到 TypeScript，不能在 vm 里直接跑 .ts：先打包成 IIFE（globalName 暴露为 __RES），
+   再与仍需保留的 12-model.js 拼在同一个 vm 上下文里求值。这样分类定义始终只有一份。 */
+const RESOURCES_BUNDLE = await (async () => {
+  const r = await esbuild.build({
+    entryPoints: [path.join(ROOT, "src/core/resources.ts")],
+    bundle: true, format: "iife", globalName: "__RES", target: ["es2022"],
+    write: false, logLevel: "silent",
+  });
+  if (!r.outputFiles || !r.outputFiles[0]) throw new Error("resources.ts 打包失败");
+  return r.outputFiles[0].text;
+})();
+
 function loadTaxonomy() {
   const ctx = {
     window: {}, console,
@@ -37,10 +51,11 @@ function loadTaxonomy() {
     imgFull: () => "", esc: s => String(s ?? ""),
   };
   vm.createContext(ctx);
-  const code = read("src/00-resources.js") + "\n" + read("src/12-model.js");
+  const code = RESOURCES_BUNDLE + "\n" + read("src/12-model.js");
   const expr = `;({
-    TYPE_SPEC, TYPE_ZH, TYPE_ORDER, DOMAIN_ZH, TAG_ZH, ELE_ZH, WEAPON_ZH, NO_ART_KIND,
-    tagZh, typeZhOf, typeSpecOf, nameKey, cosmeticKey, PREPARED_STATE_RE
+    TYPE_SPEC, TYPE_ZH, TYPE_ORDER, DOMAIN_ZH, NO_ART_KIND,
+    typeZhOf, typeSpecOf, nameKey, cosmeticKey, PREPARED_STATE_RE,
+    TAG_ZH: __RES.TAG_ZH, ELE_ZH: __RES.ELE_ZH, WEAPON_ZH: __RES.WEAPON_ZH, tagZh: __RES.tagZh
   })`;
   return vm.runInContext(code + expr, ctx);
 }

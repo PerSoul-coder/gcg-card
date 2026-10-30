@@ -1,0 +1,21 @@
+{
+  "name": "gcg-card",
+  "version": "0.0.0",
+  "private": true,
+  "description": "七圣召唤卡牌与牌组浏览器",
+  "type": "module",
+  "scripts": {
+    "check": "tsc --noEmit",
+    "build:dataset": "node scripts/build-dataset.mjs",
+    "build:assets": "node scripts/build-concepts.mjs && node scripts/build-pinyin.mjs && node scripts/build-icons.mjs",
+    "build:app": "node scripts/build-app.mjs",
+    "build": "npm run build:app && node scripts/build-single.mjs",
+    "test": "node tests/run-all.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2",
+    "happy-dom": "^20.0.0",
+    "pinyin-pro": "^3.27.0",
+    "typescript": "^5.9.0"
+  }
+}

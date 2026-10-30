@@ -18,7 +18,8 @@ import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { gzipSync } from "node:zlib";
-import { APP_SOURCES, ASSET_SOURCES } from "../src/sources.mjs";
+import { spawnSync } from "node:child_process";
+import { ASSET_SOURCES } from "./sources.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const read = p => readFileSync(resolve(ROOT, p), "utf8");
@@ -31,6 +32,14 @@ const outArg = argv.find(a => a.startsWith("--out="));
 const OUT = outArg
   ? outArg.slice("--out=".length)
   : (lite ? "dist/七圣召唤-卡牌与牌组浏览器-轻量.html" : "dist/七圣召唤-卡牌与牌组浏览器.html");
+
+/* 先构建应用包：单文件版内联的就是 dist/app.js，避免产物落后于 TS 源码 */
+{
+  const r = spawnSync(process.execPath, [resolve(ROOT, "scripts/build-app.mjs")], {
+    cwd: ROOT, encoding: "utf8",
+  });
+  if (r.status !== 0) throw new Error("构建 dist/app.js 失败：\n" + (r.stderr || r.stdout || ""));
+}
 
 const DATASETS = [
   ["characters", "gi-data/characters.json"],
@@ -47,9 +56,10 @@ function assertInlinable(code, kind) {
 
 let html = read("deck-viewer.html");
 const css = assertInlinable(read("deck-viewer.css"), "style");
-/* 资源脚本 + 应用脚本：顺序全部来自 src/sources.mjs，构建端不再维护第二份清单 */
+/* 资源脚本 + 应用包：资源顺序来自 scripts/sources.mjs；
+   应用包是 build-app.mjs 的产物（TS 入口 + 尚未迁移的旧脚本），构建端不再维护第二份清单 */
 const assets = ASSET_SOURCES.map(p => [p, assertInlinable(read(p), "script")]);
-const app = assertInlinable(APP_SOURCES.map(p => read(p)).join("\n\n"), "script");
+const app = assertInlinable(read("dist/app.js"), "script");
 
 /* ---------- 1. 样式内联 ---------- */
 const cssTag = /<link\s+rel="stylesheet"\s+href="deck-viewer\.css[^"]*"\s*>/;

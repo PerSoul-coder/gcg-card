@@ -5,7 +5,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { readAppSource } from "./test-lib.mjs";
-import { ASSET_SOURCES } from "../src/sources.mjs";
+import { ASSET_SOURCES } from "../scripts/sources.mjs";
 
 const here = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const OUT = path.join(here, "dist", "七圣召唤-卡牌与牌组浏览器.html");
