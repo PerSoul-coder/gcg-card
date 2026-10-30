@@ -1,5 +1,6 @@
 /* src/30-deps.js —— 由 scripts/_convert.mjs 从旧脚本转换（迁移中间态）。 */
 import { state } from "./data/state";
+import type { DeckReq, PlayRestriction } from "./types";
 import { ELE_COLOR, WEAPON_ZH, COST_ZH, tagZh, NATION_CODE, CAMP_CODE, ELE_CODE, ENERGY_ICON } from "./core/resources";
 import { esc, toast } from "./core/dom";
 /* ---------- 测试卡过滤 ----------
@@ -42,8 +43,8 @@ function costText(pc) {
    · deckTag ：牌组需包含至少 N 名指定地区/阵营角色（风与自由 / 愚人众的阴谋…）。
      N 与元素/地区/阵营均取 relatedCharacterTags（结构化）+ 描述文本双重确认。
    打出限制（对局中生效）——restrictionsOf：秘传限1 / 天赋须在场 / 武器限定 / 限打张数。 */
-function deckReqsOf(e) {
-  const R = [];
+function deckReqsOf(e): DeckReq[] {
+  const R: DeckReq[] = [];
   /* 具体角色：结构化 id 优先；id 缺失（新卡暂无角色数据）时退回描述正则 */
   if (e.relatedCharacterId != null) {
     const n = state.charById.get(e.relatedCharacterId)?.name || "";
@@ -127,8 +128,8 @@ function reqGapText(req, chars) {
   return "";
 }
 /* 打出限制（结构化推导）：秘传 tag / 天赋关联角色 / 武器类型 tag / 描述文本规则 */
-function restrictionsOf(e) {
-  const R = [];
+function restrictionsOf(e): PlayRestriction[] {
+  const R: PlayRestriction[] = [];
   const tags = e.tags || [];
   if (tags.includes("GCG_TAG_LEGEND"))
     R.push({ code: "legend", short: "秘传·限1", label: "秘传牌：整套牌组只能放入 1 张（含同名卡）" });

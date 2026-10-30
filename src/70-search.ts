@@ -35,7 +35,8 @@ function loadSearchScope() {
   } catch (e) {}
   return { title: true, pinyin: true, desc: true };
 }
-const searchScope = loadSearchScope();
+type SearchScope = { title: boolean; pinyin: boolean; desc: boolean };
+const searchScope: SearchScope = loadSearchScope();
 function saveSearchScope() { try { localStorage.setItem(STORAGE_KEYS.searchScope, JSON.stringify(searchScope)); } catch (e) {} }
 const browseActive = () => BROWSE_DIMS.some(d => browseState[d] !== "");
 const corpusKey = () => BROWSE_DIMS.map(d => browseState[d]).join("|");
@@ -64,6 +65,7 @@ const normCompact = s => String(s || "").normalize("NFKC").toLowerCase().replace
 /* 拼音索引由 build-pinyin.mjs 构建期生成；缺失时自动退化为仅字面检索 */
 import { PINYIN_DATA } from "../gi-data/pinyin.js";
 import { state } from "./data/state";
+import type { PoolEntry, SearchHit, SuggestHit } from "./types";
 import { STORAGE_KEYS, eleIcon } from "./core/resources";
 import { esc, toast } from "./core/dom";
 import { typeZhOf, nameKey } from "./data/model";
@@ -185,9 +187,9 @@ function fuzzyScore(ctx, forms) {
   return null;
 }
 
-function scoreName(ctx, name, englishName, sc = searchScope) {
+function scoreName(ctx, name, englishName, sc = searchScope): { score: number; match: string; note?: string } | null {
   let best: { score: number; match: string; note?: string } | null = null;
-  const take = r => { if (r && (!best || r.score < best.score)) best = r; };
+  const take = (r: { score: number; match: string; note?: string } | null) => { if (r && (!best || r.score < best.score)) best = r; };
   if (sc.title) {
     take(literalScore(ctx, name));
     if (ctx.latin) {
@@ -207,7 +209,7 @@ function scoreName(ctx, name, englishName, sc = searchScope) {
     if (sc.title && ctx.han && !ctx.latin && withinOneEdit(ctx.compact, normCompact(name))) take({ score: 68, match: "fuzzy", note: "近似写法" });
     /* 子序列模糊：2 字母命中面太大，从 3 个字符起才启用 */
     if (!best && ctx.len >= 3) {
-      const forms = [];
+      const forms: string[] = [];
       if (sc.title) {
         forms.push(normCompact(name), normCompact(englishName));
       }
@@ -231,16 +233,16 @@ function compareResults(a, b) {
     || a.name.localeCompare(b.name, "zh");
 }
 
-function searchCards(q: string, opts: { scope?: string; corpus?: unknown; noDesc?: boolean; limit?: number } = {}) {
+function searchCards(q: string, opts: { scope?: SearchScope; corpus?: PoolEntry[]; noDesc?: boolean; limit?: number } = {}) {
   const ctx = queryCtx(q);
   if (!ctx.compact) return [];
   const sc = opts.scope || searchScope;
   const corpus = opts.corpus || searchCorpus();
   const corpusIds = browseActive() ? new Set(corpus.map(x => x.id)) : null;
-  const out = [];
-  const descOut = [];
+  const out: SearchHit[] = [];
+  const descOut: SearchHit[] = [];
   const nameKeys = new Set();
-  const push = (kind, id, name, extra, src) => {
+  const push = (kind: SearchHit["kind"], id: number | null, name: string, extra: Partial<SearchHit>, src?: { englishName?: string }) => {
     const s = scoreName(ctx, name, src && src.englishName, sc);
     if (!s) return false;
     nameKeys.add(kind + ":" + name);
@@ -271,7 +273,7 @@ function searchCards(q: string, opts: { scope?: string; corpus?: unknown; noDesc
   const rawLower = ctx.raw.toLowerCase();
   if (rawLower && sc.desc && !opts.noDesc) {
     const descKeys = new Set();
-    const pushDesc = r => {
+    const pushDesc = (r: SearchHit) => {
       const k = r.kind + ":" + r.name;
       if (nameKeys.has(k) || descKeys.has(k)) return false;
       descKeys.add(k);
@@ -314,7 +316,7 @@ function searchCards(q: string, opts: { scope?: string; corpus?: unknown; noDesc
 function nearNames(q, limit = 6) {
   const ctx = queryCtx(q);
   if (!ctx.compact) return [];
-  const cand = [];
+  const cand: Array<{ name: string; kind: SearchHit["kind"]; id?: number }> = [];
   const corpus = searchCorpus();
   const corpusIds = browseActive() ? new Set(corpus.map(x => x.id)) : null;
   for (const x of corpus) cand.push({ name: x.name, kind: x.kind, id: x.id });
@@ -326,7 +328,7 @@ function nearNames(q, limit = 6) {
     conceptSeen.add(ck);
     cand.push({ name, kind: "concept" });
   }
-  const out = [];
+  const out: SuggestHit[] = [];
   const maxGap = Math.max(2, ctx.len);
   for (const x of cand) {
     const m = subseqWindow(ctx.compact, normCompact(x.name));
@@ -373,7 +375,7 @@ function scopeRow() {
   </div>`;
 }
 function inputHint() {
-  const parts = [];
+  const parts: string[] = [];
   if (searchScope.title) parts.push("中文名", "英文名");
   if (searchScope.pinyin) parts.push("拼音全拼 / 首字母");
   parts.push("模糊输入");

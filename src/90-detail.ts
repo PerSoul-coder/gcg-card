@@ -27,7 +27,7 @@ import { COMPARE_MAX } from "./88-compare";
    同名多版本（如「增殖生命体」有火/水/草/雷四张状态牌）只出一个 chip——
    否则会并排出现四个一模一样的按钮，既分不清也没法选；代表条目优先取可构筑版本，
    title 里注明还有几个同名条目。 */
-function backlinkHtml(name, selfId) {
+function backlinkHtml(name: string, selfId: number | null = null) {
   const b = backlinks.get(name);
   if (!b || !b.size) return "";
   /* 准备状态影子不进"被引用"：它只是技能自己的运行时标记，列出来会与技能同名同义 */
@@ -116,9 +116,9 @@ function detailView(id, ids) {
 }
 /* 每个视图自己记住滚动位置：翻页 / 下钻后回到顶部，返回时回到原来的位置。
    旧实现每次 innerHTML 重建都会把弹层滚回顶部，返回对比面板后要重新往下找。 */
-let renderedView = null;
+let renderedView: OverlayEntry | null = null;
 /* resetScroll：翻页 / 换了一张卡时强制回到顶部；其余重渲染沿用视图自己的位置 */
-function renderOverlay(resetScroll) {
+function renderOverlay(resetScroll = false) {
   const reset = resetScroll === true;
   const detail = $("detail");
   if (!reset && renderedView && detail && typeof detail.scrollTop === "number") {

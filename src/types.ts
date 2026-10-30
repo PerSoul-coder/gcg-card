@@ -197,10 +197,14 @@ export interface ParsedDeck {
 
 /** 弹层栈的一层。detail / term 可继续下钻，odds 与 deckdiff 是互斥的整屏弹层。 */
 export interface OverlayEntry {
-  kind: "detail" | "term" | "odds" | "deckdiff";
+  kind: "detail" | "term" | "skill" | "compare" | "odds" | "deckdiff";
   id?: number;
   key?: string;
   pick?: unknown;
+  /** 弹层滚动位置：视图切换时保存/恢复，避免 innerHTML 重建后回到顶部。 */
+  scrollTop?: number;
+  /** 对比视图的横向滚动位置。 */
+  cmpLeft?: number;
   [k: string]: unknown;
 }
 
@@ -216,13 +220,13 @@ export interface PoolEntry {
   element: string;
   type: string;
   typeRaw: string;
-  domain: "char" | "card";
+  domain: Domain;
   deckable: boolean;
   art: boolean;
   tags: Array<string | null>;
   tagsRaw: string[];
-  hp?: number;
-  energy?: number;
+  hp?: number | null;
+  energy?: number | null;
   ver?: string;
   share?: number | null;
   restrictions: unknown[];
@@ -233,23 +237,115 @@ export interface PoolEntry {
   dice: number;
   energyCost: number;
   desc: string;
+  /** 名称 + 描述的小写全文，供描述检索直接 includes，避免每次重新拼接。 */
+  descAll: string;
 }
 
 /* ---------- 技能条目 ----------
    角色技能与装备牌特技共用一种形状：装备牌特技的 ownerKind 是 "card"。 */
 export interface SkillEntry {
+  kind: "skill";
   key: string;
+  /** 数据源里的技能 id（键末段）。 */
+  id: number;
   name: string;
-  ownerId: number;
-  ownerName: string;
-  ownerKind: "char" | "card";
+  englishName: string;
+  /** 原始技能类型码与中文名：普攻 / 战技 / 爆发 / 被动 / 特殊。 */
+  tag: string;
   tagZh: string;
-  cost?: unknown;
+  cost: unknown[];
+  desc: string;
+  /** 去掉「需准备 n 个行动轮」后的效果正文。 */
   effect: string;
-  desc?: string;
+  hidden: boolean;
   prepared: boolean;
   prepareTurns: number;
   stateId: number | null;
   altCount: number;
-  hidden?: boolean;
+  /* 归属：角色技能 ownerKind="char"；装备牌特技 ownerKind="card"。
+     两条构建路径的字段略有差异——数据集路径额外给 ownerKey / ownerCardId / art / linkable，
+     旧数据源路径只给 ownerId。因此后四个都是可选的。 */
+  ownerId: number | null;
+  ownerName: string;
+  ownerKind: "char" | "card";
+  ownerKey?: string;
+  ownerCardId?: number | null;
+  art?: Art | null;
+  linkable?: boolean;
+}
+
+/* ---------- 牌组存储 ----------
+   两套形状是刻意分开的：持久化用元组数组（JSON 直存），内存操作用 Map（按 id 定位）。
+   以前两者都是裸的 `[]` / `new Map()`，推断成 never，下游几十处属性访问全靠运气。 */
+export interface Deck {
+  id: number;
+  name: string;
+  /** 角色 id，最多 3 个。 */
+  chars: number[];
+  /** [卡牌 id, 份数]，顺序即牌组内展示顺序。 */
+  cards: Array<[number, number]>;
+  updatedAt: number;
+}
+
+export interface Draft {
+  chars: number[];
+  cards: Map<number, number>;
+}
+
+/* ---------- 牌组限制与打出限制 ----------
+   两者在界面上并列成徽标（allReqs），但来源不同：
+     · DeckReq —— 构筑门槛，加入牌组前就要满足（角色 / 元素 / 地区阵营）
+     · PlayRestriction —— 对局中生效（秘传限 1 / 天赋须在场 / 武器限定 / 限打张数）
+   以前都是裸 `[]`，推断成 never，导致 allReqs 的下游全部失类型。 */
+export interface DeckReq {
+  code: "deckChar" | "deckEl" | "deckTag";
+  short: string;
+  label: string;
+  name?: string;
+  charId?: number | null;
+  tag?: string;
+  n?: number;
+}
+
+export interface PlayRestriction {
+  code: "legend" | "talent" | "weapon" | "once";
+  short: string;
+  label: string;
+}
+
+export type ReqBadge = DeckReq | PlayRestriction;
+
+/* ---------- 检索命中 ----------
+   kind 除了角色/卡牌，还可能是概念（术语没有独立 id，靠 name 定位）。 */
+export interface SearchHit {
+  kind: "char" | "card" | "concept";
+  id: number | null;
+  name: string;
+  score: number;
+  match: string;
+  note?: string;
+  buildable?: boolean;
+  ver?: string;
+  noShare?: boolean;
+  /** 概念命中时记录它实际对应的类别（术语 / 技能 / 卡牌…），用于结果分组。 */
+  ckind?: string;
+}
+
+/** 检索建议（输入框下拉）的一条：gap 越小越靠前。 */
+export interface SuggestHit {
+  name: string;
+  kind: string;
+  gap: number;
+}
+
+/** 卡池统计：筛选 chips 的计数、版本列表、数据信息行都读这里。 */
+export interface PoolStats {
+  total: number;
+  buildable: number;
+  testFiltered: number;
+  shadowFiltered: number;
+  byType: Record<string, number>;
+  byEl: Record<string, number>;
+  byTag: Record<string, number>;
+  versions: string[];
 }

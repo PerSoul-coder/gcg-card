@@ -1,7 +1,7 @@
 /* src/45-pool.js —— 由 scripts/_convert.mjs 从旧脚本转换（迁移中间态）。 */
 import { deckReqsOf, diceCost, energyCost, isTestCard, reqElement, restrictionsOf } from "./30-deps";
 import { state } from "./data/state";
-import type { PoolEntry } from "./types";
+import type { PoolEntry, PoolStats } from "./types";
 import { tagZh } from "./core/resources";
 import { TYPE_ORDER, typeZhOf, isDeckable, domainOfEntity, isShadowState, hasCardFace } from "./data/model";
 
@@ -24,7 +24,7 @@ let poolVersion = 0;
 export function invalidatePoolMemo(): void {
   poolVersion += 1;
 }
-let poolStats = { total: 0, buildable: 0, testFiltered: 0, shadowFiltered: 0, byType: {}, byEl: {}, byTag: {}, versions: [] };
+let poolStats: PoolStats = { total: 0, buildable: 0, testFiltered: 0, shadowFiltered: 0, byType: {}, byEl: {}, byTag: {}, versions: [] };
 
 /** 清空卡池与统计（供「刷新数据」使用）。 */
 export function resetPool(): void {
@@ -45,7 +45,7 @@ function buildPool() {
     kind: "char", id: c.id, name: c.name, englishName: c.englishName,
     element: charElement(c), type: "角色牌", typeRaw: "GCG_CARD_CHARACTER",
     domain: "char", deckable: true, art: true,
-    tags: c.tags.map(tagZh).filter(Boolean), tagsRaw: c.tags,
+    tags: (c.tags || []).map(tagZh).filter(Boolean), tagsRaw: c.tags || [],
     hp: c.hp, energy: c.maxEnergy, ver: c.sinceVersion,
     share: c.shareId, restrictions: [], deckReqs: [], related: null, relatedId: null,
     playCost: [], dice: -1, energyCost: 0, desc: (c.storyText || "").trim(),
@@ -53,7 +53,7 @@ function buildPool() {
   });
   let testFiltered = 0, shadowFiltered = 0;
   for (const e of state.ENT) {
-    if (!POOL_TYPE_ORDER.includes(e.type)) continue;
+    if (!e.type || !POOL_TYPE_ORDER.includes(e.type)) continue;
     /* 明显测试卡不进牌库（判据见 isTestCard；详情深链仍可查） */
     if (isTestCard(e)) { testFiltered++; continue; }
     /* 准备状态影子不进牌库：它与技能同名、内容只是「本角色将使用技能 X」，
@@ -63,10 +63,10 @@ function buildPool() {
     const dreqs = deckReqsOf(e);
     pool.push({
       kind: "card", id: e.id, name: e.name, englishName: e.englishName,
-      element: cardElement(e, rel, dreqs), type: typeZhOf(e), typeRaw: e.type,
+      element: cardElement(e, rel, dreqs), type: typeZhOf(e), typeRaw: e.type || "",
       domain: domainOfEntity(e), deckable: isDeckable(e),
       art: hasCardFace(e),
-      tags: e.tags.map(tagZh).filter(Boolean), tagsRaw: e.tags,
+      tags: (e.tags || []).map(tagZh).filter(Boolean), tagsRaw: e.tags || [],
       hp: null, energy: null, ver: e.sinceVersion,
       share: e.shareId, restrictions: restrictionsOf(e), deckReqs: dreqs,
       related: rel?.name || null, relatedId: e.relatedCharacterId ?? null,
@@ -75,11 +75,11 @@ function buildPool() {
     });
   }
   /* 统计：筛选 chips 计数与全局数据信息行都读这里 */
-  const byType = {}, byEl = {}, byTag = {};
+  const byType: Record<string, number> = {}, byEl: Record<string, number> = {}, byTag: Record<string, number> = {};
   for (const x of pool) {
     byType[x.typeRaw] = (byType[x.typeRaw] || 0) + 1;
     if (x.element) byEl[x.element] = (byEl[x.element] || 0) + 1;
-    for (const t of x.tags) byTag[t] = (byTag[t] || 0) + 1;
+    for (const t of x.tags) if (t) byTag[t] = (byTag[t] || 0) + 1;
   }
   poolStats = {
     total: pool.length,
@@ -87,7 +87,7 @@ function buildPool() {
     testFiltered,
     shadowFiltered,
     byType, byEl, byTag,
-    versions: [...new Set(pool.map(x => x.ver).filter(Boolean))].sort(verCmp),
+    versions: [...new Set(pool.map(x => x.ver).filter((v): v is string => !!v))].sort(verCmp),
   };
   poolVersion++;
 }

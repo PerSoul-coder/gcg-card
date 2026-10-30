@@ -21,9 +21,9 @@ const SKILL_TAG_ZH = {
 const SKILL_TAG_ORDER = ["GCG_SKILL_TAG_A", "GCG_SKILL_TAG_E", "GCG_SKILL_TAG_Q", "GCG_SKILL_TAG_PASSIVE", "GCG_SKILL_TAG_NONE"];
 
 let SKILLS: SkillEntry[] = [];
-const skillByKey = new Map();      /* "角色id:技能id" → 技能 */
-const skillByName = new Map();     /* 归一化名 → 技能[] */
-const skillsOfOwner = new Map();   /* 角色 id → 技能[]（已排序、已去重） */
+const skillByKey = new Map<string, SkillEntry>();   /* "角色id:技能id" → 技能 */
+const skillByName = new Map<string, SkillEntry[]>(); /* 归一化名 → 技能[] */
+const skillsOfOwner = new Map<string, SkillEntry[]>(); /* "char:id" / "card:id" → 技能[]（已排序、已去重） */
 
 /** 清空技能索引（供「刷新数据」使用）。索引的全部内部结构留在本模块。 */
 export function resetSkillIndex(): void {
@@ -45,7 +45,7 @@ function skillEffectText(desc) {
 /* 统一数据集路径：技能来源 = 角色技能 + 装备牌特技（构建期已归一、已去重）。
    装备牌的「特技：X」过去完全不在索引里，导致卡文里的 X 既搜不到也点不动。 */
 function buildSkillIndexFromDataset() {
-  const rows = dsSkills().map(r => {
+  const rows: SkillEntry[] = dsSkills().map(r => {
     const rel = r.rel || {};
     const ownerKey = rel.ownerKey || "";
     const ownerKind = rel.ownerKind || "char";
@@ -79,7 +79,7 @@ function buildSkillIndexFromDataset() {
     skillByKey.set(s.key, s);
     const k = nameKey(s.name);
     if (!skillByName.has(k)) skillByName.set(k, []);
-    skillByName.get(k).push(s);
+    skillByName.get(k)!.push(s);
     const list = byOwner.get(s.ownerKey) || [];
     list.push(s);
     byOwner.set(s.ownerKey, list);
@@ -95,9 +95,10 @@ function buildSkillIndex() {
   if (typeof dsReady === "function" && dsReady()) { buildSkillIndexFromDataset(); return; }
   const seen = new Set();
   for (const c of state.CHAR) {
-    const list = [];
+    const list: SkillEntry[] = [];
     for (const s of c.skills || []) {
-      if (!s || !s.name) continue;
+      /* 没有 id 的技能无法构成稳定键（也无法与数据集路径对齐），直接跳过 */
+      if (!s || typeof s.name !== "string" || !s.name || s.id == null) continue;
       const dedupeId = c.id + ":" + s.id;
       if (seen.has(dedupeId)) continue;      /* 数据里偶有完全重复的一条 */
       seen.add(dedupeId);
@@ -112,14 +113,15 @@ function buildSkillIndex() {
       const turns = (PREPARE_TURNS_RE.exec(desc) || [])[1];
       list.push({
         kind: "skill",
+        ownerKind: "char",   /* 旧数据源路径只处理角色技能；装备牌特技走数据集路径 */
         key: c.id + ":" + s.id,
         id: s.id,
         ownerId: c.id,
         ownerName: c.name,
         name: s.name,
         englishName: s.englishName || "",
-        tag: s.type,
-        tagZh: SKILL_TAG_ZH[s.type] || "技能",
+        tag: s.type || "",
+        tagZh: SKILL_TAG_ZH[s.type || ""] || "技能",
         cost: Array.isArray(s.playCost) ? s.playCost : [],
         desc,
         effect: skillEffectText(desc),
@@ -138,7 +140,7 @@ function buildSkillIndex() {
       skillByKey.set(s.key, s);
       const k = nameKey(s.name);
       if (!skillByName.has(k)) skillByName.set(k, []);
-      skillByName.get(k).push(s);
+      skillByName.get(k)!.push(s);
     }
   }
 }

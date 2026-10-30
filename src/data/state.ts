@@ -11,10 +11,13 @@ import type { ParsedDeck, OverlayEntry } from "../types";
 export interface RawSkill {
   id?: number;
   name?: string;
+  englishName?: string;
   description?: string;
   rawDescription?: string;
   tag?: string;
   type?: string;
+  hidden?: boolean;
+  playCost?: unknown[] | number;
   [k: string]: unknown;
 }
 
@@ -36,6 +39,10 @@ export interface RawEntity {
   tags?: string[];
   skills?: RawSkill[];
   version?: string;
+  sinceVersion?: string;
+  relatedCharacterId?: number | null;
+  relatedCharacterTags?: string[];
+  relatedCardId?: number | null;
   [k: string]: unknown;
 }
 

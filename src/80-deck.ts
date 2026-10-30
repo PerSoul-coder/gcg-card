@@ -5,6 +5,7 @@ import { decodeRaw, encodeRaw } from "./10-codec";
 import { syncTileQty } from "./85-views";
 import { cardElement, charElement } from "./45-pool";
 import { state } from "./data/state";
+import type { Deck, Draft } from "./types";
 import { STORAGE_KEYS, imgFull, eleIcon } from "./core/resources";
 import { esc, toast } from "./core/dom";
 import { registerLayer, syncScrollLock } from "./core/layers";
@@ -16,23 +17,23 @@ import { pool } from "./45-pool";
    decks: [{id, name, chars:[], cards:[[id,count]], updatedAt}]，持久化于 localStorage。
    draft 是"当前活动牌组"的内存门面——draftAdd / draftEncode 等旧接口全部保留，
    底层改为读写活动牌组，任何变更即同步落盘。旧版单草稿（gi-viewer-draft）首次启动自动迁移。 */
-const draft = { chars: [], cards: new Map() };  /* chars: id[]；cards: id→count */
-let decks = [];
-let activeDeckId = null;
-let deckRenameId = null;
+const draft: Draft = { chars: [], cards: new Map() };  /* chars: id[]；cards: id→count */
+let decks: Deck[] = [];
+let activeDeckId: number | null = null;
+let deckRenameId: number | null = null;
 function loadDecks() {
   decks = [];
   try {
     const d = JSON.parse(localStorage.getItem(STORAGE_KEYS.decks) || "null");
-    if (Array.isArray(d)) decks = d.filter(x => x && typeof x === "object" && Number.isFinite(x.id));
+    if (Array.isArray(d)) decks = (d as Deck[]).filter(x => x && typeof x === "object" && Number.isFinite(x.id));
   } catch (e) { decks = []; }
 }
 function saveDecks() { try { localStorage.setItem(STORAGE_KEYS.decks, JSON.stringify(decks)); } catch (e) {} }
 function activeDeck() { return decks.find(d => d.id === activeDeckId) || null; }
 let deckSeq = 0;
-function newDeck(name) {
+function newDeck(name?: string): Deck {
   /* id 带序号后缀：同一毫秒连建多个牌组也不会碰撞 */
-  const d = { id: Date.now() * 1000 + (deckSeq++ % 1000), name: name || `牌组 ${decks.length + 1}`, chars: [], cards: [], updatedAt: Date.now() };
+  const d: Deck = { id: Date.now() * 1000 + (deckSeq++ % 1000), name: name || `牌组 ${decks.length + 1}`, chars: [], cards: [], updatedAt: Date.now() };
   decks.unshift(d); activeDeckId = d.id; return d;
 }
 
