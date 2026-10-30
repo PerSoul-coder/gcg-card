@@ -37,7 +37,7 @@ const documentStub = {
   addEventListener: () => {},
   querySelector: () => makeEl(false),
   querySelectorAll: () => [],
-  body: { appendChild: () => {} },
+  body: { appendChild: () => {}, dataset: {} },
 };
 const fetchStub = async url => {
   const cat = Object.keys(DATA).find(c => url.endsWith("/" + c));

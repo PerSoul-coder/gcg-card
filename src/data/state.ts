@@ -80,7 +80,7 @@ export const state: AppState = {
   charByName: new Map(),
   entById: new Map(),
   current: null,
-  currentView: "grid",
+  currentView: "browse",
   deckOrder: [],
   overlayStack: [],
 };

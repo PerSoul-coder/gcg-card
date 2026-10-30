@@ -39,7 +39,12 @@ document.addEventListener("click", ev => {
   if ((ev.target as HTMLElement).closest("#suggest") || (ev.target as HTMLElement).id === "browseSearch") return;
   closeSuggest();
 });
-$("btnSample").addEventListener("click", () => { $<HTMLInputElement>("codeInput").value = SAMPLE; updateBtnLabel(); decodeAndRender(SAMPLE); });
+/* 示例牌组：载入后直接跳到卡面视图——用户点它就是要看一副牌 */
+$("btnSample").addEventListener("click", () => {
+  $("moreMenu").classList.remove("show");
+  $<HTMLInputElement>("codeInput").value = SAMPLE; updateBtnLabel();
+  decodeAndRender(SAMPLE).then(() => switchView("grid")).catch(() => {});
+});
 $("btnHistory").addEventListener("click", () => { renderHistory(); toggleHistoryPanel(); });
 $("histPanel").addEventListener("click", ev => {
   const item = (ev.target as HTMLElement).closest("[data-code]");
@@ -52,12 +57,16 @@ document.addEventListener("click", ev => {
 const VIEW_KEY = STORAGE_KEYS.view;
 const VIEW_RENDER = { grid: renderGrid, list: renderList, browse: renderBrowse };
 function switchView(name) {
-  if (!VIEW_RENDER[name]) name = "grid";
+  /* 卡库是主入口：未知视图一律落到 browse，而不是「空牌组的卡面」 */
+  if (!VIEW_RENDER[name]) name = "browse";
   state.currentView = name;
   document.querySelectorAll(".tab").forEach(x => x.classList.toggle("active", x.dataset.view === name));
   document.querySelectorAll(".view").forEach(v => v.classList.toggle("active", v.id === "view-" + name));
+  /* 牌组操作条（分享码 / 导出 / 牌组工具）只属于牌组视图，由 CSS 按 body[data-view]
+     决定显隐——样式跟着视图走，不靠每个入口记得调 */
+  document.body.dataset.view = name;
   try { localStorage.setItem(VIEW_KEY, name); } catch (e) {}
-  const render = VIEW_RENDER[name] || renderGrid;
+  const render = VIEW_RENDER[name] || renderBrowse;
   /* 牌组摘要是「卡面视图」的头部信息，切到卡库/列表时收起：
      否则解析过牌组之后，整块摘要会一直压在标签栏上方（手机上约占半屏） */
   const sum = $("summary");
@@ -214,9 +223,10 @@ document.addEventListener("keydown", ev => {
   if (overlayOpen()) return;
   const tag = ((ev.target as HTMLElement).tagName || "").toLowerCase();
   if (tag === "input" || tag === "textarea") return;
-  if (ev.key === "1") switchView("grid");
-  if (ev.key === "2") switchView("list");
-  if (ev.key === "3") switchView("browse");
+  /* 数字键与标签栏顺序一致：1 卡库 / 2 牌组卡面 / 3 牌组列表 */
+  if (ev.key === "1") switchView("browse");
+  if (ev.key === "2") switchView("grid");
+  if (ev.key === "3") switchView("list");
   if (ev.key === "/") { ev.preventDefault(); focusBrowseSearch(); }
 });
 
@@ -259,14 +269,15 @@ function routeHash() {
   if (h) {   /* 分享码 */
     $<HTMLInputElement>("codeInput").value = h; updateBtnLabel();
     return (async () => {
-      try { await decodeAndRender(h); restoreView(); }
+      /* 外部分享链接：解析成功后直接进卡面视图，用户要的就是这副牌 */
+      try { await decodeAndRender(h); switchView("grid"); }
       catch (e) { setStatus("加载失败：" + (e as Error).message, "err"); }
     })();
   }
-  /* 空 hash：加载示例牌组，并恢复上次停留的视图 */
-  $<HTMLInputElement>("codeInput").value = SAMPLE; updateBtnLabel();
+  /* 空 hash：直接进卡库——这是浏览器的主用途。
+     示例牌组改为按需（页头「更多 → 加载示例牌组」），不再每次打开都解析一遍并写进历史。 */
   return (async () => {
-    try { await decodeAndRender(SAMPLE, { noHash: true }); restoreView(); }
+    try { await ensureData(); restoreView(); }
     catch (e) { setStatus("加载失败：" + (e as Error).message, "err"); }
   })();
 }
@@ -274,7 +285,8 @@ function routeHash() {
 function restoreView() {
   let v = "";
   try { v = localStorage.getItem(VIEW_KEY) || ""; } catch (e) {}
-  if (v && VIEW_RENDER[v]) switchView(v);
+  /* 没有记录时落到卡库：这是浏览器的主用途，不该一上来就是「空牌组的卡面」 */
+  switchView(VIEW_RENDER[v] ? v : "browse");
 }
 /* hash 变化重新路由。history.replaceState 不触发 hashchange，因此筛选/检索内部
    改 hash 不会自触发；只有用户改地址栏、前进后退、外部链接才会进来。 */

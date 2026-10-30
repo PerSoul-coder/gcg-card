@@ -50,7 +50,7 @@ const documentStub = {
   addEventListener: () => {},
   querySelector: () => makeEl(false),
   querySelectorAll: () => [],
-  body: { appendChild: () => {} },
+  body: { appendChild: () => {}, dataset: {} },
 };
 
 const logic = readAppSource();

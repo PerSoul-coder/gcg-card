@@ -141,9 +141,10 @@ function fileStamp() {
 }
 
 /* ---------- 导出菜单 / 更多菜单 ----------
-   两个下拉互斥，共用一个层：Esc 只按一次就该把「当前打开的那个」关掉，
+   三个下拉互斥，共用一个层：Esc 只按一次就该把「当前打开的那个」关掉，
    而不是先关一个、再按一次关另一个。 */
-const MENU_IDS = ["exportMenu", "moreMenu"] as const;
+const MENU_OF: Record<string, string> = { btnExport: "exportMenu", btnDeckTools: "deckToolsMenu", btnMore: "moreMenu" };
+const MENU_IDS = Object.values(MENU_OF);
 const menuEl = (id: string) => $(id);
 const menusOpen = () => MENU_IDS.some(id => { const el = menuEl(id); return !!(el && el.classList && el.classList.contains("show")); });
 const closeMenus = () => {
@@ -152,27 +153,28 @@ const closeMenus = () => {
 registerLayer({ id: "topMenus", isOpen: menusOpen, close: closeMenus, order: 10 });
 
 const openMenu = (btn: string) => {
-  const menu = btn === "btnExport" ? "exportMenu" : "moreMenu";
-  const other = menu === "exportMenu" ? "moreMenu" : "exportMenu";
-  $(other).classList.remove("show");
+  const menu = MENU_OF[btn];
+  if (!menu) return;
+  for (const id of MENU_IDS) if (id !== menu) $(id).classList.remove("show");
   $(menu).classList.toggle("show");
 };
 $("btnExport").addEventListener("click", ev => { ev.stopPropagation(); openMenu("btnExport"); });
+$("btnDeckTools").addEventListener("click", ev => { ev.stopPropagation(); openMenu("btnDeckTools"); });
 $("btnMore").addEventListener("click", ev => { ev.stopPropagation(); openMenu("btnMore"); });
 document.addEventListener("click", ev => {
   if (!(ev.target as HTMLElement).closest(".expwrap")) closeMenus();
 });
-/* 更多菜单动作 */
+/* 页头「更多」菜单动作：全局功能，任何视图都可用 */
 $("btnDataInfo").addEventListener("click", () => {
   const el = $("dataInfo");
   const show = el.style.display === "none";
   el.style.display = show ? "" : "none";
   $("btnDataInfo").textContent = show ? "隐藏数据信息" : "数据信息";
-  $("moreMenu").classList.remove("show");
+  closeMenus();
 });
-$("btnDeckDiff").addEventListener("click", () => { $("moreMenu").classList.remove("show"); showDeckDiff(); });
-$("btnOdds").addEventListener("click", () => { $("moreMenu").classList.remove("show"); showOdds(); });
-$("btnHelp").addEventListener("click", () => { $("moreMenu").classList.remove("show"); showHelp(); });
+$("btnDeckDiff").addEventListener("click", () => { closeMenus(); showDeckDiff(); });
+$("btnOdds").addEventListener("click", () => { closeMenus(); showOdds(); });
+$("btnHelp").addEventListener("click", () => { closeMenus(); showHelp(); });
 $("exportMenu").addEventListener("click", ev => {
   const b = (ev.target as HTMLElement).closest("[data-exp]");
   if (!b) return;

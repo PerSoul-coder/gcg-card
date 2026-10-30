@@ -80,7 +80,7 @@ const documentStub = {
   addEventListener: () => {},
   querySelector: () => makeEl(null),
   querySelectorAll: () => [],
-  body: { appendChild: () => {} },
+  body: { appendChild: () => {}, dataset: {} },
   documentElement: { classList: { add() {}, remove() {}, toggle() {}, contains: () => false } },
 };
 const fetchStub = async url => {
