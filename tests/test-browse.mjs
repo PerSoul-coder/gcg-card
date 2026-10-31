@@ -417,6 +417,28 @@ return (async () => {
   browseState.mech = "";
   assert(browseHash() === "", "机制清空后 hash 复位");
 
+  /* ===== 15. 分享图布局（96-share 纯函数：网格数学 / 边界 / 不重叠） ===== */
+  /* 前面的用例可能清掉了解析状态：确保有一副牌组再算布局 */
+  if (!state.current) await decodeAndRender(SAMPLE, { noHash: true });
+  const L = shareImageLayout(state.current, { name: "测试牌组", note: null });
+  assert(L.width === 1080 && L.height > 400, "分享图布局：画布尺寸合理（" + L.width + "×" + L.height + "）");
+  assert(L.charCells.length === state.current.chars.length && L.charCells.length <= 3, "分享图布局：角色格数与角色数一致");
+  const nCards = state.current.order.reduce((a, t) => a + state.current.groups[t].length, 0);
+  assert(L.cardCells.length === nCards, "分享图布局：行动牌格数 = 去重卡种数");
+  /* 网格内不越界、彼此不重叠（同尺寸格子：检查左上角不重复即可） */
+  const inB = c => c.x >= 0 && c.y >= 0 && c.x + c.w <= L.width && c.y + c.h <= L.height;
+  assert(L.cardCells.every(inB) && L.charCells.every(inB), "分享图布局：所有格子都在画布内");
+  const keys = new Set(L.cardCells.map(c => c.x + "," + c.y));
+  assert(keys.size === L.cardCells.length, "分享图布局：格子不重叠");
+  /* 8 列网格：同一行的格子 y 相同，最多 8 个不同 x */
+  const ys = [...new Set(L.cardCells.map(c => c.y))];
+  assert(Math.max(...ys.map(y => L.cardCells.filter(c => c.y === y).length)) <= 8, "分享图布局：每行不超过 8 张");
+  /* 计数徽标的数据源：多张卡带 count>1 */
+  assert(L.cardCells.some(c => c.count > 1) === state.current.order.some(t => state.current.groups[t].some(x => x.count > 1)), "分享图布局：count 透传");
+  /* note 行存在时画布要变高（B3 的备注会传进来） */
+  const L2 = shareImageLayout(state.current, { note: "起手要素：先找 X" });
+  assert(L2.height === L.height + 30, "分享图布局：备注行抬高画布");
+
 })();
 `;
 

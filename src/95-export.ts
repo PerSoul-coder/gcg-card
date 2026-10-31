@@ -4,6 +4,8 @@ import { recordOfId, shareOfId } from "./data/records";
 import { $, copyText } from "./core/dom";
 import { skillsOf } from "./47-skills";
 import { showDeckDiff } from "./88-compare";
+import { renderShareCanvas } from "./96-share";
+import { activeDeck } from "./80-deck";
 import { showHelp } from "./90-detail";
 import { decodeRaw, encodeRaw } from "./10-codec";
 import { state } from "./data/state";
@@ -13,9 +15,10 @@ import { toast } from "./core/dom";   /* copyText 已在上面与 $ 一并导入
 import { registerLayer } from "./core/layers";
 
 /* ---------- 导出：文本 / Markdown / 结构化 JSON / CSV ---------- */
-function download(name, content, mime) {
+function download(name, content: string | Blob, mime) {
   const a = document.createElement("a");
-  a.href = URL.createObjectURL(new Blob([content], { type: mime }));
+  const blob = content instanceof Blob ? content : new Blob([content], { type: mime });
+  a.href = URL.createObjectURL(blob);
   a.download = name;
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 4000);
@@ -191,6 +194,20 @@ const EXPORT_ACTIONS: Array<{ id: string; label: string; hint?: string; run: () 
   {
     id: "csv", label: "CSV · 下载（Excel 可直开）",
     run: () => { download(`${fileStamp()}.csv`, toCSV(), "text/csv;charset=utf-8"); toast("CSV 已下载（Excel 可直开）"); },
+  },
+  {
+    id: "png", label: "分享图 · 下载（PNG）", hint: "把当前牌组绘成一张可分享的长图（含角色 / 卡面 / 费用分布 / 分享码）",
+    run: () => {
+      if (!state.current) { toast("请先解析一个牌组", true); return; }
+      toast("正在生成分享图…");
+      void (async () => {
+        const canvas = await renderShareCanvas(state.current!, { name: activeDeck()?.name || null, note: activeDeck()?.note || null });
+        const blob = await new Promise<Blob | null>(r => canvas.toBlob(r, "image/png"));
+        if (!blob) throw new Error("canvas 导出失败");
+        download(`${fileStamp()}.png`, blob, "image/png");
+        toast("分享图已下载");
+      })().catch(e => toast("分享图生成失败：" + (e as Error).message, true));
+    },
   },
 ];
 /* 复制是异步的：成功/失败都要有回音，不留 unhandled rejection（run 内部自理）；

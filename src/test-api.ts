@@ -33,4 +33,5 @@ export * from "./85-views";
 export * from "./88-compare";
 export * from "./90-detail";
 export * from "./95-export";
+export * from "./96-share";
 export * from "./99-main";
