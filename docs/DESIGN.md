@@ -516,6 +516,28 @@ TermEntry desc/story 下沉后，同构哑弹与散落约定的清除：
   同原理）——单文件版日后托管到网站，同一份 HTML 的扫码内容自然就是线上地址，
   不分协议降级。
 
+### 16.2b 第二轮特性（用户点单十项）
+
+- **门面与链接**：head 补 description / og:* / 内联 SVG favicon（og:image 依赖
+  部署域名先不写）；工具栏「复制链接」= location.href + #码（qrContent 复用）。
+  #t= / #s= 深链核查发现 routeHash 早已消费——提案前先 grep 现状。
+- **校验违规可定位**：deckProblems 字符串数组改 { text, ids }——全局计数类问题
+  没有单卡可指（ids 空 → 按钮禁用态仅展示）。
+- **曲线点选**：柱条 data-odds → 卡面视图 .cost-hit 描金 + scrollIntoView，
+  再点同桶取消；renderGrid 重渲染时复位（旧引用已失效）。
+- **分享图核心牌描金**：activeDeckMeta 的 core 一直都在，只是没传给 png 动作。
+- **最近查看（46-recent）**：showDetail 前插去重、上限 12、prune 同 favs 口径；
+  横带点击复用 90-detail 的 data-goto 全局委托——先找现有机制再发明新的。
+- **检索命中片段（descSnippet）**：SearchHit.descText 携带原文、渲染时切片
+  高亮——描述命中此前只有一枚 chip，瓦片解释不了「为什么命中」。
+- **备份/恢复**：localStorage 按 origin 隔离 → 迁移路径就是备份文件。合并语义
+  只增改不删除（updatedAt 新者胜），恢复无需预确认。
+- **文本导入（98-textimport）**：解析纯函数 + 检查清单（err/warn 两级，err 阻断
+  载入）+ 确认弹页；载入永远创建新牌组。带【分享码】行给一键直解析（逐字节
+  可靠优先于文本匹配）。
+- **资源缓存（49-cache）**：Cache Storage 仅 https/localhost；命中优先 + 被动
+  回填都在 core/image.ts 一个收口；全量预缓存 6 并发可中止、已缓存秒过。
+
 ### 16.3 坑
 
 - build-app 缓存指纹只收集 src/gi-data——**vendor 改动不失效缓存**，产物陈旧
