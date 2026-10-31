@@ -10,10 +10,18 @@ import { navBar } from "./90-detail";
 import { overlayHashClear } from "./core/history";
 
 /* ---------- 抽牌概率模型 ----------
-   行动牌是 30 张的无放回抽样池，抽牌等价于超几何分布：
+   行动牌是 30 张的无放回抽样池。基础分布是超几何：
      P(至少 need 张) = 1 - Σ_{i<need} C(K,i)·C(N-K,n-i) / C(N,n)
    N = 行动牌总数，K = 关键牌张数，n = 已看到的牌数。
-   起手 5 张，之后每回合抽 2 张；不含调度（换牌）与额外抽牌效果。 */
+   在此之上按官方规则建模两件事：
+   · 调度换牌：起手摸 5 后可把任意张放回牌组底再摸回同张数。概率表采用
+     「最大化关键牌到手」的策略假设——起手没有关键牌就把 5 张全部换掉再摸
+     5 张；换下的牌压在牌组底，之后的摸牌在摸穿上部之前碰不到它们。
+     于是每个观察点是两种局面的精确混合（各自都是标准超几何）：
+     A = 起手就有（不触发全换）：手牌含位置 1..(5+2t) 的关键牌；
+     ¬A = 起手没有（全换 5 再摸 5）：手牌含位置 6..(10+2t) 的关键牌。
+   · 秘传必在起始手牌：整套限 1 张且起手必带 → 到手率恒 100%。
+   之后每回合抽 2 张；不含额外抽牌效果。 */
 const DRAW_START = 5;
 const DRAW_PER_TURN = 2;
 const ODDS_TURNS = [0, 1, 2, 3, 4];
@@ -56,23 +64,45 @@ function oddsDeckStats(): OddsStats {
   }
   return { total, byCost, byType, uniq, avg: total ? diceTotal / total : 0 };
 }
-/* 每个观察点（起手 / 第 1~4 回合后 / 全牌组）的至少 1 张、至少 2 张与期望张数 */
-function oddsRows(N: number, K: number): OddsRow[] {
-  const seen = new Set<number>();
+/* 每个观察点（起手 / 第 1~4 回合后 / 全牌组）的至少 1 张、至少 2 张与期望张数。
+   legend=true：秘传牌，起手必带 → 到手率恒 100%、期望恒 1。否则按「起手未中则
+   全换 5 张」的调度策略混合两种超几何局面（见上方模型注释）。 */
+function oddsRows(N: number, K: number, legend = false): OddsRow[] {
   const out: OddsRow[] = [];
-  const push = (label, n) => {
-    n = Math.min(n, N);
-    if (seen.has(n)) return;
-    seen.add(n);
+  if (legend) {
+    for (const t of ODDS_TURNS) {
+      out.push({ label: t === 0 ? `起手 ${DRAW_START} 张` : `第 ${t} 回合后`, n: DRAW_START + t * DRAW_PER_TURN, atLeast1: 1, atLeast2: null, expect: 1 });
+    }
+    out.push({ label: `全牌组 ${N} 张`, n: N, atLeast1: 1, atLeast2: null, expect: 1 });
+    return out;
+  }
+  const clamp01 = (p: number) => Math.max(0, Math.min(1, p));
+  /* ¬A：起手 5 张全无关键牌（A 的补集）。此后关键牌均匀分布在其余 N-5 个位置。 */
+  const pNo = comb(N - K, DRAW_START) / comb(N, DRAW_START);
+  const seen = new Set<number>();
+  const push = (label: string, t: number) => {
+    const d1 = Math.min(DRAW_START + t * DRAW_PER_TURN, N);          /* A 局面：位置 1..(5+2t) */
+    if (seen.has(d1)) return;
+    seen.add(d1);
+    const dTurn = Math.min(t * DRAW_PER_TURN, N - DRAW_START);       /* ¬A 时 W1 里属于「回合抽」的部分 */
+    const d2 = Math.min(DRAW_START + t * DRAW_PER_TURN, N - DRAW_START); /* ¬A 局面：位置 6..(5+2t)+5 */
+    const a1 = (hyperAtLeast(N, K, d1, 1) - pNo * hyperAtLeast(N - DRAW_START, K, dTurn, 1))
+      + pNo * hyperAtLeast(N - DRAW_START, K, d2, 1);
+    const a2 = K >= 2
+      ? (hyperAtLeast(N, K, d1, 2) - pNo * hyperAtLeast(N - DRAW_START, K, dTurn, 2))
+        + pNo * hyperAtLeast(N - DRAW_START, K, d2, 2)
+      : null;
+    const ex = (K * d1 / N - pNo * K * dTurn / (N - DRAW_START))
+      + pNo * K * d2 / (N - DRAW_START);
     out.push({
-      label, n,
-      atLeast1: hyperAtLeast(N, K, n, 1),
-      atLeast2: K >= 2 ? hyperAtLeast(N, K, n, 2) : null,
-      expect: N ? n * K / N : 0,
+      label, n: d1,
+      atLeast1: clamp01(a1),
+      atLeast2: a2 == null ? null : clamp01(a2),
+      expect: Math.max(0, Math.min(K, ex)),
     });
   };
-  for (const t of ODDS_TURNS) push(t === 0 ? `起手 ${DRAW_START} 张` : `第 ${t} 回合后 ${DRAW_START + t * DRAW_PER_TURN} 张`, DRAW_START + t * DRAW_PER_TURN);
-  push(`全牌组 ${N} 张`, N);
+  for (const t of ODDS_TURNS) push(t === 0 ? `起手 ${DRAW_START} 张（未中则全换）` : `第 ${t} 回合后`, t);
+  push(`全牌组 ${N} 张`, Number.MAX_SAFE_INTEGER >> 1);   /* 饱和行：窗口吞下整个牌堆 */
   return out;
 }
 
@@ -86,7 +116,10 @@ function oddsRows(N: number, K: number): OddsRow[] {
      通用骰（VOID）费用任何骰都能付，重投后等价可付、视为闲置
    · 元素调和：弃 1 张手牌，把 1 枚骰转换成任意元素（「元素调和」词条）
    · 秘传必在起始手牌（「秘传」词条）；纯秘传标记（无骰子费用）的牌在手即可打出
-   不模拟：卡片效果触发、角色充能（费用中的充能视作可满足）、调度换牌。
+   · 调度换牌（「替换手牌」规则）：起手没有关键牌时按「最大化到手」策略把 5 张
+     全部放回牌组底再摸 5 张；压底的牌在摸穿上部之前不会被摸出（模拟里它们
+     只含非关键牌，关键牌永远只可能在上部被摸到）
+   不模拟：卡片效果触发、角色充能（费用中的充能视作可满足）。
    「可打出」的语义：第 t 回合内目标牌在手（本回合新抽算入）且——把目标牌当作
    本回合第一优先支出时——骰子够付。含调和/不含调和两列共用同一批骰子抽样
    （配对比较，只差在是否允许弃牌转色）。 */
@@ -149,12 +182,13 @@ export interface SimResult {
 
 export function simTurns(opts: {
   total: number; copies: number; playCost: CostEntry[] | undefined;
-  turns?: number; trials?: number; seed?: number; reroll?: boolean;
+  turns?: number; trials?: number; seed?: number; reroll?: boolean; mulligan?: boolean;
 }): SimResult {
   const T = Math.max(1, Math.min(opts.turns ?? SIM_TURNS, 20));
   const trials = Math.max(1, opts.trials ?? SIM_TRIALS);
   const rng = rng32(opts.seed ?? 20261031);
-  const reroll = opts.reroll !== false;   /* 默认按官方规则重投（测试可关闭做配对比较） */
+  const reroll = opts.reroll !== false;       /* 默认按官方规则重投（测试可关闭做配对比较） */
+  const mulligan = opts.mulligan !== false;   /* 默认按官方规则调度（测试可关闭做对照） */
   const { diceTotal, needs } = parseCost(opts.playCost);
   const isLegend = (opts.playCost || []).some(pc => pc.type === "GCG_COST_LEGEND");
   /* 秘传必在起始手牌：把一张固定放进起手，其余照常洗在牌堆里 */
@@ -162,8 +196,13 @@ export function simTurns(opts: {
   let pickInDeck = Math.max(0, opts.copies - pickInHand);
   let deckLeft = Math.max(0, opts.total - (isLegend ? 1 : 0));
   let hand = 0;
+  let returned = 0;   /* 调度压底的张数（只可能是非关键牌：起手没摸到才触发全换） */
   const draw = () => {   /* 无放回抽样：逐张判定是否关键牌 */
-    if (deckLeft <= 0) return;
+    if (deckLeft <= 0) {
+      /* 上部摸穿后才会碰到压底的牌——它们不含关键牌，只计手牌数 */
+      if (returned > 0) { returned--; hand++; }
+      return;
+    }
     if (rng() * deckLeft < pickInDeck) { pickInHand++; pickInDeck--; }
     deckLeft--; hand++;
   };
@@ -226,8 +265,14 @@ export function simTurns(opts: {
     pickInDeck = Math.max(0, opts.copies - pickInHand);
     deckLeft = Math.max(0, opts.total - (isLegend ? 1 : 0));
     hand = 0;
-    /* 起手 5 张 */
+    returned = 0;
+    /* 起手 5 张；调度换牌：起手没有关键牌 → 5 张全部放回牌组底，重摸 5 张 */
     for (let i = 0; i < DRAW_START; i++) draw();
+    if (mulligan && pickInHand === 0 && deckLeft > 0) {
+      hand = 0;
+      returned = DRAW_START;
+      for (let i = 0; i < DRAW_START; i++) draw();
+    }
     snap(0);
     /* 每回合：结束阶段抓 2 张 → 下一回合投骰判定可打出 */
     for (let t = 1; t <= T; t++) {
@@ -275,7 +320,8 @@ function renderOddsView(v) {
     return;
   }
   const pick = stats.uniq.find(x => x.id === v.pick) || stats.uniq[0];
-  const rows = oddsRows(stats.total, pick.count);
+  const isLegend = (pick.playCost || []).some(pc => pc.type === "GCG_COST_LEGEND");
+  const rows = oddsRows(stats.total, pick.count, isLegend);
   const typeKeys = Object.keys(stats.byType);
   /* 关键牌按类型分组，30 张卡的下拉不再是一长串平铺 */
   const groups: Array<{ type: string; items: ParsedCard[] }> = [];
@@ -286,7 +332,10 @@ function renderOddsView(v) {
   }
   const pickMeta = `${pick.type}${costText(pick.playCost) ? " · " + costText(pick.playCost) : ""} · 牌组内 ×${pick.count}（${Math.round(pick.count / stats.total * 100)}%）`;
   const take = rows.length
-    ? `<div class="odds-take">起手 ${rows[0].n} 张至少摸到 1 张：<b>${fmtPct(rows[0].atLeast1)}</b>${rows[1] ? ` · 第 1 回合后（${rows[1].n} 张）：<b>${fmtPct(rows[1].atLeast1)}</b>` : ""}</div>` : "";
+    ? (isLegend
+      ? `<div class="odds-take">秘传必在起手：到手率恒为 <b>${fmtPct(rows[0].atLeast1)}</b>（整套限 1 张，无需调度）</div>`
+      : `<div class="odds-take">起手 5 张（未中则全换）至少摸到 1 张：<b>${fmtPct(rows[0].atLeast1)}</b>${rows[1] ? ` · 第 1 回合后：<b>${fmtPct(rows[1].atLeast1)}</b>` : ""}</div>`)
+    : "";
   $("detail").innerHTML = `${navBar()}
     <div class="odds-view">
       <div class="cmp-title">抽牌概率与费用曲线 <small>${stats.total} 张行动牌 · 不含角色牌</small></div>
@@ -302,7 +351,7 @@ function renderOddsView(v) {
         <div class="odds-chips">${typeKeys.map(t => `<span class="odds-chip">${esc(t)} ${stats.byType[t]}</span>`).join("")}</div>
       </div>
       <div class="odds-sec">
-        <h3>关键牌抽牌概率 <small>超几何分布 · 每回合抽 2 张</small></h3>
+        <h3>关键牌抽牌概率 <small>超几何精确值 · 含调度换牌</small></h3>
         <label class="odds-pick"><span>关键牌</span>
           <select data-oddspick aria-label="选择要计算抽牌概率的关键牌">
             ${groups.map(g => `<optgroup label="${esc(g.type)}">${g.items.map(x => `<option value="${x.id}"${x.id === pick.id ? " selected" : ""}>${esc(x.name)}${x.count > 1 ? ` ×${x.count}` : ""}</option>`).join("")}</optgroup>`).join("")}
@@ -311,34 +360,33 @@ function renderOddsView(v) {
         </label>
         ${take}
         <table class="odds-table">
-          <tr><th>看到张数</th><th>至少 1 张</th><th>至少 2 张</th><th>期望张数</th></tr>
+          <tr><th>回合</th><th>至少 1 张</th><th>至少 2 张</th><th>期望张数</th></tr>
           ${rows.map((r, i) => `<tr${i === 0 ? ' class="key"' : ""}>
             <td>${esc(r.label)}</td>
             <td><b>${fmtPct(r.atLeast1)}</b><span class="odds-pbar"><i style="width:${Math.round(r.atLeast1 * 100)}%"></i></span></td>
             <td>${r.atLeast2 == null ? "—" : fmtPct(r.atLeast2)}</td>
             <td>${r.expect.toFixed(2)}</td></tr>`).join("")}
         </table>
-        <div class="odds-hint">按起手 ${DRAW_START} 张、每回合抽 ${DRAW_PER_TURN} 张估算，不含调度与额外抽牌效果；角色牌不参与行动牌抽牌。</div>
+        <div class="odds-hint">起手摸 5 张；未摸到关键牌则按「5 张全部调度换掉再摸 5 张」计，换下的牌压在牌组底，之后的摸牌碰不到；之后每回合抽 ${DRAW_PER_TURN} 张。不含额外抽牌效果；角色牌不参与行动牌抽牌。本工具估计较粗略与乐观——实际对局还需先打其它牌、费用互相占用，真实打出概率通常低于表值。</div>
       </div>
       ${(() => {
         const sim = simFor(`${state.current!.code}|${pick.id}|${stats.total}`,
           { total: stats.total, copies: pick.count, playCost: pick.playCost });
-        const isLegend = (pick.playCost || []).some(pc => pc.type === "GCG_COST_LEGEND");
         const zeroCost = parseCost(pick.playCost).diceTotal === 0;
         const row = (t: number, key: boolean) => `<tr${key ? ' class="key"' : ""}>
-          <td>${t === 0 ? `起手 ${DRAW_START} 张` : `第 ${t} 回合（已看 ${Math.min(stats.total, DRAW_START + t * DRAW_PER_TURN)} 张）`}</td>
+          <td>${t === 0 ? `起手 ${DRAW_START} 张` : `第 ${t} 回合`}</td>
           <td><b>${fmtPct(sim.inHand[t])}</b></td>
           <td>${fmtPct(sim.playable[t])}<span class="odds-pbar"><i style="width:${Math.round(sim.playable[t] * 100)}%"></i></span></td>
           <td>${fmtPct(sim.playableRaw[t])}</td>
           <td>${sim.handAvg[t].toFixed(1)}</td></tr>`;
         return `<div class="odds-sec">
         <h3>回合模拟 <small>蒙特卡洛 · ${sim.trials.toLocaleString()} 次</small></h3>
-        <div class="odds-simmeta">规则：起手 ${DRAW_START} 张 · 每回合抓 ${DRAW_PER_TURN} 张 · 每回合投 ${DICE_PER_TURN} 枚元素骰（万能 1/8，不继承），投后可重投一次（闲置骰全部重投）· 秘传必在起手${isLegend ? `（本牌是秘传，起手必带${zeroCost ? "；0 费在手即打出" : ""}）` : ""} · 不模拟效果触发与充能（充能费用视作可满足）</div>
+        <div class="odds-simmeta">规则：起手 ${DRAW_START} 张，未摸到关键牌则全换 5 张再摸 5（换下的压底）· 每回合抓 ${DRAW_PER_TURN} 张 · 每回合投 ${DICE_PER_TURN} 枚元素骰（万能 1/8，不继承），投后可重投一次（闲置骰全部重投）· 秘传必在起手${isLegend ? `（本牌是秘传，起手必带${zeroCost ? "；0 费在手即打出" : ""}）` : ""} · 不模拟效果触发与充能（充能费用视作可满足）</div>
         <table class="odds-table">
           <tr><th>回合</th><th>到手</th><th>可打出 · 含调和</th><th>可打出 · 不调和</th><th>平均手牌</th></tr>
           ${sim.turns.map(t => row(t, t === 0)).join("")}
         </table>
-        <div class="odds-hint">「含调和」按官方元素调和计：每弃 1 张手牌可把 1 枚骰转成任意元素；「可打出」把关键牌当作该回合的第一优先支出，不含先打其它牌的占用。重投按理性策略计：对支付本牌费用无贡献的闲置骰全部重投（枚数 0~8 随局面）。</div>
+        <div class="odds-hint">「含调和」按官方元素调和计：每弃 1 张手牌可把 1 枚骰转成任意元素；「可打出」把关键牌当作该回合的第一优先支出。重投按理性策略计：对支付本牌费用无贡献的闲置骰全部重投（枚数 0~8 随局面）。本工具估计较粗略与乐观：不模拟效果触发、充能与对局取舍，实际打出概率通常低于表值。</div>
       </div>`;
       })()}
     </div>`;

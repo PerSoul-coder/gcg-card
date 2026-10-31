@@ -251,13 +251,22 @@ return (async () => {
   const sim = simTurns({ total: 30, copies: pickCard.count, playCost: pickCard.playCost, seed: 7 });
   const sim2 = simTurns({ total: 30, copies: pickCard.count, playCost: pickCard.playCost, seed: 7 });
   assert(JSON.stringify(sim) === JSON.stringify(sim2), "模拟：同种子两次运行逐位一致（确定性）");
-  /* turn0 = 起手 5 张：非秘传牌的到手率应落在超几何解析值 ±1.5%（2 万次抽样噪声 ≈ 0.35%） */
-  const analytic0 = hyperAtLeast(30, pickCard.count, 5, 1);
-  assert(Math.abs(sim.inHand[0] - analytic0) < 0.015,
-    "模拟 vs 解析：起手到手率一致（模拟 " + sim.inHand[0].toFixed(3) + " / 解析 " + analytic0.toFixed(3) + "）");
-  const analyticLast = hyperAtLeast(30, pickCard.count, 5 + sim.turns.length - 1 <= 30 ? (5 + (sim.turns.length - 1) * 2) : 30, 1);
-  assert(Math.abs(sim.inHand[sim.turns.length - 1] - Math.min(1, analyticLast)) < 0.015,
-    "模拟 vs 解析：末回合到手率一致");
+  /* turn0：模拟按「起手未中则全换 5 张」调度计——与解析表同策略互证（2 万次噪声 ≈ 0.35%） */
+  const rowsM = oddsRows(30, pickCard.count);
+  assert(Math.abs(sim.inHand[0] - rowsM[0].atLeast1) < 0.015,
+    "模拟 vs 解析（含调度）：起手到手率一致（模拟 " + sim.inHand[0].toFixed(3) + " / 解析 " + rowsM[0].atLeast1.toFixed(3) + "）");
+  const rowsT4 = oddsRows(30, pickCard.count)[4];
+  assert(Math.abs(sim.inHand[4] - rowsT4.atLeast1) < 0.015,
+    "模拟 vs 解析（含调度）：第 4 回合到手率一致（模拟 " + sim.inHand[4].toFixed(3) + " / 解析 " + rowsT4.atLeast1.toFixed(3) + "）");
+  assert(rowsM[0].atLeast1 > hyperAtLeast(30, pickCard.count, 5, 1), "调度换牌提升起手到手率（全换 > 不换）");
+  /* 秘传解析行：起手必带 → 到手率恒 100%、整套限 1 张 */
+  const rowsL = oddsRows(30, 1, true);
+  assert(rowsL.every(r => r.atLeast1 === 1) && rowsL[0].atLeast2 === null && rowsL[0].expect === 1,
+    "解析表秘传行：起手必带，到手率恒 100%、期望 1");
+  /* 关闭调度对照：起手到手率回落到无调度超几何值 */
+  const simNoMull = simTurns({ total: 30, copies: pickCard.count, playCost: pickCard.playCost, seed: 7, mulligan: false });
+  assert(Math.abs(simNoMull.inHand[0] - hyperAtLeast(30, pickCard.count, 5, 1)) < 0.015,
+    "关闭调度：起手到手率回到无调度超几何值");
   const mono = (arr) => arr.every((v, i) => i === 0 || v >= arr[i - 1] - 1e-9);
   assert(mono(sim.inHand) && mono(sim.playable), "曲线单调不降（手牌只增、关键牌不弃）");
   assert(sim.playable.every((v, i) => v >= sim.playableRaw[i] - 1e-9),
