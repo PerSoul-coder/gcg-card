@@ -1070,6 +1070,12 @@ body.cmp-on .wrap { padding-bottom: 180px; }
 .tile .qcnt.max { background: var(--gold); color: var(--on-accent); border-color: var(--gold); font-weight: bold; }
 .dp-cnt button:disabled { color: var(--disabled); cursor: default; }
 
+/* ===== 分享码二维码弹层 ===== */
+.qr-view { text-align: center; padding: 8px 0 4px; }
+.qr-view > svg { background: #fff; border-radius: 10px; padding: 6px; box-shadow: var(--elev-2); }
+.qr-hint { color: var(--text-2); font-size: var(--fs-13); line-height: 1.8; margin: 14px auto 6px; max-width: 30em; }
+.qr-code { color: var(--dim); font-size: var(--fs-11); word-break: break-all; background: var(--bg2); border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; }
+
 /* ===== 核心牌标记：列表行按钮 + 卡面瓦片徽标 + 管理面板备注 ===== */
 .corebtn { margin-left: 6px; font-size: var(--fs-11); line-height: 1; padding: 2px 6px; border-radius: 8px; border: 1px solid var(--line); background: none; color: var(--faint); cursor: pointer; vertical-align: 1px; transition: color var(--t-fast), border-color var(--t-fast), background var(--t-fast); }
 .corebtn:hover { color: var(--gold); border-color: var(--gold-dim); }

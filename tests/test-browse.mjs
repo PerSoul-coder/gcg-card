@@ -463,6 +463,13 @@ return (async () => {
   activeDeck().core = [];
   saveDecks();
 
+  /* ===== 17. 分享码二维码（97-qr：SVG 生成确定性 / 静区 / 深链内容） ===== */
+  const svg1 = qrSvg("HELLO-WORLD-123");
+  const svg2 = qrSvg("HELLO-WORLD-123");
+  assert(svg1 === svg2 && svg1.includes("<svg") && svg1.includes("path"), "qrSvg：同文本两次生成逐位一致");
+  assert(svg1.includes('fill="#ffffff"') && svg1.includes('fill="#12161d"'), "qrSvg：白底深模块（扫码对比度）");
+  assert(!qrSvg("").includes("NaN"), "qrSvg：空串不产生 NaN 坐标");
+
 })();
 `;
 

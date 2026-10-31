@@ -5,6 +5,7 @@ import { copyLimit, draft, draftAdd, draftRemoveCard, draftRemoveChar } from "./
 import { browseVisibleIds } from "./85-views";
 import { renderSkillView, showSkill, skillOf } from "./47-skills";
 import { compareState, renderCompareView, renderDeckDiffView } from "./88-compare";
+import { renderQrView } from "./97-qr";
 import { R_STYLE, reqElement } from "./30-deps";
 import { termEntries } from "./40-concepts";
 import { state } from "./data/state";
@@ -164,6 +165,7 @@ const OVERLAY_RENDER: Record<string, (v: OverlayEntry) => void> = {
   skill: renderSkillView,
   compare: renderCompareView,
   deckdiff: renderDeckDiffView,
+  qr: renderQrView,
   detail: renderDetailView,
 };
 function renderOverlay(resetScroll = false) {
@@ -281,6 +283,7 @@ function viewLabel(v) {
   if (v.kind === "skill") { const s = skillOf(v.key); return s ? s.name : "技能"; }
   if (v.kind === "compare") return "卡牌对比";
   if (v.kind === "deckdiff") return "牌组对比";
+  if (v.kind === "qr") return "分享码二维码";
   return nameOfId(v.id) || "上一页";
 }
 /* 弹层顶栏：返回（仅栈深 > 1 时出现）+ 自定义按钮组 + 关闭 */

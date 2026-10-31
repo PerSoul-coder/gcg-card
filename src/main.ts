@@ -25,6 +25,7 @@ import "./88-compare";
 import "./90-detail";
 import "./95-export";
 import "./96-share";
+import "./97-qr";
 import { boot } from "./99-main";
 
 /* 启动必须是最后一个顶层副作用：入口模块体在所有依赖模块体之后求值，

@@ -5,6 +5,7 @@ import { $, copyText } from "./core/dom";
 import { skillsOf } from "./47-skills";
 import { showDeckDiff } from "./88-compare";
 import { renderShareCanvas } from "./96-share";
+import { showQr } from "./97-qr";
 import { activeDeck, draft } from "./80-deck";
 import { showHelp } from "./90-detail";
 import { decodeRaw, encodeRaw } from "./10-codec";
@@ -226,6 +227,10 @@ const EXPORT_ACTIONS: Array<{ id: string; label: string; hint?: string; run: () 
         toast("分享图已下载");
       })().catch(e => toast("分享图生成失败：" + (e as Error).message, true));
     },
+  },
+  {
+    id: "qr", label: "分享码二维码", hint: "扫码打开本页并自动解析这套牌组（离线版为分享码本体）",
+    run: () => showQr(),
   },
 ];
 /* 复制是异步的：成功/失败都要有回音，不留 unhandled rejection（run 内部自理）；
