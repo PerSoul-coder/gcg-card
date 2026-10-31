@@ -293,7 +293,7 @@ return (async () => {
   /* ===== 8. 构筑校验 ===== */
   draftClear();
   const probs = deckProblems();
-  assert(probs.length === 2 && probs[0].includes("3 名角色") && probs[1].includes("30 张行动牌"), "空牌组校验：角色 + 行动牌两条问题");
+  assert(probs.length === 2 && probs[0].text.includes("3 名角色") && probs[1].text.includes("30 张行动牌"), "空牌组校验：角色 + 行动牌两条问题");
   let errMsg = "";
   try { draftEncode(); } catch (e) { errMsg = e.message; }
   assert(errMsg.includes("3 名角色"), "draftEncode 复用校验信息（空牌组拒绝生成）");
