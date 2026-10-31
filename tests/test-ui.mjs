@@ -58,9 +58,9 @@ assert(/id="deckTools"/.test(deckTools) && /class="controls"/.test(deckTools), "
 
 /* ===== 3. 全局动作升页头图标钮；示例牌组归位牌组工具；图鉴是独立页签 ===== */
 assert(/class="hd-actions"/.test(headerHtml), "页头有独立动作区");
-assert(/id="btnTheme"/.test(headerHtml) && /id="btnRefresh"/.test(headerHtml)
+assert(/id="btnTheme"/.test(headerHtml) && /id="btnRandom"/.test(headerHtml) && !/id="btnRefresh"/.test(headerHtml)
   && /id="btnHelp"/.test(headerHtml) && !/id="btnDataInfo"/.test(headerHtml),
-  "页头三图标钮：主题 / 刷新 / 帮助（数据信息钮已删，原「更多」菜单已解散）");
+  "页头三图标钮：主题 / 随机一卡 / 帮助（数据信息与刷新钮已归档移除）");
 assert(!/id="moreMenu"/.test(headerHtml) && !/id="btnMore"/.test(headerHtml), "「更多」菜单不复存在");
 const deckMenu = blockOfId("deckToolsMenu");
 assert(/id="btnHistory"/.test(deckMenu) && /id="btnDeckDiff"/.test(deckMenu),

@@ -4,16 +4,15 @@ import { $ } from "./core/dom";
 import { closeSuggest, moveSuggest, pushRecent, resetSuggestTimer, scheduleSuggest, searchState, selectSuggest, sugState } from "./70-search";
 import { overlayHashParse } from "./core/history";
 import { browseState, parseBrowseHash, renderBrowse, renderBrowseResults, renderGrid, renderList, setShowFavsOnly, setShowUnbuildable, syncBrowseHash } from "./85-views";
-import { ensureData, onDataReady, resetDataState } from "./20-data";
-import { resetPool, loadFavs, pruneFavs } from "./45-pool";
-import { resetConceptIndex, termEntries } from "./40-concepts";
-import { resetBacklinks } from "./50-backlinks";
-import { resetSkillIndex, skillOf, showSkill, renderSkillsView } from "./47-skills";
+import { ensureData, onDataReady } from "./20-data";
+import { loadFavs, pool, pruneFavs } from "./45-pool";
+import { termEntries } from "./40-concepts";
+import { skillOf, showSkill, renderSkillsView } from "./47-skills";
 import { beginRenameDeck, closeDraftPanel, deleteDeckById, draftClear, draftEncode, draftLoadCurrent, draftRemoveCard, draftRemoveChar, draftSetCount, duplicateDeck, loadDraft, newDeck, pruneDraft, renderDraft, renderDraftPanel, syncFromActive, toggleDraftPanel } from "./80-deck";
 import { overlayOpen, showDetail, showHelp, showTermModal, syncOverlayToHash, lightboxOpen, lightboxStep, closeLightbox, renderOverlay } from "./90-detail";
-import { resetViewState, state } from "./data/state";
-import { recordOfId, resetRecordIndex } from "./data/records";
-import { ICON_AUTO, ICON_HELP, ICON_MOON, ICON_REFRESH, ICON_SUN, SAMPLE, STORAGE_KEYS } from "./core/resources";
+import { state } from "./data/state";
+import { recordOfId } from "./data/records";
+import { ICON_AUTO, ICON_HELP, ICON_MOON, ICON_RANDOM, ICON_SUN, SAMPLE, STORAGE_KEYS } from "./core/resources";
 import { closeTopLayer } from "./core/layers";
 import { closeMenus } from "./95-export";
 import { setStatus, toast, copyText } from "./core/dom";
@@ -81,7 +80,7 @@ if (themeMq && typeof (themeMq as unknown as { addEventListener?: unknown }).add
   (themeMq as unknown as MediaQueryList).addEventListener("change", () => { if (themeMode === "auto") syncThemeUI(); });
 }
 /* 页头图标按钮：HTML 里是空钮，图标单点来自 resources（悬浮 title 在 HTML 上） */
-$("btnRefresh").innerHTML = ICON_REFRESH;
+$("btnRandom").innerHTML = ICON_RANDOM;
 $("btnHelp").innerHTML = ICON_HELP;
 syncThemeUI();
 $("btnHistory").addEventListener("click", () => { renderHistory(); toggleHistoryPanel(); });
@@ -191,52 +190,19 @@ function focusBrowseSearch() {
   if (input) input.focus();
 }
 
-/* ---------- 刷新 ---------- */
-let refreshBusy = false;
-$("btnRefresh").addEventListener("click", async () => {
-  /* file:// 下（单文件离线版）网络路径必然被浏览器拦截，而数据已经内置：
-     刷新没有意义。提前说明并直接返回，不做下面那套索引重置——
-     保住正在使用的卡池 / 概念 / 反链，也不用回退重建。 */
-  if (location.protocol === "file:") {
-    toast("单文件离线版数据已内置，无需刷新；要更新牌库请重新构建或使用在线版");
-    return;
-  }
-  /* 双击守卫：resetDataState 会清掉在途 flight，连点会让两个 loadData 并发拉取 */
-  if (refreshBusy) { toast("正在刷新数据，请稍候"); return; }
-  refreshBusy = true;
-  try {
-    await refreshData();
-  } finally {
-    refreshBusy = false;
-  }
-});
-async function refreshData(): Promise<void> {
-  /* 不预先清缓存：网络不可用时旧缓存 / 内置快照还能兜住，不至于整页失去数据。
-     拉取成功后 writeCache 会自然覆盖旧值。 */
-  resetDataState();      /* 重置单 flight，强制 ensureData 真正重新拉取 */
-  resetRecordIndex();    /* 记录表与 id/分享码索引 */
-  resetViewState();      /* 详情 / 翻页上下文 */
-  renderOverlay();       /* 弹层栈已清空：让 overlay 视觉同步关闭，不留 .show 残壳 */
-  resetConceptIndex();   /* 概念索引与术语正则 */
-  resetPool();           /* 卡池与统计 */
-  resetBacklinks();      /* 反链 */
-  resetSkillIndex();     /* 技能索引（含装备牌特技） */
-  setStatus(`<span class="spin"></span>正在重新拉取数据…`);
-  try {
-    await ensureData(true);
-    (VIEW_RENDER[state.currentView] || renderGrid)();
-    toast("数据已刷新");
-  } catch (e) {
-    /* 刷新失败 → 回退到本地可用数据（内置快照或缓存），保证页面仍然可用 */
-    try {
-      await ensureData(false);
-      (VIEW_RENDER[state.currentView] || renderGrid)();
-      setStatus("刷新失败，已回退到本地数据：" + (e as Error).message, "err");
-    } catch (e2) {
-      setStatus("刷新失败：" + (e as Error).message + "；本地也没有可用数据", "err");
-    }
-  }
+/* ---------- 随便看看（原「刷新数据」位） ----------
+   数据随构建产物走，运行期刷新没有意义；按钮位改为随机一卡——
+   浏览器的发现式用法：没目标时掷一把，落在哪张看哪张。只从可构筑池里挑。 */
+function showRandomCard(): void {
+  const pick = () => {
+    const buildable = pool.filter(x => x.share != null);
+    const x = buildable[Math.floor(Math.random() * buildable.length)];
+    showDetail(x.id);
+  };
+  if (!dataReady) { ensureData().then(pick).catch((e: Error) => setStatus("加载失败：" + e.message, "err")); return; }
+  pick();
 }
+$("btnRandom").addEventListener("click", () => { closeTopLayer(); showRandomCard(); });
 
 /* 草稿栏 / 牌组面板（innerHTML 重渲染 → 事件委托） */
 document.addEventListener("click", ev => {
