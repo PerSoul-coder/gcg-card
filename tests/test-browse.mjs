@@ -435,9 +435,11 @@ return (async () => {
   assert(Math.max(...ys.map(y => L.cardCells.filter(c => c.y === y).length)) <= 8, "分享图布局：每行不超过 8 张");
   /* 计数徽标的数据源：多张卡带 count>1 */
   assert(L.cardCells.some(c => c.count > 1) === state.current.order.some(t => state.current.groups[t].some(x => x.count > 1)), "分享图布局：count 透传");
-  /* note 行存在时画布要变高（B3 的备注会传进来） */
+  /* 备注并入页头第二行（右置），不再单独占行抬高画布 */
   const L2 = shareImageLayout(state.current, { note: "起手要素：先找 X" });
-  assert(L2.height === L.height + 30, "分享图布局：备注行抬高画布");
+  assert(L2.height === L.height && L2.note === "起手要素：先找 X", "分享图布局：备注并入页头行，画布不再抬高");
+  /* 费用分布块与角色行同带：右缘不越界 */
+  assert(L.curveBox.w > 0 && L.curveBox.x + L.curveBox.w <= L.width, "分享图布局：费用分布块右缘不越界");
 
   /* ===== 16. 牌组备注与核心牌（Deck v2 字段 + 活动牌组匹配导出） ===== */
   /* normalizeDeck：note/core 透传、损坏字段清洗 */
@@ -469,6 +471,9 @@ return (async () => {
   assert(svg1 === svg2 && svg1.includes("<svg") && svg1.includes("path"), "qrSvg：同文本两次生成逐位一致");
   assert(svg1.includes('fill="#ffffff"') && svg1.includes('fill="#12161d"'), "qrSvg：白底深模块（扫码对比度）");
   assert(!qrSvg("").includes("NaN"), "qrSvg：空串不产生 NaN 坐标");
+  /* 内容恒为本页深链（与复制单卡链接同原理）：单文件版托管后同一份 HTML 自然线上化 */
+  assert(qrContent("file:///D:/x/gcg.html", "ABC") === "file:///D:/x/gcg.html#ABC", "qrContent：file:// 也编成本页深链");
+  assert(qrContent("https://example.com/p/a.html#old", "ABC") === "https://example.com/p/a.html#ABC", "qrContent：去旧 hash 换分享码");
 
 })();
 `;
