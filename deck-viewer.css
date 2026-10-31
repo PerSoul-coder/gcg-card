@@ -455,6 +455,10 @@ footer { margin-top: 46px; color: var(--faint); font-size: var(--fs-12); text-al
 .curve { display: flex; align-items: flex-end; gap: 6px; height: 64px; position: relative; padding: 0 4px; }
 .cbar { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 2px; width: 22px; height: 100%; }
 .cfill { width: 14px; background: linear-gradient(180deg, var(--gold), var(--gold-deeper)); border-radius: 3px 3px 0 0; min-height: 0; transition: height var(--t-slow); }
+/* 费用柱条可点（有空桶不可点）：悬停微亮，点中的卡描金 */
+.cbar[data-odds] { cursor: pointer; border-radius: 4px; }
+.cbar[data-odds]:hover .cfill { filter: brightness(1.25); }
+.tile.cost-hit { outline: 2px solid var(--gold); outline-offset: 2px; border-radius: 10px; }
 .cnum { font-size: var(--fs-11); color: var(--gold-dim); line-height: 1; }
 .clabel { font-size: var(--fs-11); color: var(--dim); line-height: 1; }
 .ctitle { position: absolute; right: 0; top: -16px; font-size: var(--fs-11); color: var(--dim); }

@@ -40,8 +40,8 @@ function renderSummary() {
     for (const r of x.deckReqs || []) { dCount[r.code] = (dCount[r.code] || 0) + x.count; dCards += x.count; }
   }
   const maxB = Math.max(...buckets, 1);
-  const curve = `<div class="curve" title="元素骰费用分布（0~4 / 5+，按张数计重）">${buckets.map((n, i) => `
-    <div class="cbar" title="元素骰费用 ${i === 5 ? "5+" : i}：${n} 张">
+  const curve = `<div class="curve" title="元素骰费用分布（0~4 / 5+，按张数计重）；点击柱条在卡面视图中定位该费用的卡">${buckets.map((n, i) => `
+    <div class="cbar"${n ? ` data-odds="${i}" title="元素骰费用 ${i === 5 ? "5+" : i}：${n} 张——点击在下方定位"` : ""}>
       <span class="cnum">${n || ""}</span>
       <div class="cfill" style="height:${Math.round(n / maxB * 100)}%"></div>
       <span class="clabel">${i === 5 ? "5+" : i}</span>
@@ -81,8 +81,36 @@ document.addEventListener("click", ev => {
   b.title = on ? "取消核心牌（概览条列出「仅 1 张」提醒，随导出携带）" : "标记为核心牌（概览条列出「仅 1 张」提醒，随导出携带）";
   renderSummary();
 }, true);
-/* 点击概览中的限制统计 → 跳到列表视图并过滤 */
+/* 点击概览中的限制统计 → 跳到列表视图并过滤；
+   点击费用柱条 → 卡面视图高亮该费用的卡并滚到第一张（再点同桶取消）。
+   概览条只在卡面视图显示，所以定位目标就是 #view-grid 里的 .tile。 */
+let oddsHit = -1;
+function clearOddsHit(): void {
+  document.querySelectorAll(".cost-hit").forEach(el => el.classList.remove("cost-hit"));
+}
 $("summary").addEventListener("click", ev => {
+  const bar = (ev.target as HTMLElement).closest("[data-odds]") as HTMLElement | null;
+  if (bar) {
+    const b = Number(bar.dataset.odds);
+    const same = b === oddsHit;
+    clearOddsHit();
+    oddsHit = same ? -1 : b;
+    if (same) return;
+    const diceOf = new Map(state.current
+      ? state.current.order.flatMap(t => state.current!.groups[t].map(x => [x.id, x.dice] as [number, number]))
+      : []);
+    const match = (d: number) => (b === 5 ? d >= 5 : d === b);
+    let first: HTMLElement | null = null;
+    document.querySelectorAll("#view-grid .tile").forEach(el => {
+      const d = diceOf.get(Number((el as HTMLElement).dataset.id));
+      if (d != null && match(d)) {
+        (el as HTMLElement).classList.add("cost-hit");
+        if (!first) first = el as HTMLElement;
+      }
+    });
+    first?.scrollIntoView({ behavior: "smooth", block: "center" });
+    return;
+  }
   const a = (ev.target as HTMLElement).closest("[data-filter]");
   if (!a) return;
   listFilter = a.dataset.filter || "";
@@ -102,6 +130,7 @@ function tileHtml(x) {
       <div class="capbar">${x.element ? eleIcon(x.element, "inline-el") : ""}${esc(x.name)}${en}${rel ? `<small>${rel}</small>` : ""}</div></div></div>`;
 }
 function renderGrid() {
+  clearOddsHit(); oddsHit = -1;   /* 重渲染后旧的高亮引用已失效，一并复位 */
   if (!state.current) {
     $("view-grid").innerHTML = `<div class="empty-hint">尚未解析牌组<br><small>粘贴分享码后自动解析；也可以先回「卡库浏览」筛选检索，或用「牌组工具 → 加载示例牌组」</small></div>`;
     return;
