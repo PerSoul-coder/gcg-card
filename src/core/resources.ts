@@ -113,6 +113,7 @@ export const ICON_STAR =
 /* 页头图标按钮与详情动作行的语义图标 */
 export const ICON_REFRESH = actionSvg("M13 8a5 5 0 1 1-1.46-3.54M13 2.5V5h-2.5");
 /* 骰子：圆角方块内五点（随机一卡） */
+export const ICON_IMG = actionSvg("M3.5 4.5h13v11h-13zM6 12.5l3-3 2.5 2.5 2.5-2.5 2.5 2.5");
 export const ICON_DB = actionSvg("M5 4.5h10v11H5zM5 8.5h10M5 12h10");
 export const ICON_RANDOM =
   `<svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><rect x="2.5" y="2.5" width="11" height="11" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="5.6" cy="5.6" r="1.05" fill="currentColor"/><circle cx="10.4" cy="5.6" r="1.05" fill="currentColor"/><circle cx="8" cy="8" r="1.05" fill="currentColor"/><circle cx="5.6" cy="10.4" r="1.05" fill="currentColor"/><circle cx="10.4" cy="10.4" r="1.05" fill="currentColor"/></svg>`;

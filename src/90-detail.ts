@@ -10,11 +10,12 @@ import { renderTextImportView } from "./98-textimport";
 import { renderCacheView } from "./49-cache";
 import { R_STYLE, reqElement } from "./30-deps";
 import { pushRecentCard, refreshRecentStrip } from "./46-recent";
+import { exportActionOf } from "./95-export";
 import { termEntries } from "./40-concepts";
 import { state } from "./data/state";
 import type { GcgRecord, OverlayEntry } from "./types";
 import { recordOfId, nameOfId, isCharId, isShadowId, cardRecords, keyIdOf } from "./data/records";
-import { ELE_ZH, ELE_COLOR, tagZh, eleIcon, enPips, imgFull, ICON_X, ICON_SWAP, ICON_STAR, ICON_LINK } from "./core/resources";
+import { ELE_ZH, ELE_COLOR, tagZh, eleIcon, enPips, imgFull, ICON_X, ICON_SWAP, ICON_STAR, ICON_LINK, ICON_IMG } from "./core/resources";
 import { esc, toast, copyText } from "./core/dom";
 import { registerLayer, syncScrollLock, setModalLayer } from "./core/layers";
 import { animateExit } from "./core/motion";
@@ -326,7 +327,7 @@ function renderDetailView(v) {
   /* 已选 2 张及以上时，详情里就能直接打开对比面板；返回仍回到这张卡 */
   const cmpOpenBtn = compareState.ids.length >= 2
     ? `<button class="lbtn" data-cmpopen="1" title="打开卡牌对比面板">${ICON_SWAP} ${compareState.ids.length}</button>` : "";
-  const nav = navBar(`${pagerHtml(v)}${joinBtn}${cmpBtn}${cmpOpenBtn}<button class="lbtn${isFav(v.id) ? " on" : ""}" data-fav="${v.id}" aria-pressed="${isFav(v.id)}" title="${isFav(v.id) ? "取消收藏" : "收藏"}">${ICON_STAR} ${isFav(v.id) ? "已收藏" : "收藏"}</button><button class="lbtn" title="复制该卡链接" data-act="copyLink">${ICON_LINK}</button>`);
+  const nav = navBar(`${pagerHtml(v)}${joinBtn}${cmpBtn}${cmpOpenBtn}<button class="lbtn${isFav(v.id) ? " on" : ""}" data-fav="${v.id}" aria-pressed="${isFav(v.id)}" title="${isFav(v.id) ? "取消收藏" : "收藏"}">${ICON_STAR} ${isFav(v.id) ? "已收藏" : "收藏"}</button><button class="lbtn" title="单卡分享图 · 下载（PNG）" data-act="cardPng">${ICON_IMG}</button><button class="lbtn" title="复制该卡链接" data-act="copyLink">${ICON_LINK}</button>`);
   let html;
   if (c) {
     const el = c.stats.element;
@@ -419,6 +420,7 @@ $("detail").addEventListener("click", ev => {
     case "close": overlayClose(); break;
     case "step": modalStep(Number(b.dataset.d) || 1); break;
     case "copyLink": copyCardLink(); break;
+    case "cardPng": { const act = exportActionOf("cardpng"); if (act) act.run(); break; }
     case "draftToggle": draftToggleModal(); break;
     case "draftRemove": draftRemoveFromDetail(); break;
   }

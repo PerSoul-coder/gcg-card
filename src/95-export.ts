@@ -1,10 +1,10 @@
 /* 95-export.ts —— 导出：JSON / CSV / 文本，字段形状是对外契约。 */
 import { allReqs, costText } from "./30-deps";
-import { recordOfId, shareOfId } from "./data/records";
+import { recordOfId, shareOfId, keyIdOf } from "./data/records";
 import { $, copyText } from "./core/dom";
 import { skillsOf } from "./47-skills";
 import { showDeckDiff } from "./88-compare";
-import { renderShareCanvas } from "./96-share";
+import { renderShareCanvas, renderCardShareCanvas } from "./96-share";
 import { showQr, qrContent } from "./97-qr";
 import { activeDeck, draft, exportDecksBackup, mergeDecksBackup, renderDraftPanel } from "./80-deck";
 import { pruneFavs } from "./45-pool";
@@ -253,6 +253,23 @@ const EXPORT_ACTIONS: Array<{ id: string; label: string; hint?: string; run: () 
         download(`${fileStamp()}.png`, blob, "image/png");
         toast("分享图已下载");
       })().catch(e => toast("分享图生成失败：" + (e as Error).message, true));
+    },
+  },
+  {
+    id: "cardpng", label: "单卡分享图 · 下载（PNG）", hint: "把详情弹层里当前这张卡绘成可分享的竖图（费用 / 效果 / 依赖）",
+    run: () => {
+      const top = state.overlayStack[state.overlayStack.length - 1];
+      if (!top || top.kind !== "detail") { toast("先打开一张卡的详情，再导出单卡分享图", true); return; }
+      const rec = recordOfId(top.id);
+      if (!rec) { toast("找不到这张卡的记录", true); return; }
+      toast("正在生成单卡分享图…");
+      void (async () => {
+        const canvas = await renderCardShareCanvas(rec, { href: location.href });
+        const blob = await new Promise<Blob | null>(r => canvas.toBlob(r, "image/png"));
+        if (!blob) throw new Error("canvas 导出失败");
+        download(`gi-card-${fileStamp().replace("gi-deck-", "")}.png`, blob, "image/png");
+        toast("单卡分享图已下载");
+      })().catch(e => toast("单卡分享图生成失败：" + (e as Error).message, true));
     },
   },
   {

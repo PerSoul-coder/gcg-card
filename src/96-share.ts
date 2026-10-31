@@ -4,10 +4,18 @@
    toBlob 由调用方接管）。单图 404 / 断网时画「卡壳」占位，不拖垮整次导出。
    配色与深色主题同源（独立成图不依赖 CSS 变量），固定写死在这里。
    构图：左对齐单栏——页头（标题 + 牌名/备注同行右置）→ 分隔线 →
-   角色行（左）与费用分布（右）同一横带 → 行动牌网格 → 页脚（分享码 + 水印）。 */
+   角色行（左）与费用分布（右）同一横带 → 行动牌网格 → 页脚（分享码 + 水印）。
+
+   单卡分享图（cardShareLayout / renderCardShareCanvas）：「这张牌什么效果？」
+   的 IM 直接载体——卡面 + 费用/属性 + 依赖徽标 + 效果全文（角色按技能分节）
+   + #card= 深链。高度取决于文本量，因此测量函数作为参数注入布局纯函数
+   （生产传 ctx.measureText，测试传伪等宽），换行在布局层算好、绘制层只画。 */
 import { imgFull } from "./core/resources";
 import { loadImages } from "./core/image";
-import type { ParsedDeck } from "./types";
+import { keyIdOf } from "./data/records";
+import { costText } from "./30-deps";
+import { skillsOf } from "./47-skills";
+import type { GcgRecord, ParsedDeck } from "./types";
 
 /* ---------- 画布配色（独立成图，不读 CSS 变量） ---------- */
 const C = {
@@ -213,5 +221,161 @@ export async function renderShareCanvas(cur: ParsedDeck, opts: { name?: string |
   ctx.textAlign = "right";
   ctx.font = "12px sans-serif";
   ctx.fillText("七圣召唤 · 卡牌与牌组浏览器", L.width - 48, L.footLineY + 26);
+  return canvas;
+}
+
+/* ---------- 单卡分享图 ---------- */
+export type Measure = (text: string, font: string) => number;
+
+/** 逐字换行（CJK 主导；拉丁词被截断可接受）。空段保留为空行。 */
+export function wrapText(text: string, font: string, maxWidth: number, measure: Measure): string[] {
+  const out: string[] = [];
+  for (const para of String(text || "").split("\n")) {
+    if (!para) { out.push(""); continue; }
+    let cur = "";
+    for (const ch of para) {
+      if (cur && measure(cur + ch, font) > maxWidth) { out.push(cur); cur = ch; }
+      else cur += ch;
+    }
+    if (cur) out.push(cur);
+  }
+  return out;
+}
+export interface CardSideBlock { label: string; lines: string[]; y: number }
+export interface CardEffectBlock { head: string | null; lines: string[]; y: number; dim?: boolean }
+export interface CardShareLayout {
+  width: number;
+  height: number;
+  name: string;
+  meta: string;                       /* typeZh · version */
+  art: ShareBox;
+  sideX: number;
+  sideBlocks: CardSideBlock[];        /* 右栏：费用 / 属性 / 依赖 / 打出 */
+  effectBlocks: CardEffectBlock[];    /* 通栏：卡=效果；角色=每技能一块 */
+  link: string | null;
+  headLineY: number;
+  footLineY: number;
+}
+export function cardShareLayout(
+  rec: GcgRecord,
+  opts: { measure: Measure; link?: string | null },
+): CardShareLayout {
+  const measure = opts.measure;
+  const W = 720, M = 36, GAP = 20;
+  const F = { name: "bold 24px sans-serif", label: "bold 12px sans-serif", body: "14px sans-serif", small: "13px sans-serif" };
+  const headLineY = 64;
+  const artW = 260, artH = Math.round(artW * 720 / 420);
+  const art: ShareBox = { x: M, y: 82, w: artW, h: artH };
+  const sideX = M + artW + GAP;
+  const sideW = W - M - sideX;
+  /* 右栏：费用 → 属性（角色）→ 依赖 → 打出 */
+  const side: Array<{ label: string; text: string }> = [];
+  const costStr = costText(rec.stats.cost);
+  if (costStr) side.push({ label: "费用", text: costStr });
+  if (rec.stats.hp != null) side.push({ label: "属性", text: `生命 ${rec.stats.hp} · 充能 ${rec.stats.maxEnergy ?? 0}` });
+  if (rec.reqs.deck.length) side.push({ label: "牌组限制", text: rec.reqs.deck.map(r => r.short || r.label).join(" / ") });
+  if (rec.reqs.play.length) side.push({ label: "打出限制", text: rec.reqs.play.map(r => r.short || r.label).join(" / ") });
+  let sy = art.y + 2;
+  const sideBlocks: CardSideBlock[] = side.map(b => {
+    const lines = wrapText(b.text, F.body, sideW, measure);
+    const blk = { label: b.label, lines, y: sy };
+    sy += 36 + lines.length * 22 + 6;
+    return blk;
+  });
+  /* 通栏效果区：角色按技能分节（名+费用做节头），卡就是效果本体 */
+  const bodyW = W - M * 2;
+  let ey = art.y + artH + 26;
+  const effectBlocks: CardEffectBlock[] = [];
+  if (rec.kind === "char") {
+    for (const sk of skillsOf(keyIdOf(rec.key))) {
+      const head = sk.name + (costText(sk.cost) ? `　${costText(sk.cost)}` : "");
+      const lines = wrapText(sk.effect || "", F.body, bodyW, measure);
+      effectBlocks.push({ head, lines, y: ey });
+      ey += 36 + lines.length * 22 + 8;
+    }
+  } else if (rec.desc.effect.trim()) {
+    const lines = wrapText(rec.desc.effect, F.body, bodyW, measure);
+    effectBlocks.push({ head: null, lines, y: ey });
+    ey += 22 + lines.length * 22 + 8;
+  }
+  if (rec.desc.story.trim()) {
+    const lines = wrapText(`「${rec.desc.story.trim()}」`, F.small, bodyW, measure);
+    effectBlocks.push({ head: null, lines, y: ey, dim: true });
+    ey += 22 + lines.length * 20 + 4;
+  }
+  const bottom = Math.max(sy - 6, ey - 8, art.y + artH);
+  const footLineY = Math.round(bottom + 24);
+  const H = Math.round(footLineY + 44);
+  return {
+    width: W, height: H,
+    name: rec.name,
+    meta: `${rec.typeZh} · ${rec.version}`,
+    art, sideX, sideBlocks, effectBlocks,
+    link: opts.link || null,
+    headLineY, footLineY,
+  };
+}
+
+/** 单卡分享图绘制（薄层）：测量用离屏 ctx，卡面失败画卡壳。 */
+export async function renderCardShareCanvas(rec: GcgRecord, opts: { href?: string | null } = {}): Promise<HTMLCanvasElement> {
+  const SCALE = 2;
+  const probe = document.createElement("canvas").getContext("2d")!;
+  const measure: Measure = (t, f) => { probe.font = f; return probe.measureText(t).width; };
+  const id = keyIdOf(rec.key);
+  const link = opts.href ? opts.href.split("#")[0] + "#card=" + id : null;
+  const L = cardShareLayout(rec, { measure, link });
+  const canvas = document.createElement("canvas");
+  canvas.width = L.width * SCALE;
+  canvas.height = L.height * SCALE;
+  const ctx = canvas.getContext("2d")!;
+  ctx.scale(SCALE, SCALE);
+  ctx.fillStyle = C.bg;
+  ctx.fillRect(0, 0, L.width, L.height);
+  ctx.textBaseline = "alphabetic";
+  /* 页头：名称（金）+ 类型·版本（右，暗）+ 分隔线 */
+  ctx.textAlign = "left";
+  ctx.fillStyle = C.gold;
+  ctx.font = "bold 24px sans-serif";
+  ctx.fillText(L.name, 36, 44);
+  ctx.textAlign = "right";
+  ctx.fillStyle = C.dim;
+  ctx.font = "12px sans-serif";
+  ctx.fillText(L.meta, L.width - 36, 44);
+  ctx.fillStyle = C.line;
+  ctx.fillRect(36, L.headLineY, L.width - 72, 1);
+  /* 卡面（失败画卡壳） */
+  const [img] = await loadImages([imgFull(id)]);
+  drawCellImage(ctx, img, { id, count: 1, x: L.art.x, y: L.art.y, w: L.art.w, h: L.art.h });
+  /* 右栏块 */
+  ctx.textAlign = "left";
+  for (const b of L.sideBlocks) {
+    ctx.fillStyle = C.gold;
+    ctx.font = "bold 12px sans-serif";
+    ctx.fillText(b.label, L.sideX, b.y + 14);
+    ctx.fillStyle = C.text;
+    ctx.font = "14px sans-serif";
+    b.lines.forEach((ln, i) => ctx.fillText(ln, L.sideX, b.y + 36 + i * 22));
+  }
+  /* 效果块（角色按技能分节；story 暗色） */
+  for (const b of L.effectBlocks) {
+    if (b.head) {
+      ctx.fillStyle = C.gold;
+      ctx.font = "bold 14px sans-serif";
+      ctx.fillText(b.head, 36, b.y + 14);
+    }
+    ctx.fillStyle = b.dim ? C.dim : C.text;
+    ctx.font = (b.dim ? "13px" : "14px") + " sans-serif";
+    const first = b.y + (b.head ? 36 : 22);
+    b.lines.forEach((ln, i) => ctx.fillText(ln, 36, first + i * (b.dim ? 20 : 22)));
+  }
+  /* 页脚：深链（左）+ 水印（右） */
+  ctx.fillStyle = C.line;
+  ctx.fillRect(36, L.footLineY, L.width - 72, 1);
+  ctx.fillStyle = C.dim;
+  ctx.font = "12px sans-serif";
+  ctx.textAlign = "left";
+  ctx.fillText(L.link || rec.name, 36, L.footLineY + 26);
+  ctx.textAlign = "right";
+  ctx.fillText("七圣召唤 · 卡牌与牌组浏览器", L.width - 36, L.footLineY + 26);
   return canvas;
 }
