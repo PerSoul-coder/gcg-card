@@ -58,6 +58,7 @@ export function buildRecordIndex(): void {
       if (!(id in idToShareId)) idToShareId[id] = r.share;
     }
   }
+  buildNameOrder();
 }
 
 export function resetRecordIndex(): void {
@@ -65,8 +66,45 @@ export function resetRecordIndex(): void {
   byKey.clear();
   chars.length = 0;
   cards.length = 0;
+  nameRank.clear();
   for (const k of Object.keys(shareToId)) delete shareToId[+k];
   for (const k of Object.keys(idToShareId)) delete idToShareId[+k];
+}
+
+/* ---------- 名称字典序索引 ----------
+   牌库「分类内按字典序展示」、搜索同分稳定排序、相似卡候选排序都要它。
+   运行时建一次：localeCompare 每个名字只跑一次，调用方全部走 O(1) 序号比较。
+   引号牌名按引号内正文参与排序——ICU zh 排序把前引号当主权重字符（码点小于
+   汉字），不剥离的话所有「」牌名会整堆排在库首，看起来就不是字典序
+   （「花羽会」应排 H 区、「女士」应排 N 区，而不是全部挤在最前面）。 */
+const nameRank = new Map<string, number>();
+const LEADING_QUOTE_RE = /^[「『"'“‘]+/;
+const nameBody = (n: string): string => n.replace(LEADING_QUOTE_RE, "");
+let collator: { compare: (a: string, b: string) => number } | null = null;
+try { collator = typeof Intl !== "undefined" && Intl.Collator ? new Intl.Collator("zh") : null; } catch (e) { collator = null; }
+const bodyCmp = (a: string, b: string): number =>
+  collator ? collator.compare(nameBody(a), nameBody(b)) || collator.compare(a, b)
+           : a.localeCompare(b, "zh");
+
+function buildNameOrder(): void {
+  nameRank.clear();
+  if (!dsReady() || !DATASET) return;
+  const names = new Set<string>();
+  for (const r of DATASET.records) if (r.name) names.add(r.name);
+  const ordered = [...names].sort(bodyCmp);
+  ordered.forEach((n, i) => nameRank.set(n, i));
+}
+
+/**
+ * 字典序比较器：全应用名称排序的唯一入口（牌库排序 / 视图 tie-break /
+ * 搜索同分排序 / 相似卡候选）。不在索引里的名字（任意输入）按同一规则现算，
+ * 与索引序保持一致。
+ */
+export function nameCmp(a: string, b: string): number {
+  const ra = nameRank.get(a);
+  const rb = nameRank.get(b);
+  if (ra != null && rb != null) return ra - rb;
+  return bodyCmp(a, b);
 }
 
 /** 按数字 id 取记录（角色或卡牌）；不存在返回 null。 */

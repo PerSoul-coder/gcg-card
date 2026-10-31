@@ -112,8 +112,16 @@ return (async () => {
   browseState.sort = "name"; browseState.dir = 1;
   const byName = browseFilter();
   let nameOk = true;
-  for (let i = 1; i < byName.length; i++) if (byName[i - 1].name.localeCompare(byName[i].name, "zh") > 0) nameOk = false;
-  assert(nameOk, "排序：名称升序");
+  /* 字典序走数据层单点比较器（nameCmp）：引号牌名按引号内正文参与排序——
+     旧实现的裸 localeCompare 把前引号当主权重字符，所有「」牌名整堆排在库首 */
+  for (let i = 1; i < byName.length; i++) if (nameCmp(byName[i - 1].name, byName[i].name) > 0) nameOk = false;
+  assert(nameOk, "排序：名称升序（nameCmp 字典序）");
+  assert(nameCmp("「女士」", "阿贝多") > 0, "引号牌名按正文排序：「女士」排在阿贝多之后（N 区，不再堆库首）");
+  assert(nameCmp("「曾如磐石抵挡黑水奔流…」", "迪卢克") < 0, "引号牌名按正文排序：曾（C 区）在迪卢克之前");
+  const firstPlain = byName.findIndex(x => !x.name.startsWith("「"));
+  const lastQuoted = byName.map(x => x.name.startsWith("「")).lastIndexOf(true);
+  assert(firstPlain >= 0 && lastQuoted > firstPlain,
+    "「」牌名按正文交错在库里（不全堆在库首之前；字典序下阿贝多本就是第一张）");
   browseState.dir = -1;
   assert(browseFilter()[0].name === byName[byName.length - 1].name, "排序：方向取反");
   browseState.sort = "cost"; browseState.dir = 1;

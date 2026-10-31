@@ -1,6 +1,6 @@
 /* 85-views.ts —— 卡面 / 列表视图与卡库浏览：筛选、分面、分页、瓦片渲染。 */
 import { R_STYLE, R_ZH, allReqs, depBadges, reqElement } from "./30-deps";
-import { recordOfId, isCharId } from "./data/records";
+import { recordOfId, isCharId, nameCmp } from "./data/records";
 import { $ } from "./core/dom";
 import { safeReplaceState } from "./core/history";
 import { showOdds } from "./86-odds";
@@ -139,7 +139,7 @@ function renderList() {
     return `<span class="rpill" style="color:${col}" title="${esc(r.label)}">${el ? eleIcon(el, "inline-el") : ""}${esc(r.short)}</span>`;
   };
   const rows = t => state.current!.groups[t].filter(match)
-    .sort((a, b) => listSort.dir * (sortVal[listSort.key](a) < sortVal[listSort.key](b) ? -1 : sortVal[listSort.key](a) > sortVal[listSort.key](b) ? 1 : a.name.localeCompare(b.name, "zh")))
+    .sort((a, b) => listSort.dir * (sortVal[listSort.key](a) < sortVal[listSort.key](b) ? -1 : sortVal[listSort.key](a) > sortVal[listSort.key](b) ? 1 : nameCmp(a.name, b.name)))
     .map(x => `<tr data-id="${x.id}">
     <td class="cnt">${x.count > 1 ? "×" + x.count : "1"}</td>
     <td>${x.element ? eleIcon(x.element, "inline-el") : ""}${esc(x.name)}</td><td>${costHtml(x.playCost)}</td>
@@ -326,13 +326,13 @@ function passFilter(x, st) {
   return true;
 }
 function browseCmp(a, b, key, dir) {
-  if (key === "name") return dir * a.name.localeCompare(b.name, "zh");
+  if (key === "name") return dir * nameCmp(a.name, b.name);   /* 数据层字典序索引：引号牌名按正文排序 */
   if (key === "id") return dir * (a.id - b.id);
-  if (key === "ver") return dir * (verCmp(a.ver, b.ver) || a.name.localeCompare(b.name, "zh"));
+  if (key === "ver") return dir * (verCmp(a.ver, b.ver) || nameCmp(a.name, b.name));
   /* cost：角色无骰子费用，按费用排序时固定沉到一端（升序在顶） */
   const va = a.kind === "char" ? -1 : a.dice * 100 + a.energyCost;
   const vb = b.kind === "char" ? -1 : b.dice * 100 + b.energyCost;
-  return dir * (va - vb) || a.name.localeCompare(b.name, "zh");
+  return dir * (va - vb) || nameCmp(a.name, b.name);
 }
 /* ---------- 筛选结果 / 分面计数 / 分组：按筛选状态记忆 ----------
    一次筛选只该算一次。滚动追加、计数刷新、翻页上下文、加牌后的徽标同步都会回头

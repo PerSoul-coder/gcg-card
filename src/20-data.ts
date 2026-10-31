@@ -65,4 +65,7 @@ async function loadData(forceNetwork = false): Promise<void> {
   buildBacklinks();      /* 反链：只读出边（refs） */
   for (const fn of readyHooks) fn();
   dataReady = true;
+  /* 载入完成即清状态行：此前「正在载入卡牌数据…」永不清理，spinner 一直转，
+     看起来像没加载完。来源与规模由 dataInfo 行常驻展示；失败路径由调用方写错误。 */
+  setStatus("");
 }

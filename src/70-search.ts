@@ -2,7 +2,7 @@
 import { BROWSE_DIMS, browseFilter, browseState, passFilter, renderBrowse, renderBrowseResults, syncBrowseHash } from "./85-views";
 import { $ } from "./core/dom";
 import { pool } from "./45-pool";
-import { recordOfId } from "./data/records";
+import { recordOfId, nameCmp } from "./data/records";
 import { KIND_ZH, backlinks } from "./50-backlinks";
 import { conceptTextOf, escapeRe, termEntries, termIndex } from "./40-concepts";
 import { dataReady, ensureData } from "./20-data";
@@ -234,7 +234,7 @@ function compareResults(a, b) {
     || W[a.kind] - W[b.kind]
     || bb(a) - bb(b)
     || a.name.length - b.name.length
-    || a.name.localeCompare(b.name, "zh");
+    || nameCmp(a.name, b.name);
 }
 
 function searchCards(q: string, opts: { scope?: SearchScope; corpus?: PoolEntry[]; noDesc?: boolean; limit?: number } = {}) {

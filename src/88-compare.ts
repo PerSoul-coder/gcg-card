@@ -3,7 +3,7 @@ import { pool } from "./45-pool";
 import type { DeckDiffEntry, OverlayEntry, PoolEntry } from "./types";
 import { $ } from "./core/dom";
 import { costText } from "./30-deps";
-import { recordOfId, nameOfId } from "./data/records";
+import { recordOfId, nameOfId, nameCmp } from "./data/records";
 import { skillsOf } from "./47-skills";
 import { linkify } from "./40-concepts";
 import { overlayBack, overlayOpen, renderOverlay, topView } from "./90-detail";
@@ -166,7 +166,7 @@ function similarCards(id: number, limit = 3) {
     const { score, why } = simScore(base, x);
     out.push({ id: x.id, name: x.name, score, why: why.join(" · "), meta: simMeta(x) });
   }
-  return out.sort((a, b) => b.score - a.score || a.name.localeCompare(b.name, "zh")).slice(0, limit);
+  return out.sort((a, b) => b.score - a.score || nameCmp(a.name, b.name)).slice(0, limit);
 }
 function inCurrentDeck(id) {
   return !!state.current && (state.current!.charIds.includes(id) || state.current!.cardIds.includes(id));
@@ -284,7 +284,7 @@ function diffDecks(codeA, codeB) {
     const e = recordOfId(id);
     const a = A.countMap.get(id) || 0, b = B.countMap.get(id) || 0;
     return { id, name: e ? e.name : `#${id}`, type: e ? e.typeZh : "", a, b, delta: b - a };
-  }).sort((x, y) => (x.type.localeCompare(y.type, "zh") || x.name.localeCompare(y.name, "zh")));
+  }).sort((x, y) => (x.type.localeCompare(y.type, "zh") || nameCmp(x.name, y.name)));
   return {
     A, B, rows,
     added: rows.filter(r => r.a === 0 && r.b > 0),
