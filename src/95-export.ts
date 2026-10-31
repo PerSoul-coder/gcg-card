@@ -167,19 +167,44 @@ document.addEventListener("click", ev => {
 $("btnDeckDiff").addEventListener("click", () => { closeMenus(); showDeckDiff(); });
 $("btnPrint").addEventListener("click", () => { closeMenus(); window.print(); });
 $("btnHelp").addEventListener("click", () => { closeMenus(); showHelp(); });
+
+/* ---------- 导出动作注册表 ----------
+   菜单按钮与点击分发都由这张表生成：新导出形态（分享图 / 二维码）= 表里加一条，
+   HTML 里的 #exportMenu 保持空壳（与页头图标钮同款「HTML 占位、JS 注入」模式）。 */
+const EXPORT_ACTIONS: Array<{ id: string; label: string; hint?: string; run: () => void }> = [
+  {
+    id: "text", label: "文本牌表 · 复制",
+    run: () => { copyText(deckText()).then(() => toast("文本牌表已复制"), () => toast("复制失败", true)); },
+  },
+  {
+    id: "md", label: "Markdown 牌表 · 复制",
+    run: () => { copyText(deckMarkdown()).then(() => toast("Markdown 牌表已复制"), () => toast("复制失败", true)); },
+  },
+  {
+    id: "json-copy", label: "结构化 JSON · 复制",
+    run: () => { copyText(JSON.stringify(buildExport(), null, 2)).then(() => toast("结构化 JSON 已复制"), () => toast("复制失败", true)); },
+  },
+  {
+    id: "json-dl", label: "结构化 JSON · 下载",
+    run: () => { download(`${fileStamp()}.json`, JSON.stringify(buildExport(), null, 2), "application/json"); toast("JSON 已下载"); },
+  },
+  {
+    id: "csv", label: "CSV · 下载（Excel 可直开）",
+    run: () => { download(`${fileStamp()}.csv`, toCSV(), "text/csv;charset=utf-8"); toast("CSV 已下载（Excel 可直开）"); },
+  },
+];
+/* 复制是异步的：成功/失败都要有回音，不留 unhandled rejection（run 内部自理）；
+   分发统一套一层 try：数据缺失（未解析牌组）等同步异常也要有 toast 回音。 */
+const exportActionOf = (id: string) => EXPORT_ACTIONS.find(a => a.id === id) || null;
+$("exportMenu").innerHTML = EXPORT_ACTIONS
+  .map(a => `<button data-exp="${a.id}"${a.hint ? ` title="${a.hint}"` : ""}>${a.label}</button>`).join("");
 $("exportMenu").addEventListener("click", ev => {
   const b = (ev.target as HTMLElement).closest("[data-exp]");
   if (!b) return;
   $("exportMenu").classList.remove("show");
-  const act = b.dataset.exp;
-  try {
-    /* 复制是异步的：成功/失败都要有回音，不留 unhandled rejection */
-    if (act === "text") { copyText(deckText()).then(() => toast("文本牌表已复制"), () => toast("复制失败", true)); }
-    else if (act === "md") { copyText(deckMarkdown()).then(() => toast("Markdown 牌表已复制"), () => toast("复制失败", true)); }
-    else if (act === "json-copy") { copyText(JSON.stringify(buildExport(), null, 2)).then(() => toast("结构化 JSON 已复制"), () => toast("复制失败", true)); }
-    else if (act === "json-dl") { download(`${fileStamp()}.json`, JSON.stringify(buildExport(), null, 2), "application/json"); toast("JSON 已下载"); }
-    else if (act === "csv") { download(`${fileStamp()}.csv`, toCSV(), "text/csv;charset=utf-8"); toast("CSV 已下载（Excel 可直开）"); }
-  } catch (e) { toast("导出失败：" + (e as Error).message, true); }
+  const act = exportActionOf(b.dataset.exp || "");
+  if (!act) return;
+  try { act.run(); } catch (e) { toast("导出失败：" + (e as Error).message, true); }
 });
 
 /* ---------- 分享码 ---------- */
@@ -205,4 +230,4 @@ $("btnCopyCode").addEventListener("click", async () => {
   } catch (e) { toast("生成失败：" + (e as Error).message, true); }
 });
 
-export { download, deckText, deckMarkdown, buildExport, toCSV, fileStamp, openMenu, closeMenus, encodeCurrent };
+export { download, deckText, deckMarkdown, buildExport, toCSV, fileStamp, EXPORT_ACTIONS, exportActionOf, openMenu, closeMenus, encodeCurrent };

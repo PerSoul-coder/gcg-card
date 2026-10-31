@@ -1,5 +1,5 @@
 /* 70-search.ts —— 检索：卡牌、概念、技能的统一定位与建议。 */
-import { BROWSE_DIMS, browseFilter, browseState, passFilter, renderBrowse, renderBrowseResults, syncBrowseHash } from "./85-views";
+import { BROWSE_DIMS, browseFilter, browseState, passFilter, renderBrowse, renderBrowseResults, syncBrowseHash, emptyBrowseFilters } from "./85-views";
 import { $ } from "./core/dom";
 import { pool } from "./45-pool";
 import { recordOfId, nameCmp } from "./data/records";
@@ -403,7 +403,7 @@ function toggleSearchScope(k) {
 }
 /* 清除卡库筛选（第一阶段），检索词保留并基于恢复后的全库重算 */
 function clearBrowseFilters() {
-  Object.assign(browseState, { type: "", el: "", cost: "", energy: "", tag: "", ver: "" });
+  Object.assign(browseState, emptyBrowseFilters());
   renderBrowse();
 }
 

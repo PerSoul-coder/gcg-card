@@ -331,12 +331,18 @@ export interface SkillEntry {
    两套形状是刻意分开的：持久化用元组数组（JSON 直存），内存操作用 Map（按 id 定位）。
    以前两者都是裸的 `[]` / `new Map()`，推断成 never，下游几十处属性访问全靠运气。 */
 export interface Deck {
+  /** 存储结构版本（normalizeDeck 落盘时写；旧数据缺失按 v1 处理后升级）。 */
+  v?: 2;
   id: number;
   name: string;
   /** 角色 id，最多 3 个。 */
   chars: number[];
   /** [卡牌 id, 份数]，顺序即牌组内展示顺序。 */
   cards: Array<[number, number]>;
+  /** 牌组备注（对局思路 / 起手要素），管理面板可编辑；可缺省（旧数据无此字段）。 */
+  note?: string;
+  /** 核心牌 id 清单（构筑依赖的少张数卡），概览条列出「仅 1 张」提醒；可缺省。 */
+  core?: number[];
   updatedAt: number;
 }
 

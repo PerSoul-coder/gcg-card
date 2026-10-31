@@ -20,14 +20,36 @@ const draft: Draft = { chars: [], cards: new Map() };  /* chars: id[]；cards: i
 let decks: Deck[] = [];
 let activeDeckId: number | null = null;
 let deckRenameId: number | null = null;
+/* 存储结构单点消毒：loadDecks 的逐条体检与 newDeck/duplicateDeck 的构造都走这里，
+   字段增补（note/core…）只改这一个函数。不合格的条目整条丢弃（对齐 favs/recent 口径）。 */
+function normalizeDeck(raw: unknown): Deck | null {
+  if (!raw || typeof raw !== "object") return null;
+  const r = raw as Partial<Deck>;
+  if (!Number.isFinite(r.id) || !Array.isArray(r.chars) || !Array.isArray(r.cards)) return null;
+  const d: Deck = {
+    v: 2,
+    id: r.id as number,
+    name: typeof r.name === "string" && r.name ? r.name : "牌组",
+    chars: r.chars.map(Number).filter((n): n is number => Number.isFinite(n)),
+    cards: r.cards
+      .map(p => (Array.isArray(p) ? [Number(p[0]), Number(p[1])] : null))
+      .filter((p): p is [number, number] => !!p && Number.isFinite(p[0]) && Number.isFinite(p[1])),
+    updatedAt: Number.isFinite(r.updatedAt) ? r.updatedAt as number : Date.now(),
+  };
+  if (typeof r.note === "string" && r.note) d.note = r.note;
+  if (Array.isArray(r.core)) d.core = r.core.map(Number).filter((n): n is number => Number.isFinite(n));
+  return d;
+}
 function loadDecks() {
   decks = [];
   try {
     const d = JSON.parse(localStorage.getItem(STORAGE_KEYS.decks) || "null");
-    /* 逐条消毒：缺 chars/cards 的损坏条目会让 renderDraftPanel 的 reduce 抛 TypeError，
-       牌组管理从此静默失效。不合格的整条丢弃（对齐 favs/recent 的防护口径）。 */
-    if (Array.isArray(d)) decks = (d as Deck[]).filter(x => x && typeof x === "object"
-      && Number.isFinite(x.id) && Array.isArray(x.chars) && Array.isArray(x.cards));
+    if (Array.isArray(d)) {
+      for (const x of d as unknown[]) {
+        const nd = normalizeDeck(x);
+        if (nd) decks.push(nd);
+      }
+    }
   } catch (e) { decks = []; }
 }
 function saveDecks() { try { localStorage.setItem(STORAGE_KEYS.decks, JSON.stringify(decks)); } catch (e) {} }
@@ -35,7 +57,7 @@ function activeDeck() { return decks.find(d => d.id === activeDeckId) || null; }
 let deckSeq = 0;
 function newDeck(name?: string): Deck {
   /* id 带序号后缀：同一毫秒连建多个牌组也不会碰撞 */
-  const d: Deck = { id: Date.now() * 1000 + (deckSeq++ % 1000), name: name || `牌组 ${decks.length + 1}`, chars: [], cards: [], updatedAt: Date.now() };
+  const d: Deck = { v: 2, id: Date.now() * 1000 + (deckSeq++ % 1000), name: name || `牌组 ${decks.length + 1}`, chars: [], cards: [], updatedAt: Date.now() };
   decks.unshift(d); activeDeckId = d.id; return d;
 }
 
@@ -57,13 +79,15 @@ export function beginRenameDeck(id) {
   if (inp) { inp.focus(); inp.select(); }
 }
 
-/** 复制牌组：角色数组与卡牌计数都是深拷贝，改副本不影响原牌组。 */
+/** 复制牌组：角色数组、卡牌计数、备注与核心牌都是深拷贝，改副本不影响原牌组。 */
 export function duplicateDeck(id) {
   const src = decks.find(d => d.id === id);
   if (!src) return false;
   const d = newDeck(src.name + " 副本");
   d.chars = [...src.chars];
   d.cards = src.cards.map(([cardId, c]) => [cardId, c]);
+  if (src.note) d.note = src.note;
+  if (src.core) d.core = [...src.core];
   syncFromActive(); renderDraft(); renderDraftPanel();
   return true;
 }
@@ -339,4 +363,4 @@ export function toggleDraftPanel(): void {
    open/close 里的 setModalLayer 以同一 spec 幂等覆盖，二者不冲突。 */
 registerLayer({ id: "draftPanel", isOpen: draftPanelOpen, close: closeDraftPanel, order: 46, modal: true });
 
-export { draft, decks, activeDeckId, deckRenameId, loadDecks, saveDecks, activeDeck, deckSeq, newDeck, syncFromActive, saveDraft, loadDraft, pruneDraft, draftTotal, COPY_LIMIT, LEGEND_COPY_LIMIT, copyLimit, draftAdd, draftRemoveChar, draftRemoveCard, draftSetCount, draftClear, draftLoadCurrent, deckProblems, draftEncode, renderDraft, renderDraftPanel, commitDeckRename };
+export { draft, decks, activeDeckId, deckRenameId, loadDecks, saveDecks, activeDeck, deckSeq, newDeck, normalizeDeck, syncFromActive, saveDraft, loadDraft, pruneDraft, draftTotal, COPY_LIMIT, LEGEND_COPY_LIMIT, copyLimit, draftAdd, draftRemoveChar, draftRemoveCard, draftSetCount, draftClear, draftLoadCurrent, deckProblems, draftEncode, renderDraft, renderDraftPanel, commitDeckRename };

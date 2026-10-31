@@ -157,6 +157,15 @@ function detailView(id: number, ids?: number[]): OverlayEntry {
    旧实现每次 innerHTML 重建都会把弹层滚回顶部，返回对比面板后要重新往下找。 */
 let renderedView: OverlayEntry | null = null;
 /* resetScroll：翻页 / 换了一张卡时强制回到顶部；其余重渲染沿用视图自己的位置 */
+/* 弹层 kind → 渲染函数：renderOverlay 的分发点收口在这张表。
+   syncOverlayToHash 的相等判定逻辑各 kind 异质（id/name/key 字段不同），保持分支不走表。 */
+const OVERLAY_RENDER: Record<string, (v: OverlayEntry) => void> = {
+  term: renderTermView,
+  skill: renderSkillView,
+  compare: renderCompareView,
+  deckdiff: renderDeckDiffView,
+  detail: renderDetailView,
+};
 function renderOverlay(resetScroll = false) {
   const reset = resetScroll === true;
   const detail = $("detail");
@@ -168,11 +177,8 @@ function renderOverlay(resetScroll = false) {
   const top = topView();
   if (!top) { setOverlayOpen(false); renderedView = null; return; }
   if (reset) { top.scrollTop = 0; top.cmpLeft = 0; }
-  if (top.kind === "term") renderTermView(top);
-  else if (top.kind === "skill") renderSkillView(top);
-  else if (top.kind === "compare") renderCompareView(top);
-  else if (top.kind === "deckdiff") renderDeckDiffView(top);
-  else renderDetailView(top);
+  /* kind → 渲染函数注册表：新弹层种类在这里挂一行（渲染函数保持模块内聚） */
+  (OVERLAY_RENDER[top.kind] || renderDetailView)(top);
   setOverlayOpen(true);
   if (detail && typeof detail.scrollTop === "number") detail.scrollTop = top.scrollTop || 0;
   if (top.cmpLeft && detail && detail.querySelector) {

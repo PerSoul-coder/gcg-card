@@ -273,10 +273,79 @@ function browseSearchResultsHtml() {
 /* ---------- 卡库浏览：多维筛选 / 排序 / 分片渲染 ----------
    筛选维度：类别 / 元素（角色及其天赋）/ 骰子费用 / 充能 / 标签 / 版本。
    计数为 facet 计数：每个可选值按"其余维度全部生效"统计，点进去不会把人带向空结果。 */
-/** 卡库筛选状态：六个维度 + 排序。u（是否显示不可构筑）是全局开关，不在这里。 */
+/** 卡库筛选状态：筛选维度 + 排序。u（是否显示不可构筑）是全局开关，不在这里。 */
+type FilterKey = "type" | "el" | "cost" | "energy" | "tag" | "ver";
 interface BrowseState { type: string; el: string; cost: string; energy: string; tag: string; ver: string; sort: string; dir: number }
-const browseState: BrowseState = { type: "", el: "", cost: "", energy: "", tag: "", ver: "", sort: "name", dir: 1 };
-const BROWSE_DIMS: FacetDim[] = ["type", "el", "cost", "energy", "tag", "ver"];
+/* ---------- 筛选维度注册表 ----------
+   每个维度的全部行为都由这张表驱动：取值、放行判定、分面计数、hash 编解码、
+   展开态行渲染、已激活 chips 标签。新增维度 = 表里加一条 + BrowseState 加一个键，
+   不再往十来处 if 链里各插一刀。
+   · value：单值维度。返回 null 表示「该条没有这个属性」（角色没有骰子费用 /
+     充能 / 机制文本），激活该维度时这类条目一律不匹配——这正是既有行为。
+   · values：多值维度（标签），一条卡可同时命中多个值，分面逐值累加。
+   · double：分面按「可构筑 / 不可构筑」双计数（type / tag 这类实体也可能有的维度）。
+   · row：定制行渲染（版本用下拉）；缺省走默认 chips 行。
+   · vals：行内可选值的枚举顺序；缺省按分面键。 */
+interface FilterDim {
+  key: FilterKey;
+  letter: string;                          /* hash 参数字母（#b=t=…,e=…） */
+  label: string;                           /* 展开态行标签 */
+  value?: (x: PoolEntry) => string | null;
+  values?: (x: PoolEntry) => string[];
+  double?: boolean;
+  allCount?: "sum";                        /* 「全部」chip 显示分面合计 */
+  vals?: (facets: Facets) => string[];
+  chipLabel?: (v: string) => string;
+  chipActive?: (v: string) => string;
+  allTitle?: string;                       /* 「全部」chip 的悬浮说明 */
+  row?: (st: BrowseState, facets: Facets) => string;
+}
+const FILTER_DIMS: FilterDim[] = [
+  {
+    key: "type", letter: "t", label: "类别", double: true, allCount: "sum",
+    value: x => x.typeRaw,
+    vals: () => POOL_TYPE_ORDER.filter(t => poolStats.byType[t]),
+    chipLabel: v => TYPE_ZH[v] || v,
+    chipActive: v => TYPE_ZH[v] || v,
+    allTitle: "可构筑 / 对局实体与历史变体（后者默认折叠，可用右侧开关平铺）",
+  },
+  {
+    key: "el", letter: "e", label: "元素", allCount: "sum",
+    value: x => x.element || null,
+    vals: f => Object.keys(ELE_ZH).filter(e => fcn(f.el, e)),
+    chipLabel: v => eleIcon(v) + ELE_ZH[v],
+    allTitle: "按角色元素筛选（含其天赋牌）",
+  },
+  {
+    key: "cost", letter: "c", label: "骰子费用",
+    value: x => (x.kind === "char" ? null : String(Math.min(x.dice, 5))),
+    vals: f => ["0", "1", "2", "3", "4", "5"].filter(k => fcn(f.cost, k)),
+    chipLabel: v => (v === "5" ? "5+" : v),
+    chipActive: v => "骰子 " + (v === "5" ? "5+" : v),
+  },
+  {
+    key: "energy", letter: "n", label: "充能",
+    value: x => (x.kind === "char" ? null : (x.energyCost > 0 ? String(x.energyCost) : "0")),
+    vals: f => Object.keys(f.energy).sort(),
+    chipLabel: v => (v === "0" ? "无充能" : ENERGY_ICON + v),
+    chipActive: v => (v === "0" ? "无充能" : ENERGY_ICON + v),
+  },
+  {
+    key: "tag", letter: "g", label: "标签", double: true,
+    values: x => x.tags.filter((t): t is string => !!t),
+    vals: f => Object.entries(f.tag).sort((a, b) => b[1].n - a[1].n).map(([t]) => t),
+  },
+  {
+    key: "ver", letter: "v", label: "版本", row: (st, facets) => verRow(st),
+    value: x => x.ver || null,
+  },
+];
+/* 清空全部筛选维度（不动排序方向）。检索「范围」按钮与重置按钮共用。 */
+function emptyBrowseFilters(): Pick<BrowseState, FilterKey> {
+  return { type: "", el: "", cost: "", energy: "", tag: "", ver: "" };
+}
+const browseState: BrowseState = { ...emptyBrowseFilters(), sort: "name", dir: 1 };
+const BROWSE_DIMS: FacetDim[] = FILTER_DIMS.map(d => d.key) as FacetDim[];   /* 兼容旧名（键数组视图） */
 /* 每页 40 张：一次插入 60 张带图片的瓦片本身就是一次 50ms 级的长任务，
    拆小后每次追加更短，滚动时不至于被"补货"卡住一帧以上。 */
 const BROWSE_PAGE = 40;
@@ -299,21 +368,17 @@ let bPager: Pager | null = null, nbPager: Pager | null = null;
 /* 视口尺寸：测试与 SSR 环境没有 window/innerHeight，统一从这里取，避免各处 try */
 function viewH() { try { return window.innerHeight || innerHeight || 800; } catch (e) { return 800; } }
 function viewTop() { try { return window.scrollY || window.pageYOffset || 0; } catch (e) { return 0; } }
-function facetKey(x, dim) {
-  if (dim === "type") return x.typeRaw;
-  if (dim === "el") return x.element || null;
-  if (dim === "cost") return x.kind === "char" ? null : String(Math.min(x.dice, 5));
-  if (dim === "energy") return x.kind === "char" ? null : (x.energyCost > 0 ? String(x.energyCost) : "0");
-  if (dim === "ver") return x.ver || null;
-  return null;
-}
 function passFilter(x, st) {
-  if (st.type && x.typeRaw !== st.type) return false;
-  if (st.el && x.element !== st.el) return false;
-  if (st.cost !== "" && (x.kind === "char" || String(Math.min(x.dice, 5)) !== st.cost)) return false;
-  if (st.energy !== "" && (x.kind === "char" || (x.energyCost > 0 ? String(x.energyCost) : "0") !== st.energy)) return false;
-  if (st.tag && !x.tags.includes(st.tag)) return false;
-  if (st.ver && x.ver !== st.ver) return false;
+  for (const d of FILTER_DIMS) {
+    const v = st[d.key];
+    if (!v) continue;
+    if (d.values) {
+      if (!d.values(x).includes(v)) return false;
+      continue;
+    }
+    const k = d.value!(x);
+    if (k === null || k !== v) return false;
+  }
   return true;
 }
 function browseCmp(a, b, key, dir) {
@@ -341,7 +406,8 @@ const _browseMemo: {
   split: { key: string; data: BrowseSplit | null };
 } = { filter: { key: "", list: null }, facets: { key: "", data: null }, split: { key: "", data: null } };
 function browseStateKey(st = browseState) {
-  return [st.type, st.el, st.cost, st.energy, st.tag, st.ver, st.sort, st.dir].join("\u0001") + "@" + poolVersion + (showFavsOnly ? "|f" : "");
+  return FILTER_DIMS.map(d => st[d.key]).concat([st.sort, String(st.dir)]).join("\u0001")
+    + "@" + poolVersion + (showFavsOnly ? "|f" : "");
 }
 function browseFilter(st = browseState): PoolEntry[] {
   const key = browseStateKey(st);
@@ -408,14 +474,14 @@ function facetCounts(st = browseState): Facets {
     if (build) cell.b++; else cell.o++;
     cell.n++;
   };
-  for (const dim of BROWSE_DIMS) {
-    const st2 = { ...st, [dim]: "" };
+  for (const d of FILTER_DIMS) {
+    const st2 = { ...st, [d.key]: "" };
     for (const x of pool) {
       if (!passFilter(x, st2)) continue;
       const build = isBuildableEntry(x);
-      if (dim === "tag") { for (const t of x.tags) if (t) bump("tag", t, build); continue; }
-      const k = facetKey(x, dim);
-      if (k != null) bump(dim, k, build);
+      if (d.values) { for (const k of d.values(x)) if (k) bump(d.key as FacetDim, k, build); continue; }
+      const k = d.value!(x);
+      if (k != null) bump(d.key as FacetDim, k, build);
     }
   }
   _browseMemo.facets = { key, data: out };
@@ -428,12 +494,10 @@ const fcn = (map, k) => (map && map[k] ? map[k].n : 0);
    u=1 表示「显示不可构筑」开关打开；只有真正打开时才写，避免每条链接都拖一个 u=0。 */
 function browseHash(st = browseState) {
   const p: string[] = [];
-  if (st.type) p.push("t=" + st.type);
-  if (st.el) p.push("e=" + st.el);
-  if (st.cost !== "") p.push("c=" + st.cost);
-  if (st.energy !== "") p.push("n=" + st.energy);
-  if (st.tag) p.push("g=" + encodeURIComponent(st.tag));
-  if (st.ver) p.push("v=" + st.ver);
+  for (const d of FILTER_DIMS) {
+    const v = st[d.key];
+    if (v !== "") p.push(d.letter + "=" + (d.key === "tag" ? encodeURIComponent(v) : v));
+  }
   if (st.sort !== "name") p.push("s=" + st.sort);
   if (st.dir !== 1) p.push("d=-1");
   if (showUnbuildable) p.push("u=1");
@@ -444,9 +508,11 @@ function browseHash(st = browseState) {
 /* u：链接里的开关状态；q：检索词（第二阶段）。hash 带 b= 时它就是这一屏的权威值
    （u 缺省 = 关闭；q 缺省 = 清空检索词），收到链接的人看到的就是分享者看到的那一屏。
    入参约定为「未整体解码」的原始 hash：各参数在下面各自解码一次（旧实现被
-   routeHash 先整体解码过一次再传进来，参数又解码一次——q 里出现字面 % 就 URIError）。 */
+   routeHash 先整体解码过一次再传进来，参数又解码一次——q 里出现字面 % 就 URIError）。
+   维度参数的字母由 FILTER_DIMS 的 letter 定义，解码按同一张表反查。 */
 function parseBrowseHash(hash) {
-  const st = { type: "", el: "", cost: "", energy: "", tag: "", ver: "", sort: "name", dir: 1, u: false, f: false, q: undefined as string | undefined };
+  const st = { ...emptyBrowseFilters(), sort: "name", dir: 1, u: false, f: false, q: undefined as string | undefined };
+  const byLetter = new Map(FILTER_DIMS.map(d => [d.letter, d]));
   const m = String(hash || "").match(/^#?b=(.*)$/);
   if (!m) return null;
   /* 畸形转义（%zz）按原样当值用：分享链接坏了不该炸路由 */
@@ -455,12 +521,8 @@ function parseBrowseHash(hash) {
     const i = kv.indexOf("=");
     if (i < 0) continue;
     const k = kv.slice(0, i), v = kv.slice(i + 1);
-    if (k === "t") st.type = v;
-    else if (k === "e") st.el = v;
-    else if (k === "c") st.cost = v;
-    else if (k === "n") st.energy = v;
-    else if (k === "g") st.tag = dec(v);
-    else if (k === "v") st.ver = v;
+    const d = byLetter.get(k);
+    if (d) st[d.key] = d.key === "tag" ? dec(v) : v;
     else if (k === "s") st.sort = v;
     else if (k === "d") st.dir = -1;
     else if (k === "u") st.u = v === "1" || v === "on" || v === "true";
@@ -541,43 +603,35 @@ export function setBrowseExpanded(v: boolean): void {
 /* 已激活筛选 chips（折叠态展示，点击即移除该维度） */
 function activeBrowseChips(st) {
   const chips: string[] = [];
-  const push = (g: string, label: string, val: string) => chips.push(browseChip(g, val, label, null, true, "点击移除该筛选"));
-  if (st.type) push("type", TYPE_ZH[st.type] || st.type, st.type);
-  if (st.el) push("el", eleIcon(st.el) + (ELE_ZH[st.el] || st.el), st.el);
-  if (st.cost !== "") push("cost", "骰子 " + (st.cost === "5" ? "5+" : st.cost), st.cost);
-  if (st.energy !== "") push("energy", st.energy === "0" ? "无充能" : ENERGY_ICON + st.energy, st.energy);
-  if (st.tag) push("tag", st.tag, st.tag);
-  if (st.ver) push("ver", st.ver, st.ver);
+  for (const d of FILTER_DIMS) {
+    const v = st[d.key];
+    if (v !== "") chips.push(browseChip(d.key, v, d.chipActive ? d.chipActive(v) : (d.chipLabel ? d.chipLabel(v) : v), null, true, "点击移除该筛选"));
+  }
   return chips.join("");
 }
-function browseBarHtml(st: BrowseState, facets: Facets) {
-  const buildN = poolStats.buildable, otherN = poolStats.total - poolStats.buildable;
-  const typeRow = browseChip("type", "", "全部", { b: buildN, o: otherN }, !st.type, "可构筑 / 对局实体与历史变体（后者默认折叠，可用右侧开关平铺）") +
-    POOL_TYPE_ORDER.filter(t => poolStats.byType[t]).map(t =>
-      browseChip("type", t, TYPE_ZH[t] || t, facets.type[t], st.type === t, "计数为「可构筑 / 不可构筑」")).join("");
-  const elTotal = sumCells(facets.el);
-  const elRow = browseChip("el", "", "全部", elTotal.b + elTotal.o, !st.el, "按角色元素筛选（含其天赋牌）") +
-    Object.keys(ELE_ZH).filter(e => fcn(facets.el, e)).map(e =>
-      browseChip("el", e, eleIcon(e) + ELE_ZH[e], fcn(facets.el, e), st.el === e)).join("");
-  const costRow = browseChip("cost", "", "全部", null, st.cost === "") +
-    ["0", "1", "2", "3", "4", "5"].filter(k => fcn(facets.cost, k)).map(k =>
-      browseChip("cost", k, k === "5" ? "5+" : k, fcn(facets.cost, k), st.cost === k)).join("");
-  const enRow = browseChip("energy", "", "全部", null, st.energy === "") +
-    Object.keys(facets.energy).sort().map(k =>
-      browseChip("energy", k, k === "0" ? "无充能" : ENERGY_ICON + k, fcn(facets.energy, k), st.energy === k)).join("");
-  const tagRow = browseChip("tag", "", "全部", null, !st.tag) +
-    Object.entries(facets.tag).sort((a, b) => b[1].n - a[1].n).map(([t, cell]) =>
-      browseChip("tag", t, t, cell, st.tag === t)).join("");
+/* 默认 chips 行：全部 + 注册表枚举的各值（计数来自分面） */
+function dimChipRow(d: FilterDim, st: BrowseState, facets: Facets): string {
+  const s = d.allCount === "sum" ? sumCells(facets[d.key]) : null;
+  const allN = s == null ? null : (d.double ? s : s.b + s.o);
+  const vals = d.vals ? d.vals(facets) : Object.keys(facets[d.key]);
+  const row = browseChip(d.key, "", "全部", allN, st[d.key] === "", d.allTitle || "")
+    + vals.map(v => browseChip(d.key, v, d.chipLabel ? d.chipLabel(v) : v, facets[d.key][v], st[d.key] === v,
+      d.double ? "计数为「可构筑 / 不可构筑」" : "")).join("");
+  return `<div class="bg-row"><span class="bg-label">${d.label}</span><div class="bg-chips">${row}</div></div>`;
+}
+function verRow(st: BrowseState): string {
   const verSel = `<select class="bg-sel" data-bg="ver" title="按版本筛选"><option value="">全部版本</option>` +
     poolStats.versions.map(v => `<option${st.ver === v ? " selected" : ""}>${esc(v)}</option>`).join("") + `</select>`;
+  return `<div class="bg-row bg-ctrl"><span class="bg-label">版本</span>${verSel}</div>`;
+}
+function browseBarHtml(st: BrowseState, facets: Facets) {
   const sortSel = `<select class="bg-sel" data-bs="sort" title="排序方式">
       <option value="name"${st.sort === "name" ? " selected" : ""}>按名称</option>
       <option value="cost"${st.sort === "cost" ? " selected" : ""}>按费用</option>
       <option value="ver"${st.sort === "ver" ? " selected" : ""}>按版本</option>
       <option value="id"${st.sort === "id" ? " selected" : ""}>按编号</option></select>`;
   const dirBtn = `<button class="bg-dir" data-bdir="1" title="${st.dir < 0 ? "当前降序，点击升序" : "当前升序，点击降序"}">${st.dir < 0 ? "↑" : "↓"}</button>`;
-  const activeCount = (st.type ? 1 : 0) + (st.el ? 1 : 0) + (st.tag ? 1 : 0) + (st.ver ? 1 : 0)
-    + (st.cost !== "" ? 1 : 0) + (st.energy !== "" ? 1 : 0);
+  const activeCount = FILTER_DIMS.filter(d => st[d.key] !== "").length;
   const dirty = activeCount > 0 || st.sort !== "name" || st.dir !== 1;
   const toggle = `<button class="bg-toggle" data-btoggle="1" title="展开 / 收起多维筛选">${browseExpanded ? "收起筛选 ▴" : "筛选 ▾"}${activeCount ? `<b>${activeCount}</b>` : ""}</button>`;
   const reset = dirty ? `<button class="bg-reset" data-breset="1" title="清除全部筛选与排序">重置</button>` : "";
@@ -590,14 +644,8 @@ function browseBarHtml(st: BrowseState, facets: Facets) {
       ${browseExpanded ? "" : `<div class="bg-chips">${activeBrowseChips(st)}</div>`}
       ${reset}<span class="bg-label">排序</span>${sortSel}${dirBtn}${ubSwitch}${favSwitch}
       <span class="bg-count"></span></div>`;
-  /* 展开态：六维筛选各行（激活态由 chip 高亮表示，无需再重复 chips） */
-  const rows = browseExpanded ? `
-    <div class="bg-row"><span class="bg-label">类别</span><div class="bg-chips">${typeRow}</div></div>
-    <div class="bg-row"><span class="bg-label">元素</span><div class="bg-chips">${elRow}</div></div>
-    <div class="bg-row"><span class="bg-label">骰子费用</span><div class="bg-chips">${costRow}</div></div>
-    <div class="bg-row"><span class="bg-label">充能</span><div class="bg-chips">${enRow}</div></div>
-    <div class="bg-row"><span class="bg-label">标签</span><div class="bg-chips">${tagRow}</div></div>
-    <div class="bg-row bg-ctrl"><span class="bg-label">版本</span>${verSel}</div>` : "";
+  /* 展开态：注册表逐维出各行（激活态由 chip 高亮表示，无需再重复 chips） */
+  const rows = browseExpanded ? FILTER_DIMS.map(d => (d.row ? d.row(st, facets) : dimChipRow(d, st, facets))).join("") : "";
   return `<div class="browse-bar">${top}${rows}</div>`;
 }
 /* 卡库检索框：与顶部牌组码输入框彻底分离；输入只作用于当前卡库子集 */
@@ -902,7 +950,7 @@ $("view-browse").addEventListener("click", ev => {
     renderBrowse(); syncBrowseHash(); return;
   }
   if ((ev.target as HTMLElement).closest("[data-breset]")) {
-    Object.assign(browseState, { type: "", el: "", cost: "", energy: "", tag: "", ver: "", sort: "name", dir: 1 });
+    Object.assign(browseState, emptyBrowseFilters(), { sort: "name", dir: 1 });
     renderBrowse(); syncBrowseHash(); return;
   }
   if ((ev.target as HTMLElement).closest("[data-sclear]")) { clearBrowseQuery(); return; }
@@ -946,4 +994,4 @@ $("view-browse").addEventListener("change", ev => {
   if (s) { browseState.sort = (s as HTMLSelectElement).value; renderBrowse(); syncBrowseHash(); }
 });
 
-export { renderSummary, tileHtml, renderGrid, listFilter, listSort, sortVal, renderList, hlName, searchTile, browseSearchResultsHtml, browseState, BROWSE_DIMS, BROWSE_PAGE, PAGE_KEEP, bPager, nbPager, viewH, viewTop, facetKey, passFilter, browseCmp, _browseMemo, browseStateKey, browseFilter, isBuildableEntry, showUnbuildable, setShowUnbuildable, showFavsOnly, setShowFavsOnly, nbOpen, browseSplit, otherGroupHtml, facetCounts, fcn, browseHash, parseBrowseHash, syncBrowseHash, browseChip, sumCells, browseTile, syncTileQty, BROWSE_EXP_KEY, browseExpanded, activeBrowseChips, browseBarHtml, browseSearchHtml, renderBrowse, renderBrowseResults, updateBrowseCount, browseVisibleIds, dirtyBrowse, makePager, measureH, pagerPage, pagerFill, pagerSentinel, pagerGrow, pagerFillAhead, pagerSweep, appendBrowseTiles, appendOtherTiles, browseTick, hasIO, browseMaybeMore, browseIO, ioPagers, observeSentinel, unobserveSentinel, toggleNbGroup, applyBrowseQuery, clearBrowseQuery };
+export { renderSummary, tileHtml, renderGrid, listFilter, listSort, sortVal, renderList, hlName, searchTile, browseSearchResultsHtml, browseState, FILTER_DIMS, BROWSE_DIMS, emptyBrowseFilters, BROWSE_PAGE, PAGE_KEEP, bPager, nbPager, viewH, viewTop, passFilter, browseCmp, _browseMemo, browseStateKey, browseFilter, isBuildableEntry, showUnbuildable, setShowUnbuildable, showFavsOnly, setShowFavsOnly, nbOpen, browseSplit, otherGroupHtml, facetCounts, fcn, browseHash, parseBrowseHash, syncBrowseHash, browseChip, sumCells, browseTile, syncTileQty, BROWSE_EXP_KEY, browseExpanded, activeBrowseChips, browseBarHtml, browseSearchHtml, renderBrowse, renderBrowseResults, updateBrowseCount, browseVisibleIds, dirtyBrowse, makePager, measureH, pagerPage, pagerFill, pagerSentinel, pagerGrow, pagerFillAhead, pagerSweep, appendBrowseTiles, appendOtherTiles, browseTick, hasIO, browseMaybeMore, browseIO, ioPagers, observeSentinel, unobserveSentinel, toggleNbGroup, applyBrowseQuery, clearBrowseQuery };

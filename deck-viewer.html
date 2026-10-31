@@ -65,13 +65,8 @@ window.addEventListener("error", function (ev) {
     <button id="btnCopyCode" disabled>复制分享码</button>
     <div class="expwrap">
       <button id="btnExport" disabled>导出 ▾</button>
-      <div class="menu" id="exportMenu">
-        <button data-exp="text">文本牌表 · 复制</button>
-        <button data-exp="md">Markdown 牌表 · 复制</button>
-        <button data-exp="json-copy">结构化 JSON · 复制</button>
-        <button data-exp="json-dl">结构化 JSON · 下载</button>
-        <button data-exp="csv">CSV · 下载（Excel 可直开）</button>
-      </div>
+      <!-- 导出动作由 95-export 的注册表在启动时注入 -->
+      <div class="menu" id="exportMenu"></div>
     </div>
     <div class="expwrap">
       <button id="btnDeckTools">牌组工具 ▾</button>
