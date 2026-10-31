@@ -51,10 +51,6 @@ export const TYPE_SPEC: Record<string, TypeSpec> = {
   GCG_CARD_ATTACHMENT: { zh: "附加状态", domain: "field", deckable: false, scope: "char" },
 };
 
-export const DOMAIN_ZH: Record<string, string> = {
-  char: "角色", card: "卡牌", field: "对局实体", term: "术语", skill: "技能",
-};
-
 /* 技能类型 → 中文标签。角色技能与装备牌特技共用一份记录形状，区别在 rel.ownerKind：
    card-owned 的技能在游戏原文里就叫「特技」（卡面写着「特技：X」「角色最多装备1个「特技」」），
    其 typeRaw 是 GCG_SKILL_TAG_VEHICLE（载具技能码）——这里给 VEHICLE 一个正名，

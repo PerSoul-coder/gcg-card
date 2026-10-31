@@ -25,6 +25,16 @@ const cards: GcgRecord[] = [];
 const shareToId: Record<number, number> = {};
 const idToShareId: Record<number, number> = {};
 
+/**
+ * "kind:id" 形 key 的数字段（card:11301 → 11301）。
+ * 仓库里曾有三种手写解析习语（slice(indexOf)/slice(5)/split(":")[1]），对
+ * "char:"、"card:" 恰好等价，但新增 key 前缀（如 skill:/term:）时表现各异
+ * （有的 NaN、有的死链）——现在收敛到这一个点：新前缀只改这里。
+ */
+export function keyIdOf(key: string): number {
+  return Number(String(key).slice(String(key).indexOf(":") + 1));
+}
+
 /** 重建索引。数据集变化（首次加载 / 刷新）后调用。 */
 export function buildRecordIndex(): void {
   byId.clear();
@@ -38,7 +48,7 @@ export function buildRecordIndex(): void {
   for (const r of DATASET.records) {
     byKey.set(r.key, r);
     if (r.kind !== "char" && r.kind !== "card") continue;
-    const id = Number(r.key.slice(r.key.indexOf(":") + 1));
+    const id = keyIdOf(r.key);
     if (!Number.isFinite(id)) continue;
     byId.set(id, r);
     (r.kind === "char" ? chars : cards).push(r);

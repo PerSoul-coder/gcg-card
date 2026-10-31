@@ -14,6 +14,7 @@
  * 不是数据判定。 */
 
 import { dsByKey, dsReady, dsTerms } from "./07-dataset";
+import { keyIdOf } from "./data/records";
 import { esc } from "./core/dom";
 import type { GcgRecord, TermEntry } from "./types";
 
@@ -24,6 +25,18 @@ let termRe: RegExp | null = null;
 export function resetConceptIndex(): void {
   termIndex = new Map();
   termRe = null;
+}
+
+/**
+ * 概念条目的检索语料：desc（可链接释义）+ story（叙事文本）的唯一拼装点。
+ * 「检索要同时命中两者、渲染只链 desc」这条约定此前散在 70-search 的两处
+ * 手工拼接（一处用 || 会在双字段同时非空时静默丢 story）——现在形状也唯一。
+ */
+export function conceptTextOf(entries: TermEntry[]): string {
+  return entries
+    .map(e => [e.desc || "", e.story || ""].filter(Boolean).join(" "))
+    .filter(Boolean)
+    .join("\n");
 }
 
 /* 记录 → 展示条目。纯字段映射：收不收、取哪条、排第几都已由构建期确定。 */
@@ -42,7 +55,7 @@ function projectTerm(r: GcgRecord, kind: string): TermEntry {
     type: r.typeZh,
   };
   const idOf = (key: string): number | null => {
-    const n = Number(key.slice(key.indexOf(":") + 1));
+    const n = keyIdOf(key);
     return Number.isFinite(n) ? n : null;
   };
   if (kind === "card" || kind === "char") {
@@ -116,4 +129,4 @@ function linkifyExcept(escaped: string, except?: string | null): string {
   return linkify(escaped).split(span).join(target);
 }
 
-export { termIndex, termRe, buildTermIndex, termEntries, escapeRe, linkify, linkifyExcept };
+export { termIndex, termRe, buildTermIndex, termEntries, escapeRe, linkify, linkifyExcept };   /* conceptTextOf 已 inline export */

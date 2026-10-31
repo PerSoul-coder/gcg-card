@@ -206,6 +206,35 @@ const harness = `
   clearBrowseFilters();
   assert(browseState.type === "", "清除卡库筛选：维度归零");
 
+  /* ===== 6.5 检索语料单点：conceptTextOf（desc+story 唯一拼装点） ===== */
+  assert(conceptTextOf([{ src: 0, kind: "char", name: "X", desc: "效果A", story: "简介B" }]) === "效果A 简介B",
+    "conceptTextOf：desc 与 story 同时非空时都保留（旧 || 写法会静默丢 story）");
+  assert(conceptTextOf([{ src: 0, kind: "keyword", name: "Y", desc: "仅释义" }]) === "仅释义",
+    "conceptTextOf：无 story 时只取 desc");
+
+  /* story（角色简介）的词必须搜得到：搜得到简介、渲染时不链接——
+     这条约定此前散在两处手工拼接且零测试，现在从真实角色简介里取一个
+     不出现在任何释义字段的四字词做端到端验证。 */
+  const ml = charRecords().find(c => c.name === "玛拉妮") || charRecords().find(c => c.desc && c.desc.story);
+  assert(!!ml && !!ml.desc.story, "存在带简介的角色记录（故事检索前提）");
+  if (ml && ml.desc.story) {
+    const story = ml.desc.story;
+    let word = null;
+    for (let i = 0; i + 4 <= story.length && !word; i++) {
+      const w = story.slice(i, i + 4);
+      if (!/^[一-鿿]{4}$/.test(w)) continue;
+      let inDesc = false;
+      for (const [, es] of termIndex) for (const e of es) if ((e.desc || "").includes(w)) { inDesc = true; break; }
+      if (!inDesc) word = w;
+    }
+    assert(!!word, "能从简介中选出不出现于任何释义的样本词");
+    if (word) {
+      const hits = searchCards(word, { limit: 30 });
+      assert(hits.some(h => h.name === ml.name),
+        "故事词「" + word + "」可被检索命中（搜得到简介）");
+    }
+  }
+
   /* ===== 7. 空牌组时的视图保护 ===== */
   state.current = null;
   renderGrid(); renderList();

@@ -12,6 +12,17 @@ try {
   if (t === "light" || (t !== "dark" && matchMedia("(prefers-color-scheme: light)").matches))
     document.documentElement.dataset.theme = "light";
 } catch (e) {}
+/* 引导期错误横幅：应用全局监听注册于 99-main（模块依赖图末段），任一模块求值期
+   抛错时它还不存在，页面只会白屏无下文。这里把消息写到 html 属性上，
+   由 CSS（html[data-boot-error]::before）渲染成固定横幅——不依赖 DOM 就绪。
+   引导完成后（__giBooted）由 99-main 的运行期兜底接管，这里不再动作。 */
+window.addEventListener("error", function (ev) {
+  try {
+    if (window.__giBooted) return;
+    var msg = String((ev && (ev.message || (ev.error && ev.error.message))) || "未知错误").slice(0, 140);
+    document.documentElement.setAttribute("data-boot-error", msg);
+  } catch (e) {}
+});
 </script>
 <!-- ?v= 版本戳：JS/CSS 更新后强制浏览器重新拉取，避免旧缓存文件引发未定义错误 -->
 <link rel="stylesheet" href="deck-viewer.css?v=26">

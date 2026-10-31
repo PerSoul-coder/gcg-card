@@ -2,6 +2,7 @@
 import { R_STYLE, R_ZH, allReqs, depBadges, reqElement } from "./30-deps";
 import { recordOfId, isCharId } from "./data/records";
 import { $ } from "./core/dom";
+import { safeReplaceState } from "./core/history";
 import { showOdds } from "./86-odds";
 import { CAT_ORDER, clearBrowseFilters, corpusKey, hlText, loadRecent, nearNames, resultTypeLabel, searchCards, searchState, toggleSearchScope } from "./70-search";
 import { termEntries } from "./40-concepts";
@@ -129,7 +130,7 @@ function renderList() {
   const f = listFilter.trim().toLowerCase();
   /* 筛选命中范围含依赖的 code / 中文类别（概览条按限制统计点击过滤时传 R_ZH 文本） */
   const match = x => !f || [x.name, x.related, x.type, ...(x.tags || []),
-    ...allReqs(x).map(r => r.label + " " + r.short + " " + r.code + " " + (R_ZH[r.code] || "")), x.desc].join(" ").toLowerCase().includes(f);
+    ...allReqs(x).map(r => r.label + " " + r.short + " " + r.code + " " + (R_ZH[r.code] || "")), x.effect].join(" ").toLowerCase().includes(f);
   const arrow = k => listSort.key === k ? (listSort.dir < 0 ? " ▾" : " ▴") : "";
   /* 依赖限制 pill：deckEl 的元素前缀改用矢量图标，颜色仍取元素色 */
   const reqPill = r => {
@@ -144,7 +145,7 @@ function renderList() {
     <td>${x.element ? eleIcon(x.element, "inline-el") : ""}${esc(x.name)}</td><td>${costHtml(x.playCost)}</td>
     <td>${allReqs(x).map(reqPill).join("") || '<span style="color:var(--faint)">—</span>'}</td>
     <td>${esc(x.related || "—")}</td><td>${esc(x.since || "—")}</td>
-    <td class="desc">${linkify(esc(x.desc))}</td></tr>`).join("");
+    <td class="desc">${linkify(esc(x.effect))}</td></tr>`).join("");
   const sections = state.current!.order.map(t => {
     if (!state.current!.groups[t].some(match)) return "";
     return `<div class="sec-title">${t}</div><div class="table-wrap"><table>
@@ -450,11 +451,15 @@ function browseHash(st = browseState) {
   return p.length ? "#b=" + p.join(",") : "";
 }
 /* u：链接里的开关状态；q：检索词（第二阶段）。hash 带 b= 时它就是这一屏的权威值
-   （u 缺省 = 关闭；q 缺省 = 清空检索词），收到链接的人看到的就是分享者看到的那一屏。 */
+   （u 缺省 = 关闭；q 缺省 = 清空检索词），收到链接的人看到的就是分享者看到的那一屏。
+   入参约定为「未整体解码」的原始 hash：各参数在下面各自解码一次（旧实现被
+   routeHash 先整体解码过一次再传进来，参数又解码一次——q 里出现字面 % 就 URIError）。 */
 function parseBrowseHash(hash) {
   const st = { type: "", el: "", cost: "", energy: "", tag: "", ver: "", sort: "name", dir: 1, u: false, f: false, q: undefined as string | undefined };
   const m = String(hash || "").match(/^#?b=(.*)$/);
   if (!m) return null;
+  /* 畸形转义（%zz）按原样当值用：分享链接坏了不该炸路由 */
+  const dec = (v: string) => { try { return decodeURIComponent(v); } catch (e) { return v; } };
   for (const kv of m[1].split(",")) {
     const i = kv.indexOf("=");
     if (i < 0) continue;
@@ -463,19 +468,21 @@ function parseBrowseHash(hash) {
     else if (k === "e") st.el = v;
     else if (k === "c") st.cost = v;
     else if (k === "n") st.energy = v;
-    else if (k === "g") st.tag = decodeURIComponent(v);
+    else if (k === "g") st.tag = dec(v);
     else if (k === "v") st.ver = v;
     else if (k === "s") st.sort = v;
     else if (k === "d") st.dir = -1;
     else if (k === "u") st.u = v === "1" || v === "on" || v === "true";
     else if (k === "f") st.f = v === "1" || v === "on" || v === "true";
-    else if (k === "q") st.q = decodeURIComponent(v);
+    else if (k === "q") st.q = dec(v);
   }
   return st;
 }
 function syncBrowseHash() {
   const h = browseHash();
-  history.replaceState(null, "", h || location.pathname + location.search);
+  /* 每敲一键检索都会 replace 一次：走安全封装，Safari 限速抛 SecurityError 时
+     只丢一次地址栏同步，不中断 input 处理链 */
+  safeReplaceState(null, h || location.pathname + location.search);
 }
 /* chip 计数：数字 = 只显示总数；{b,o} = 双计数（可构筑 / 不可构筑）。
    只有真存在不可构筑项时才出现第二种数字，否则 chip 会全长成一串「12/0」。 */

@@ -84,9 +84,14 @@ const srcText = (dir) => fs.readdirSync(dir, { withFileTypes: true })
   .map(d => d.isDirectory() ? srcText(path.join(dir, d.name))
     : /\.ts$/.test(d.name) ? fs.readFileSync(path.join(dir, d.name), "utf8") : "")
   .join("\n");
-const layerCalls = [...srcText(path.join(here, "src")).matchAll(/registerLayer\(\{[^}]*\}\)/g)].map(m => m[0]);
-const modalIds = layerCalls.filter(s => /modal:\s*true/.test(s))
-  .map(s => (s.match(/id:\s*"([^"]+)"/) || [])[1]).sort();
+const srcAll = srcText(path.join(here, "src"));
+/* 模态登记有两种形态：registerLayer({ modal: true }) 与 setModalLayer（构造上必为模态） */
+const regIds = [...srcAll.matchAll(/registerLayer\(\{[^}]*\}\)/g)].map(m => m[0])
+  .filter(s => /modal:\s*true/.test(s))
+  .map(s => (s.match(/id:\s*"([^"]+)"/) || [])[1])
+  .filter(Boolean);   /* 排除 core/layers 内部 registerLayer({ id, ... }) 简写形态的空捕获 */
+const setIds = [...srcAll.matchAll(/setModalLayer\(\s*"([^"]+)"/g)].map(m => m[1]);
+const modalIds = [...new Set([...regIds, ...setIds])].sort();
 assert(modalIds.join() === "draftPanel,lightbox,overlay",
   `只有详情弹层 / 牌组面板 / 灯箱是模态层（实际：${modalIds.join() || "无"}）`);
 assert(!'overlay").classList.add("show")'.includes("x") && !/\$\("overlay"\)\.classList\.add\("show"\)/.test(js),

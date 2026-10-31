@@ -3,7 +3,9 @@
    99-main 的 popstate 接线 + 90-detail 的差量同步 + core/history 的记账。 */
 import { createTest } from "./_env.mjs";
 
-/* window：注册监听 + reduced-motion（缺省瞬时关闭，动效相关断言用 __setMotion 切换） */
+/* window：注册监听 + reduced-motion（缺省瞬时关闭，动效相关断言用 __setMotion 切换）。
+   getComputedStyle 回放真实节奏（overlay 退场 .2s）：animateExit 的兜底定时器据此
+   推导（200+80=280ms），与生产环境「时长从 CSS 现读」走同一条路径。 */
 function fakeWindow() {
   const ls = {};
   let reduced = true;
@@ -12,25 +14,34 @@ function fakeWindow() {
     removeEventListener: (t, fn) => { ls[t] = (ls[t] || []).filter(f => f !== fn); },
     __fire: (t, ev) => { for (const fn of [...(ls[t] || [])]) fn(ev); },
     matchMedia: () => ({ matches: reduced }),
+    getComputedStyle: () => ({ animationDuration: "0.2s", animationDelay: "0s" }),
     __setMotion: on => { reduced = !on; },
   };
 }
-/* 可编程假 history：导航时同步 location.hash，并按浏览器次序派发 popstate → hashchange */
+/* 可编程假 history：导航时同步 location.hash，并按浏览器次序派发 popstate → hashchange。
+   __setAsync(true) 把 back/go 的派发推迟到 setTimeout(0)——真实浏览器里 popstate
+   本就异步到达，守卫类竞态（快速 Esc×N）只有在这种模式下才复现得出来。
+   __navs 计数真实发生的导航次数：在途守卫的意义就是「多余的 back/go 不再发出」。 */
 function fakeHistory(loc, win) {
   const entries = [{ hash: "", state: null }];
   let idx = 0;
+  let asyncFire = false;
+  let navs = 0;
   const fire = () => {
     loc.hash = entries[idx].hash;
     win.__fire("popstate", { state: entries[idx].state });
     win.__fire("hashchange", {});
   };
+  const settle = () => { asyncFire ? setTimeout(fire, 0) : fire(); };
   return {
     __idx: () => idx,
+    __navs: () => navs,
+    __setAsync: v => { asyncFire = v; },
     pushState(state, _t, url) { entries.splice(idx + 1); entries.push({ hash: url.replace(/^#/, "#"), state }); idx++; loc.hash = entries[idx].hash; },
     replaceState(state, _t, url) { entries[idx] = { hash: url.startsWith("#") ? url : entries[idx].hash, state }; loc.hash = entries[idx].hash; },
-    back() { if (idx > 0) { idx--; fire(); } },
-    forward() { if (idx < entries.length - 1) { idx++; fire(); } },
-    go(n) { idx = Math.max(0, Math.min(entries.length - 1, idx + n)); fire(); },
+    back() { if (idx > 0) { idx--; navs++; settle(); } },
+    forward() { if (idx < entries.length - 1) { idx++; navs++; settle(); } },
+    go(n) { const j = Math.max(0, Math.min(entries.length - 1, idx + n)); if (j !== idx) { idx = j; navs++; } settle(); },
   };
 }
 
@@ -130,6 +141,68 @@ return (async () => {
   closeTopLayer();
   await flush();
   assert(!overlayOpen() && !locked(), "恢复瞬时后正常关闭并解锁");
+
+  /* ===== 11. 在途导航守卫：popstate 未到达时，重复的关闭请求不再委托历史 =====
+     真实浏览器 popstate 异步到达、pushDepth 只在那时递减——快速 Esc×2-3 或
+     双击遮罩会让多余的 back/go 越过应用最老条目，把用户弹出站外。 */
+  history.__setAsync(true);
+  showDetail(idOf(cardA));
+  const navs0 = history.__navs();
+  closeTopLayer();            /* Esc ①：委托 back，popstate 在途 */
+  closeTopLayer();            /* Esc ②：被守卫消费 */
+  closeTopLayer();            /* Esc ③：同上 */
+  assert(history.__navs() === navs0 + 1, "Esc×3 在 popstate 到达前只发出 1 次 back（在途守卫）");
+  await flush();
+  assert(!overlayOpen() && topView() === null, "在途 popstate 到达：栈正常清空");
+  assert(location.hash === "", "Esc×3：hash 停在基条目（没有越界后退）");
+
+  /* 双击遮罩（overlayClose→go 两次）同理 */
+  showDetail(idOf(cardA));
+  showTermModal("跃升");       /* 深一层：全关要吞 2 条历史 */
+  const navs1 = history.__navs();
+  overlayClose();
+  overlayClose();             /* 双击：第二次被守卫消费 */
+  assert(history.__navs() === navs1 + 1, "双击遮罩只发出 1 次 go");
+  await flush();
+  assert(!overlayOpen() && location.hash === "", "双击全关：栈与 hash 正常（不超额后退）");
+  history.__setAsync(false);
+
+  /* ===== 12. 空 hash 后退不重建卡库（C5：滚动位置保持） =====
+     routedHash 不随 pushState 更新时，popstate 看到的「无变化」让紧随的
+     hashchange 泄漏执行 routeHash→restoreView，卡库整页重建、滚动丢失。
+     探针钉在 #browseResults：stub 无 DOM 树，瓦片装在子元素里——
+     结果区若被 renderBrowseResults 重挂，标记即被冲掉。 */
+  switchView("browse");
+  const br = $("browseResults");
+  assert(String(br.innerHTML || "").includes("bgrid"), "卡库结果区已挂载（探针前提）");
+  br.innerHTML = String(br.innerHTML || "").replace('class="card-grid', 'data-probe="1" class="card-grid');
+  showDetail(idOf(cardA));
+  assert(location.hash === "#card=" + idOf(cardA), "后退前：详情 hash 已写入");
+  history.back();
+  assert(!overlayOpen() && location.hash === "", "后退：弹层关闭、hash 回到空");
+  assert(String($("browseResults").innerHTML || "").includes('data-probe="1"'),
+    "空 hash 后退：结果区未被重挂（卡库未整页重建，滚动位置保持）");
+
+  /* ===== 13. 弹层全关时灯箱连带关闭（C6：灯箱不走历史） ===== */
+  showDetail(idOf(cardA));
+  showLightbox(idOf(cardA));
+  assert(lightboxOpen() && locked(), "灯箱打开且锁滚动");
+  overlayClose();
+  assert(!overlayOpen() && !lightboxOpen(), "全部关闭：灯箱被连带关闭");
+  assert(!locked(), "弹层与灯箱都关：滚动锁释放");
+
+  /* ===== 14. 畸形 b= hash 不炸路由（单次解码 + URIError 防护） ===== */
+  location.hash = "#b=g=%zz,q=" + encodeURIComponent("火焰");
+  routeHash();
+  await flush();
+  assert(state.currentView === "browse", "畸形 g= 值：路由照常进入卡库");
+  assert(searchState.q === "火焰", "q= 参数单次解码正确（不再被双重解码破坏）");
+  assert(browseState.tag === "%zz", "畸形转义按原样当值用，不抛 URIError");
+  location.hash = "#b=q=50%off";
+  routeHash();
+  await flush();
+  assert(searchState.q === "50%off", "字面 % 的检索词按原样保留（旧实现在此 URIError）");
+
 })();
 
 `;

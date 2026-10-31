@@ -8,7 +8,7 @@
  * 它们不可入构筑但可以查）。测试卡与准备状态影子在构建期就标好了，这里按标记排除
  * 并计数——排除理由是数据事实，不是运行时猜测。 */
 
-import { charRecords, cardRecords, nameOfId, recordOfId } from "./data/records";
+import { charRecords, cardRecords, nameOfId, recordOfId, keyIdOf } from "./data/records";
 import type { GcgRecord, PoolEntry, PoolStats } from "./types";
 import { TYPE_ORDER } from "./data/model";
 import { STORAGE_KEYS } from "./core/resources";
@@ -44,7 +44,7 @@ export function resetPool(): void {
   poolStats = { total: 0, buildable: 0, testFiltered: 0, shadowFiltered: 0, byType: {}, byEl: {}, byTag: {}, versions: [] };
 }
 
-const idOf = (r: GcgRecord): number => Number(r.key.slice(r.key.indexOf(":") + 1));
+const idOf = (r: GcgRecord): number => keyIdOf(r.key);   /* 解析习语收敛到 data/records.keyIdOf */
 
 /** 记录 → 卡库条目。字段一一对应，不做任何推导。 */
 function poolEntryOf(r: GcgRecord): PoolEntry {
@@ -73,8 +73,8 @@ function poolEntryOf(r: GcgRecord): PoolEntry {
     playCost: r.stats.cost,
     dice: r.stats.dice,
     energyCost: r.stats.energy,
-    desc: (r.kind === "char" ? r.desc.story : r.desc.effect).trim(),
-    /* 检索语料在构建期拼好：角色含简介与技能，卡牌含效果与特技 */
+    /* 检索语料在构建期拼好：角色含简介与技能，卡牌含效果与特技。
+       不设 desc 字段（见 types.ts PoolEntry）：语义按 kind 暗示的压平字段就是哑弹。 */
     descAll: r.searchText,
   };
 }

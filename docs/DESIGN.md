@@ -398,3 +398,83 @@ P4 验收：
   `@media print` 已有基础样式（css 打印段），扩充为覆盖两种视图。
 - **快捷键**：`?` 打开帮助面板（当前只能从「更多」菜单进）；卡库网格方向键移动焦点 +
   Enter 打开详情（与详情翻页键位区分：网格内先落焦，焦存在时方向键才接管）。
+
+---
+
+## 14. 动效中枢、路由守卫与错误面（P8）
+
+三轮事故（滚动锁泄漏、关闭动画丢失、简介误链）的根因模式：手工动画生命周期、
+约定式状态同步、靠自觉维持的文本语义。本轮把三类根因各收敛成唯一实现。
+
+### 14.1 动效中枢（`src/core/motion.ts`）
+
+- **`animateExit({ el, openCls, closingCls, anim, onStart, onDone })`**：退场动画生命周期的
+  唯一实现——摘 openCls（层即刻算关闭）→ 挂 closingCls → `animationend` 只认 `anim` 名
+  且 `ev.target === el`（子元素更早的退场会冒泡，不守卫名字会把长退场提前掐断）→
+  兜底定时器 → 幂等收尾（摘 closingCls）。返回 `cancel()`（只解绑回调不动类名，
+  「退场中重开」由调用方先 cancel 再摆正类名）。reduced-motion / 测试环境走瞬时路径。
+- **`animationTotalMs(el)`**：从 computed style 读 `animationDuration`+`animationDelay`
+  （逗号列表逐个取最大，ms/s 各自换算），兜底时长与 toast 存活期都由此推导——
+  **跨文件双份硬编码（TS 280ms ↔ CSS .18s、JS 2600ms ↔ CSS 2.4s）永久消失，改 CSS 自动跟随**。
+- **动效规格**：时长全部接令牌（新增 `--t-panel: .28s`；toast 存活期 `--toast-life`，
+  `.err` 5s）。编排约定「退场快于入场、有位移才可感知」：`dlg-in` .28s 上浮 14px+scale(.98)、
+  `dlg-out` .2s 下沉 12px+scale(.97)、`view-in` .2s 上浮 8px、灯箱 `lb-img` 缩放入场 +
+  `lb-out` 退场。纯遮罩淡出在深色底上几乎不可见（旧版观感问题），位移是感知主体。
+- overlay / lightbox 的开关全部走 animateExit / `setModalLayer`；toast 移除时刻由
+  computed style 推导；`canHover()` 缓存 MediaQueryList（不再每次 mousemove 现查）。
+
+### 14.2 路由与历史守卫
+
+- **hashchange 等价判定（修「后退丢滚动」）**：`routedHash` 由 popstate 与 routeHash
+  双向维护，hashchange 里 `location.hash === routedHash` 即跳过——替代旧的 skipHashRoute
+  标志位（其比较基准不随 pushState 更新，空 hash 后退时失效 → routeHash→restoreView
+  整页重建卡库、滚动位置丢失）。
+- **在途导航守卫（`navPending`）**：back/go 异步语义、pushDepth 只在 popstate 递减——
+  快速 Esc×N / 双击遮罩的重复关闭请求在途期间被直接消费（当成功处理），
+  不再越界后退把用户弹出站外。popstate/hashchange 清除 + 1.5s 兜底。
+- **灯箱联动**：弹层全关（popstate）时灯箱一并收掉；灯箱打开时 ←/→ 不再同时触发
+  详情翻页（双渲染）。
+- **`setModalLayer(id, el, open)`**（core/layers）：类名 + 层登记 + 滚动锁三件事单点成对，
+  「modal 改类必须同步锁」从约定变成结构；带退场动画的关闭由 animateExit 的 onStart 解锁。
+- 技能图鉴分块挂载的 IO 收敛为 `ensureSkidxIO()`：检索重挂后需要分块即重建
+  （旧实现断开即弃，窄词搜索再清空后滚动加载整场失效）；无 IO 环境一次挂完。
+
+### 14.3 错误面收口
+
+- **运行期全局兜底**（99-main）：`window.error` + `unhandledrejection` → `reportRuntimeError`
+  （console 固定前缀 `[gi-viewer]` 区分应用错误与扩展注入脚本的噪音 + 去重 err toast）。
+  此前 post-boot 的未捕获异常只进控制台——这是各类隐患被放大的根因。
+- **引导期横幅**：deck-viewer.html 头部内联 error 监听 → `html[data-boot-error]`，
+  CSS `::before` 渲染（模块求值期全局监听尚不存在，旧版只会白屏）。
+- **安全历史写入口**：`safePushState/safeReplaceState`（core/history）——Safari 30s/100 次
+  限速抛 SecurityError 时只丢地址栏同步，不中断 input 处理链；应用内写入统一走它。
+- **路由解码防炸**：routeHash / parseBrowseHash 全链路 try/catch + b= 分支传原始 hash
+  （旧实现整体解码后再逐参解码 = 双重解码，检索词里的字面 % 会 URIError 炸断路由）。
+- 存储消毒：`loadHistory` / `loadDecks` 逐条校验、丢弃畸形条目（损坏数据曾让
+  面板渲染 TypeError 且永久失效）；骨架屏失败出口（`clearBrowseSkeleton`，失败不再
+  shimmer 无限播放）；fetch 15s AbortController 超时；剪贴板统一走 `copyText` 兜底。
+
+### 14.4 规则下沉第二梯队
+
+TermEntry desc/story 下沉后，同构哑弹与散落约定的清除：
+
+- **`PoolEntry.desc` 删除**（kind 暗示语义、零消费的哑弹）——语义按 kind 压平的字段
+  就是未来的误链入口；检索走 `descAll`。
+- **`ParsedCard.desc` → `.effect`**：命名即语义，`|| desc.story` 式兜底不再有诱因。
+- **`conceptTextOf(entries)`**（40-concepts）：检索语料 desc+story 的唯一拼装点
+  （旧 `||` 写法在双字段同时非空时静默丢 story）；70-search 两处手工拼接改调它。
+- **构建期断言**：角色记录 refs 必为空（叙事文本永不产生出边）——把「refs 只扫
+  effect/rules」从构建脚本一行 join 钉成构建失败。
+- **`SkillEntry.desc` 删除**（与 effect 同值双写）、**`keyIdOf()`**（records.ts，
+  三种 key 解析习语收敛）、**KIND_ZH 覆盖断言**（test-dataset 遍历概念索引全部 kind）、
+  死代码清除（DOMAIN_ZH、47-skills 的死导入）。
+
+### 14.5 测试与验收
+
+- 新增 `tests/test-motion.mjs`（瞬时路径 / 兜底 / cancel / 时长解析含 ms-s 单位）；
+  test-history 增至 14 节（fakeHistory `__async` 模式复现双 Esc 竞态、空 hash 后退
+  结果区探针、灯箱联动、畸形 hash）；test-search 补 conceptTextOf 单元与故事词端到端
+  命中；test-dataset 补下沉守护断言。
+- CDP 真机验收：关闭动画采样（面板下沉 12px + 淡出 ~185ms，对比修复前 167ms 纯淡出）、
+  灯箱 `.closing` 挂载/摘除、Esc×3 后 history.length 不变、后退后 scrollY 1400px 保持、
+  畸形 `#b=g=%zz` 不炸路由、`Promise.reject` → err toast → 5.2s 自动移除全链路。

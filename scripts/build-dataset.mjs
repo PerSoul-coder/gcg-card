@@ -55,7 +55,7 @@ function loadTaxonomy() {
   const code = RESOURCES_BUNDLE + "\n" + MODEL_BUNDLE;
   const expr = `;({
     TYPE_SPEC: __MODEL.TYPE_SPEC, TYPE_ZH: __MODEL.TYPE_ZH, TYPE_ORDER: __MODEL.TYPE_ORDER,
-    DOMAIN_ZH: __MODEL.DOMAIN_ZH, NO_ART_KIND: __MODEL.NO_ART_KIND,
+    NO_ART_KIND: __MODEL.NO_ART_KIND,
     SKILL_TAG_ZH: __MODEL.SKILL_TAG_ZH, SKILL_TAG_ORDER: __MODEL.SKILL_TAG_ORDER,
     typeZhOf: __MODEL.typeZhOf, typeSpecOf: __MODEL.typeSpecOf,
     nameKey: __MODEL.nameKey, cosmeticKey: __MODEL.cosmeticKey,
@@ -603,6 +603,15 @@ for (const r of records) {
     }
   }
   r.refs = [...set];
+}
+
+/* 静态断言：叙事文本永不产生出边。refs 只扫 [desc.effect, desc.rules]（上面 8.5 的
+   text join），角色记录只有 story——一旦有人把 story 加进扫描范围，反链面板就会被
+   「简介提到术语的角色」污染。这里把约定钉死成构建失败。 */
+for (const r of records) {
+  if (r.kind === "char" && (r.refs || []).length) {
+    throw new Error(`角色记录「${r.name}」的 refs 非空（${r.refs.length} 条）：叙事文本被误扫进出边`);
+  }
 }
 
 /* ---------- 8.6 特技牌的关联角色 ----------

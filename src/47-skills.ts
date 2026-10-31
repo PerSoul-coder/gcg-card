@@ -1,6 +1,6 @@
 /* 47-skills.ts —— 技能索引：角色技能与装备牌特技的统一形状。 */
 import { dsReady, dsSkills } from "./07-dataset";
-import { cardRecords } from "./data/records";
+import { cardRecords, keyIdOf } from "./data/records";
 import { $ } from "./core/dom";
 import { costHtml, costText } from "./30-deps";
 import { overlayBack, overlayOpen, renderOverlay, topView } from "./90-detail";
@@ -8,7 +8,6 @@ import { overlayHashOf, overlayHashPush, overlayHashClear } from "./core/history
 import { pinyinOf } from "./70-search";
 import { state } from "./data/state";
 import type { SkillEntry } from "./types";
-import { tagZh } from "./core/resources";
 import { esc } from "./core/dom";
 import { nameKey, cardArtHtml, SKILL_TAG_ZH, SKILL_TAG_ORDER } from "./data/model";
 import { linkify } from "./40-concepts";
@@ -38,13 +37,12 @@ function buildSkillIndexFromDataset() {
       kind: "skill", key: r.key,
       id: Number(String(r.key).split(":").pop()),
       ownerKey, ownerKind,
-      ownerId: ownerKind === "char" ? Number(ownerKey.slice(5)) : null,
-      ownerCardId: ownerKind === "card" ? Number(ownerKey.slice(5)) : null,
+      ownerId: ownerKind === "char" ? keyIdOf(ownerKey) : null,
+      ownerCardId: ownerKind === "card" ? keyIdOf(ownerKey) : null,
       ownerName: rel.ownerName || "",
       name: r.name, englishName: r.englishName || "",
       tag: r.typeRaw || "", tagZh: r.typeZh || "技能",
       cost: (r.stats && r.stats.cost) || [],
-      desc: (r.desc && r.desc.effect) || "",
       effect: (r.desc && r.desc.effect) || "",
       hidden: !!r.hidden,
       prepared: !!r.prepared,
@@ -116,10 +114,10 @@ function skillsHtmlCard(cardId) {
    角色详情永远同时看得到「角色技能」与「装备牌特技」两半。 */
 function equipSkillsHtml(charId: number): string {
   const cards = (cardRecords().filter(r =>
-    r.rel.relatedCharacterId === charId && skillsOfCard(Number(r.key.slice(5))).length));
+    r.rel.relatedCharacterId === charId && skillsOfCard(keyIdOf(r.key)).length));
   if (!cards.length) return "";
   return cards.map(c => {
-    const cid = Number(c.key.slice(5));
+    const cid = keyIdOf(c.key);
     return `<div class="sk-sec">特技 · <button class="blchip" data-goto="${cid}" title="查看「${esc(c.name)}」详情">${esc(c.name)}</button></div>
       <div class="skills">${skillsOfCard(cid).map(skillRowHtml).join("")}</div>`;
   }).join("");
@@ -222,6 +220,23 @@ function skidxGrow(): void {
   skidxMounted = to;
   if (html) list.insertAdjacentHTML("beforeend", html);
 }
+/* 分块挂载的哨兵观察器。检索重挂会整体重建结果区，IO 必须跟着重建——
+   旧实现在「结果 ≤1 批」时 disconnect 即弃且从不重连：搜一个窄词再清空，
+   列表停在首批、滚动加载整场失效。收敛成「确保存在」：需要分块而 IO 不在就重建。 */
+function ensureSkidxIO(): void {
+  const sc = $("detail");
+  if (!sc || typeof IntersectionObserver !== "function" || skidxIO) return;
+  const io = new IntersectionObserver(() => {
+    if (skidxMounted >= skidxGroups.length) {
+      io.disconnect();
+      if (skidxIO === io) skidxIO = null;   /* 自断后清引用，下次重挂才能重建 */
+      return;
+    }
+    if (sc.scrollTop + sc.clientHeight > sc.scrollHeight - 600) skidxGrow();
+  }, { root: sc, rootMargin: "600px" });
+  io.observe($("skillIdxSentinel"));
+  skidxIO = io;
+}
 function skidxRefresh(): void {
   /* 检索输入时只重挂结果区（不整视图重建——输入框焦点会丢） */
   skidxGroups = skillIdxGroups();
@@ -229,9 +244,15 @@ function skidxRefresh(): void {
   const list = $("skillIdxList");
   if (list) list.innerHTML = "";
   skidxGrow();
+  if (skidxMounted < skidxGroups.length) {
+    if (typeof IntersectionObserver === "function") ensureSkidxIO();
+    else while (skidxMounted < skidxGroups.length) skidxGrow();   /* 无 IO 环境：一次挂完，不留死列表 */
+  } else {
+    skidxIO?.disconnect?.();
+    skidxIO = null;
+  }
   const cnt = $("skillIdxCount");
   if (cnt) cnt.textContent = String(skidxGroups.reduce((s, g) => s + g.rows.length, 0));
-  if (skidxMounted >= skidxGroups.length) { skidxIO?.disconnect?.(); skidxIO = null; }
 }
 function renderSkillIdxView(): void {
   const matches = skillIdxMatches();
@@ -253,18 +274,11 @@ function renderSkillIdxView(): void {
     <div class="skillidx-chips">${chips.join("")}</div>
     <div class="skillidx-list" id="skillIdxList"></div>
     <div id="skillIdxSentinel"></div></div>`;
+  /* 整视图重建：哨兵是 #detail 的新子节点，旧 IO 的 root/sentinel 全部失效——
+     先断旧 IO，分块与否交给 skidxRefresh 里的 ensureSkidxIO 统一决定 */
+  skidxIO?.disconnect?.();
+  skidxIO = null;
   skidxRefresh();
-  /* 弹层是滚动容器：接近底部时增长下一批分组 */
-  const sc = $("detail");
-  if (sc && typeof IntersectionObserver === "function") {
-    skidxIO?.disconnect?.();
-    const io = new IntersectionObserver(() => {
-      if (skidxMounted >= skidxGroups.length) { io.disconnect(); return; }
-      if (sc.scrollTop + sc.clientHeight > sc.scrollHeight - 600) skidxGrow();
-    }, { root: sc, rootMargin: "600px" });
-    io.observe($("skillIdxSentinel"));
-    skidxIO = io;
-  }
 }
 function showSkillIdx(): void {
   overlayHashClear();   /* 整栈替换（与概率 / 差异同模式），先清已推的弹层历史 */

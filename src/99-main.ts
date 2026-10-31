@@ -11,7 +11,7 @@ import { dsStats } from "./07-dataset";
 import { resetBacklinks } from "./50-backlinks";
 import { SKILLS, resetSkillIndex, skillOf, showSkill } from "./47-skills";
 import { beginRenameDeck, closeDraftPanel, deleteDeckById, draftClear, draftEncode, draftLoadCurrent, draftRemoveCard, draftRemoveChar, draftSetCount, duplicateDeck, loadDraft, newDeck, pruneDraft, renderDraft, renderDraftPanel, syncFromActive, toggleDraftPanel } from "./80-deck";
-import { overlayOpen, showDetail, showHelp, showTermModal, syncOverlayToHash, lightboxOpen, lightboxStep } from "./90-detail";
+import { overlayOpen, showDetail, showHelp, showTermModal, syncOverlayToHash, lightboxOpen, lightboxStep, closeLightbox, renderOverlay } from "./90-detail";
 import { resetViewState, state } from "./data/state";
 import { recordOfId, charRecords, resetRecordIndex } from "./data/records";
 import { SAMPLE, STORAGE_KEYS } from "./core/resources";
@@ -94,10 +94,16 @@ function switchView(name) {
   if (sum) sum.style.display = (name === "grid" && typeof state.current !== "undefined" && state.current) ? "block" : "none";
   /* 卡库依赖全量数据：未加载则先拉取，就绪后再渲染 */
   if (!dataReady && name === "browse") {
-    ensureData().then(render).catch(e => setStatus("数据加载失败：" + e.message, "err"));
+    ensureData().then(render).catch(e => { clearBrowseSkeleton(); setStatus("数据加载失败：" + e.message, "err"); });
     return;
   }
   render();
+}
+/* 骨架屏的失败出口：shimmer 瓦片只有成功路径（renderBrowse 整体覆盖 innerHTML）
+   会摘掉——数据拉不起来时它们会无限闪下去。失败即清空，交给状态条报错。 */
+function clearBrowseSkeleton(): void {
+  const box = $("view-browse");
+  if (box && box.querySelector && box.querySelector(".skel-tile")) box.innerHTML = "";
 }
 document.querySelectorAll(".tab").forEach(t => t.addEventListener("click", () => switchView(t.dataset.view)));
 
@@ -166,6 +172,7 @@ function renderDataInfo() {
   const ds = dsStats();
   el.innerHTML = `数据源：piovium 官方静态数据　|　${charRecords().length} 角色 · ${pool.filter(x => x.kind === "card").length} 卡牌 · ${SKILLS.length} 技能 · ${ds ? ds.conceptNames : 0} 概念　|　${origin}${imgNote}`;
 }
+let refreshBusy = false;
 $("btnRefresh").addEventListener("click", async () => {
   /* file:// 下（单文件离线版）网络路径必然被浏览器拦截，而数据已经内置：
      刷新没有意义。提前说明并直接返回，不做下面那套索引重置——
@@ -174,11 +181,22 @@ $("btnRefresh").addEventListener("click", async () => {
     toast("单文件离线版数据已内置，无需刷新；要更新牌库请重新构建或使用在线版");
     return;
   }
+  /* 双击守卫：resetDataState 会清掉在途 flight，连点会让两个 loadData 并发拉取 */
+  if (refreshBusy) { toast("正在刷新数据，请稍候"); return; }
+  refreshBusy = true;
+  try {
+    await refreshData();
+  } finally {
+    refreshBusy = false;
+  }
+});
+async function refreshData(): Promise<void> {
   /* 不预先清缓存：网络不可用时旧缓存 / 内置快照还能兜住，不至于整页失去数据。
      拉取成功后 writeCache 会自然覆盖旧值。 */
   resetDataState();      /* 重置单 flight，强制 ensureData 真正重新拉取 */
   resetRecordIndex();    /* 记录表与 id/分享码索引 */
   resetViewState();      /* 详情 / 翻页上下文 */
+  renderOverlay();       /* 弹层栈已清空：让 overlay 视觉同步关闭，不留 .show 残壳 */
   resetConceptIndex();   /* 概念索引与术语正则 */
   resetPool();           /* 卡池与统计 */
   resetBacklinks();      /* 反链 */
@@ -199,7 +217,7 @@ $("btnRefresh").addEventListener("click", async () => {
       setStatus("刷新失败：" + (e as Error).message + "；本地也没有可用数据", "err");
     }
   }
-});
+}
 
 /* 草稿栏 / 牌组面板（innerHTML 重渲染 → 事件委托） */
 document.addEventListener("click", ev => {
@@ -319,7 +337,10 @@ onDataReady(() => { pruneDraft(); pruneFavs(); renderDraft(); renderDataInfo(); 
 /* hash → 视图/动作。启动时执行一次；之后由 hashchange / popstate 驱动。 */
 function routeHash() {
   routedHash = location.hash;
-  const h = decodeURIComponent(location.hash.replace(/^#/, "")).trim();
+  const raw = location.hash.replace(/^#/, "").trim();
+  /* 畸形转义（如 #b=g=%zz）按原样路由：URIError 不该炸断路由（popstate 内同样防） */
+  let h = raw;
+  try { h = decodeURIComponent(raw); } catch (e) { /* 原样 */ }
   if (h.startsWith("card=")) {
     const id = Number(h.slice(5));
     return (async () => {
@@ -356,11 +377,13 @@ function routeHash() {
     searchState.q = q;
     return (async () => {
       try { await ensureData(); switchView("browse"); }
-      catch (e) { setStatus("加载失败：" + (e as Error).message, "err"); }
+      catch (e) { clearBrowseSkeleton(); setStatus("加载失败：" + (e as Error).message, "err"); }
     })();
   }
-  if (h.startsWith("b=")) {
-    const st = parseBrowseHash(h);
+  if (raw.startsWith("b=")) {
+    /* b= 的参数各自在 parseBrowseHash 里解码一次：传原始 hash，不再整体预解码
+       （双重解码让检索词里的字面 % 变成 URIError） */
+    const st = parseBrowseHash(raw);
     if (st) {
       /* 开关与检索词跟着链接走（链接就是这一屏的快照），但不覆盖本机默认偏好（persist=false） */
       const { u: uFlag, f: fFlag, q: qHash, ...rest } = st;
@@ -371,7 +394,7 @@ function routeHash() {
     }
     return (async () => {
       try { await ensureData(); switchView("browse"); }
-      catch (e) { setStatus("加载失败：" + (e as Error).message, "err"); }
+      catch (e) { clearBrowseSkeleton(); setStatus("加载失败：" + (e as Error).message, "err"); }
     })();
   }
   if (h) {   /* 分享码 */
@@ -386,7 +409,7 @@ function routeHash() {
      示例牌组改为按需（页头「更多 → 加载示例牌组」），不再每次打开都解析一遍并写进历史。 */
   return (async () => {
     try { await ensureData(); restoreView(); }
-    catch (e) { setStatus("加载失败：" + (e as Error).message, "err"); }
+    catch (e) { clearBrowseSkeleton(); setStatus("加载失败：" + (e as Error).message, "err"); }
   })();
 }
 /* 恢复上次停留的视图（hash 指定具体视图时不恢复） */
@@ -401,31 +424,65 @@ function restoreView() {
    1) 应用内 pushState/replaceState —— 不触发任何事件，调用方自己渲染；
    2) history 导航（后退 / 前进 / 手动改地址栏）—— popstate 先做弹层差量同步
       （后退关弹层、前进重开），再对「非弹层 hash」重放 routeHash；
-      随后补发的 hashchange 跳过（已处理，避免重复路由）；
-   3) 其余 hashchange —— 原样 routeHash。 */
+   3) 其余 hashchange —— 原样 routeHash。
+   2 与 3 的分界只认一条真源：routedHash（最后一次被路由过的 hash）。
+   popstate 无条件更新它；routeHash 入口也会更新。hashchange 里 hash 与它相等
+   就说明这次变化已经被 popstate 处理过——直接跳过。旧实现用独立的 skipHashRoute
+   标志位，但 routedHash 不随 pushState 更新，空 hash 启动 → 开卡 → 后退时
+   比较基准错位、标志位不置位，紧随的 hashchange 照旧 routeHash → restoreView
+   把卡库整页重建、滚动位置丢失。 */
 let routedHash = location.hash;
-let skipHashRoute = false;
 if (window.addEventListener) window.addEventListener("popstate", ev => {
-  const changed = location.hash !== routedHash;
   routedHash = location.hash;
-  if (changed) skipHashRoute = true;
   let h = "";
   try { h = decodeURIComponent(location.hash.replace(/^#/, "")).trim(); }
   catch (e) { h = location.hash.replace(/^#/, "").trim(); }
   syncOverlayToHash(ev && ev.state && typeof ev.state.gi === "number" ? ev.state.gi : 0, overlayHashParse(h));
   /* 非弹层 hash（#b= / #q= / 分享码）交回原路由；空 hash 只关弹层，不重放
      （否则 restoreView 会把视图重置成本机上次视图） */
-  if (!overlayHashParse(h) && h) routeHash();
+  if (!overlayHashParse(h) && h) routeHashSafe();
+  /* 弹层全关时灯箱一并收掉：它是详情弹层的子面，不走历史——
+     否则弹层关了灯箱还开着，滚动锁还挂在已经不可见的界面上 */
+  if (!overlayOpen() && lightboxOpen()) closeLightbox();
 });
 if (window.addEventListener) window.addEventListener("hashchange", () => {
-  if (skipHashRoute) { skipHashRoute = false; return; }
-  routeHash();
+  if (location.hash === routedHash) return;   /* popstate 已处理（含空 hash 回退） */
+  routeHashSafe();
 });
-/* 启动兜底：初始化阶段的未捕获错误给出可操作提示，而非白屏无下文 */
-if (window.addEventListener) window.addEventListener("error", ev => {
-  if (window.__giBooted) return;
-  setStatus("初始化失败：" + (ev.message || "未知错误") + "。请刷新页面重试；若反复出现，可用「更多 → 刷新数据」重新拉取数据", "err");
-});
+/* ---------- 运行期全局兜底 ----------
+   此前 error 监听在 boot 后直接 return、unhandledrejection 无人监听：
+   post-boot 的任何未捕获异常只进控制台，普通用户看不见——
+   「点了没反应」「界面卡住」没有任何可操作信息，这也是各类隐患被放大的根因。
+   现在统一上报：console 带固定前缀（与应用错误区分于扩展注入脚本的噪音）、
+   同一错误去重后 toast 提示。启动期的友好提示保留。 */
+let lastReportedErr: { msg: string } | null = null;
+function reportRuntimeError(reason: unknown): void {
+  const msg = reason instanceof Error ? (reason.message || String(reason)) : String(reason ?? "未知错误");
+  console.error("[gi-viewer] 运行期异常：", reason);
+  if (lastReportedErr && lastReportedErr.msg === msg) return;   /* 同一错误刷屏时只报一次 */
+  lastReportedErr = { msg };
+  toast("页面发生异常（详情见控制台）：" + msg.slice(0, 80), true);
+}
+if (window.addEventListener) {
+  window.addEventListener("error", ev => {
+    if (!window.__giBooted) {
+      setStatus("初始化失败：" + (ev.message || "未知错误") + "。请刷新页面重试；若反复出现，可用「更多 → 刷新数据」重新拉取数据", "err");
+      return;
+    }
+    reportRuntimeError(ev.error || ev.message || "未知错误");
+  });
+  window.addEventListener("unhandledrejection", ev => {
+    reportRuntimeError((ev as PromiseRejectionEvent).reason);
+  });
+}
+/* routeHash 返回异步 IIFE 的 Promise：内部各有 try/catch，这里兜住未来
+   落在 try 之外的路径，不让路由失败变成静默 unhandled rejection */
+function routeHashSafe(): void {
+  try {
+    const p = routeHash() as unknown as Promise<void> | undefined;
+    if (p && typeof p.catch === "function") p.catch(e => setStatus("路由失败：" + (e as Error).message, "err"));
+  } catch (e) { setStatus("路由失败：" + (e as Error).message, "err"); }
+}
 /* 启动入口：由 main.ts 在所有模块体求值完毕后调用。
    不能放在模块顶层执行——20-data ⇄ 99-main 的循环导入下，打包次序不受控，
    本模块可能先于 20-data 求值，routeHash → ensureData → loadData

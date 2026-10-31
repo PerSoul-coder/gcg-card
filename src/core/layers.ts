@@ -34,6 +34,30 @@ export function registerLayer(spec: LayerSpec): void {
   specs.set(spec.id, spec);
 }
 
+/**
+ * 模态浮层的成对开关：类名切换 + 层登记 + 滚动锁同步，三件事一个函数做完。
+ * 「改 modal 层的类名必须跟一次 syncScrollLock」此前纯靠约定散在多个调用点，
+ * 漏一处即复现滚动锁卡死（见文件头旧事故）——现在结构上不可能漏。
+ * 带退场动画的层（overlay / lightbox）关闭不适用：它们的类名分两步变化
+ * （退场开始即算关闭），锁由 core/motion animateExit 的 onStart 释放；打开可用本函数。
+ */
+export function setModalLayer(
+  id: string,
+  el: { classList?: { toggle(c: string, f: boolean): void; contains(c: string): boolean } } | null,
+  open: boolean,
+  opts: { order: number; close: () => void },
+): void {
+  if (el && el.classList) el.classList.toggle("show", open);
+  registerLayer({
+    id,
+    isOpen: () => !!(el && el.classList && el.classList.contains("show")),
+    close: opts.close,
+    order: opts.order,
+    modal: true,
+  });
+  syncScrollLock();
+}
+
 /** 当前打开的层，自顶向下。 */
 export function openLayers(): LayerSpec[] {
   const open: LayerSpec[] = [];

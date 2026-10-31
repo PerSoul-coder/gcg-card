@@ -8,10 +8,21 @@ import { state } from "./data/state";
 import { STORAGE_KEYS, tagZh, eleIcon } from "./core/resources";
 import { esc, setStatus } from "./core/dom";
 import { registerLayer } from "./core/layers";
+import { safeReplaceState } from "./core/history";
 import { pool } from "./45-pool";
 
 /* ---------- 历史 ---------- */
-function loadHistory() { try { return JSON.parse(localStorage.getItem(STORAGE_KEYS.history) || "[]"); } catch { return []; } }
+function loadHistory() {
+  try {
+    const h = JSON.parse(localStorage.getItem(STORAGE_KEYS.history) || "[]");
+    /* 逐条消毒：损坏条目（旧版本写坏 / 手动改坏）曾让 renderHistory 直接 TypeError，
+       且持久损坏 = 历史面板永久不可用（post-boot 静默）。不合格的整条丢弃。 */
+    return Array.isArray(h) ? h.filter(x => x && typeof x === "object"
+      && typeof x.code === "string"
+      && Array.isArray(x.chars)
+      && x.chars.every(c => c && typeof c === "object" && typeof c.name === "string")) : [];
+  } catch { return []; }
+}
 function pushHistory(entry) {
   let h = loadHistory().filter(x => x.code !== entry.code);
   h.unshift(entry);
@@ -82,7 +93,7 @@ async function decodeAndRender(code: string, opts: { noHash?: boolean; noHistory
         related: e.rel.relatedCharacterId == null ? null : nameOfId(e.rel.relatedCharacterId),
         relatedId: e.rel.relatedCharacterId ?? null,
         restrictions: e.reqs.play, deckReqs: e.reqs.deck,
-        desc: e.desc.effect.trim(), since: e.version,
+        effect: e.desc.effect.trim(), since: e.version,
       });
     }
     const known = ["装备牌", "支援牌", "事件牌", "援助牌"];
@@ -106,7 +117,7 @@ async function decodeAndRender(code: string, opts: { noHash?: boolean; noHistory
     $("summary").style.display = state.currentView === "grid" ? "block" : "none";
     (["btnCopyCode", "btnExport"] as const).forEach(b => $<HTMLButtonElement>(b).disabled = false);
     setStatus(`解析成功：3 名角色 + ${cardIds.length} 张行动牌（去重 ${countMap.size} 种）`, "ok");
-    if (!opts.noHash) history.replaceState(null, "", "#" + code);
+    if (!opts.noHash) safeReplaceState(null, "#" + code);   /* Safari 限速超限时丢地址栏同步，不中断解析 */
     if (!opts.noHistory) pushHistory({ code, chars: state.current!.chars.map(c => ({ name: c.name, el: c.element })) });
   } catch (e) {
     setStatus(`解析失败：${(e as Error).message}`, "err");

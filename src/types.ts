@@ -214,7 +214,8 @@ export interface ParsedCard {
   /** 打出限制与牌组构筑限制：解析阶段就按领域类型收好，视图只负责渲染。 */
   restrictions: ReqBadge[];
   deckReqs: ReqBadge[];
-  desc: string;
+  /** 可链接效果正文（命名即语义：effect 不会被误当叙事文本兜底成 story）。 */
+  effect: string;
   since?: string;
 }
 
@@ -290,7 +291,8 @@ export interface PoolEntry {
   playCost: CostEntry[];
   dice: number;
   energyCost: number;
-  desc: string;
+  /* 注意：PoolEntry 不设 desc 字段——角色/卡牌的文本语义不同（叙事 vs 可链接），
+     压平成一个 string 就重新打开「误链简介」的事故面；检索走 descAll。 */
   /** 名称 + 描述的小写全文，供描述检索直接 includes，避免每次重新拼接。 */
   descAll: string;
 }
@@ -308,8 +310,7 @@ export interface SkillEntry {
   tag: string;
   tagZh: string;
   cost: CostEntry[];
-  desc: string;
-  /** 去掉「需准备 n 个行动轮」后的效果正文。 */
+  /** 效果正文（唯一字段；旧实现与 desc 同值双字段，鼓励「只改一个」的漂移）。 */
   effect: string;
   hidden: boolean;
   prepared: boolean;

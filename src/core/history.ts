@@ -19,6 +19,20 @@ function histFn<K extends "pushState" | "replaceState" | "back" | "go">(k: K): H
     return typeof f === "function" ? (f as (...a: never[]) => void).bind(history) : null;
   } catch (e) { return null; }
 }
+
+/* ---------- 安全历史写入口 ----------
+   Safari 对 replaceState/pushState 有 30 秒 100 次的限速，超限抛 SecurityError。
+   syncBrowseHash 每敲一键检索就 replace 一次——裸调一旦超限，SecurityError 会
+   中断 input 处理链（建议下拉停止更新）。写失败只意味着地址栏落后一步，
+   不值得炸掉交互：应用内所有历史写入统一走这里。 */
+export function safePushState(state: unknown, url: string): void {
+  const push = histFn("pushState");
+  if (push) { try { push(state as never, "" as never, url as never); } catch (e) {} }
+}
+export function safeReplaceState(state: unknown, url: string): void {
+  const rep = histFn("replaceState");
+  if (rep) { try { rep(state as never, "" as never, url as never); } catch (e) {} }
+}
 const hasWindowListeners = (): boolean =>
   typeof window !== "undefined" && typeof window.addEventListener === "function";
 
@@ -45,24 +59,47 @@ export function overlayHashParse(h: string):
 
 export const overlayPushDepth = (): number => pushDepth;
 
+/* ---------- 在途导航守卫 ----------
+   back/go 是异步语义：popstate 稍后到达，pushDepth 只在那时递减。
+   在途窗口内若照样接受重复的关闭请求（快速 Esc×2-3、双击遮罩/关闭钮），
+   多余的 back/go 会越过应用最老的历史条目，把用户弹出站外。
+   pending 期间的新请求直接消费（当成功处理，调用方不做手动弹栈），
+   真正的差量同步由到达的那个 popstate 统一完成。 */
+let navPending = false;
+function markNavPending(): boolean {
+  if (navPending) return false;
+  navPending = true;
+  /* 兜底：popstate 万一不到（异常浏览器行为）也不能把后续关闭全部吞掉 */
+  if (typeof setTimeout === "function") setTimeout(() => { navPending = false; }, 1500);
+  return true;
+}
+if (hasWindowListeners()) {
+  try {
+    window.addEventListener("popstate", () => { navPending = false; });
+    window.addEventListener("hashchange", () => { navPending = false; });
+  } catch (e) { /* 测试 stub 的监听器注册失败不致命：守卫退化为无守卫 */ }
+}
+
 /** 打开可回退层时追加一条历史。前进重开（fromHistory）不调用——那条记录已经存在。 */
 export function overlayHashPush(hash: string): void {
   pushDepth++;
-  const push = histFn("pushState");
-  if (push) { try { push({ gi: pushDepth } as never, "" as never, ("#" + hash) as never); } catch (e) {} }
+  safePushState({ gi: pushDepth }, "#" + hash);
 }
 
 /** 详情翻页等原地换内容：替换当前条目的 hash，不新增历史。 */
 export function overlayHashReplace(hash: string): void {
-  const rep = histFn("replaceState");
-  if (rep) { try { rep({ gi: pushDepth } as never, "" as never, ("#" + hash) as never); } catch (e) {} }
+  safeReplaceState({ gi: pushDepth }, "#" + hash);
 }
 
 /** UI 的「退一层」：委托给历史（popstate 里做真正的弹栈与渲染）。委托不了返回 false。 */
 export function overlayHashBack(): boolean {
   if (pushDepth > 0 && hasWindowListeners()) {
     const back = histFn("back");
-    if (back) { back(); return true; }
+    if (back) {
+      if (!markNavPending()) return true;   /* 已有在途导航：消费本次请求 */
+      back();
+      return true;
+    }
   }
   return false;
 }
@@ -71,7 +108,11 @@ export function overlayHashBack(): boolean {
 export function overlayHashCloseAll(): boolean {
   if (pushDepth > 0 && hasWindowListeners()) {
     const go = histFn("go");
-    if (go) { go(-pushDepth as never); return true; }
+    if (go) {
+      if (!markNavPending()) return true;   /* 已有在途导航：消费本次请求 */
+      go(-pushDepth as never);
+      return true;
+    }
   }
   return false;
 }
@@ -88,7 +129,6 @@ export function overlayHashClear(): void {
   if (typeof location === "undefined") return;
   const h = location.hash.replace(/^#/, "");
   if (/^(card=|t=|s=)/.test(h)) {
-    const rep = histFn("replaceState");
-    if (rep) { try { rep(null as never, "" as never, (location.pathname + location.search) as never); } catch (e) {} }
+    safeReplaceState(null, (location.pathname || "") + (location.search || ""));
   }
 }

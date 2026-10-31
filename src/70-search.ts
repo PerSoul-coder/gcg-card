@@ -4,7 +4,7 @@ import { $ } from "./core/dom";
 import { pool } from "./45-pool";
 import { recordOfId } from "./data/records";
 import { KIND_ZH, backlinks } from "./50-backlinks";
-import { escapeRe, termEntries, termIndex } from "./40-concepts";
+import { conceptTextOf, escapeRe, termEntries, termIndex } from "./40-concepts";
 import { dataReady, ensureData } from "./20-data";
 
 /* ---------- 卡牌检索（本地全量数据，无额外网络请求） ----------
@@ -269,8 +269,9 @@ function searchCards(q: string, opts: { scope?: SearchScope; corpus?: PoolEntry[
     const ck = conceptKeyOf(name);
     if (conceptKeys.has(ck)) continue;
     const ckind = conceptEntriesOf(entries).find(e => !e.mirrorCard)?.kind;
-    /* 描述检索同时扫 desc（可链接释义）与 story（角色简介）：搜得到简介、渲染时不链接 */
-    if (push("concept", null, name, { ckind }, { englishName: "", description: entries.map(e => e.desc || e.story || "").join("\n") }))
+    /* 描述检索同时扫 desc（可链接释义）与 story（角色简介）：搜得到简介、渲染时不链接。
+       拼装单点在 conceptTextOf——旧 || 写法在 desc、story 同时非空时会静默丢 story */
+    if (push("concept", null, name, { ckind }, { englishName: "", description: conceptTextOf(entries) }))
       conceptKeys.add(ck);
   }
 
@@ -294,7 +295,7 @@ function searchCards(q: string, opts: { scope?: SearchScope; corpus?: PoolEntry[
       if (!isConceptRow(entries) || !conceptInCorpus(name, corpusIds)) continue;
       const ck = conceptKeyOf(name);
       if (conceptKeys.has(ck) || nameKeys.has("concept:" + name)) continue;
-      const concept = conceptEntriesOf(entries).find(e => !e.mirrorCard && ((e.desc || "") + " " + (e.story || "")).toLowerCase().includes(rawLower));
+      const concept = conceptEntriesOf(entries).find(e => !e.mirrorCard && conceptTextOf([e]).toLowerCase().includes(rawLower));
       if (concept && pushDesc({ kind: "concept", id: null, name, score: 100, match: "desc", ckind: concept.kind }))
         conceptKeys.add(ck);
     }

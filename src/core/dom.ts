@@ -1,4 +1,5 @@
 /* 核心工具：DOM 查询、转义、提示条、剪贴板。 */
+import { animationTotalMs } from "./motion";
 
 export const $ = <T extends HTMLElement = HTMLElement>(id: string): T =>
   document.getElementById(id) as unknown as T;
@@ -30,7 +31,9 @@ export function toast(msg: string, err = false): void {
       first.remove();
     }
   }
-  setTimeout(() => t.remove(), 2600);
+  /* 存活期从 CSS 现读（tin 入场 + tout 延迟退场的总时长；.err 走更长的 --toast-life），
+     此前是 JS 2600ms ↔ CSS 2.4s 两份独立硬编码，改任一侧都会错位 */
+  setTimeout(() => t.remove(), animationTotalMs(t, 2800) + 80);
 }
 
 /* 剪贴板：优先 async Clipboard API；file:// 等场景可能拒权或缺失，

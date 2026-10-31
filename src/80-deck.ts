@@ -9,7 +9,7 @@ import { state } from "./data/state";
 import type { Deck, Draft } from "./types";
 import { STORAGE_KEYS, imgFull, eleIcon, ICON_X, ICON_PLUS } from "./core/resources";
 import { esc, toast } from "./core/dom";
-import { registerLayer, syncScrollLock } from "./core/layers";
+import { registerLayer, setModalLayer } from "./core/layers";
 import { TYPE_ZH } from "./data/model";
 
 /* ---------- 牌组：多牌组存储 + 草稿门面 ----------
@@ -24,7 +24,10 @@ function loadDecks() {
   decks = [];
   try {
     const d = JSON.parse(localStorage.getItem(STORAGE_KEYS.decks) || "null");
-    if (Array.isArray(d)) decks = (d as Deck[]).filter(x => x && typeof x === "object" && Number.isFinite(x.id));
+    /* 逐条消毒：缺 chars/cards 的损坏条目会让 renderDraftPanel 的 reduce 抛 TypeError，
+       牌组管理从此静默失效。不合格的整条丢弃（对齐 favs/recent 的防护口径）。 */
+    if (Array.isArray(d)) decks = (d as Deck[]).filter(x => x && typeof x === "object"
+      && Number.isFinite(x.id) && Array.isArray(x.chars) && Array.isArray(x.cards));
   } catch (e) { decks = []; }
 }
 function saveDecks() { try { localStorage.setItem(STORAGE_KEYS.decks, JSON.stringify(decks)); } catch (e) {} }
@@ -319,25 +322,21 @@ document.addEventListener("click", ev => {
 
 /* ---------- 牌组管理面板：开合集中在这里 ----------
    面板是可滚动的 60dvh 浮层，打开期间必须锁住文档滚动，否则在面板里滑到底
-   滚动链会传给页面（表现为「滑动被背景捕捉」）。锁同步交给层栈，
-   开合点只调这两个函数，就不会有人忘记。 */
+   滚动链会传给页面（表现为「滑动被背景捕捉」）。类名 + 层登记 + 锁同步
+   收在 setModalLayer 一个函数里成对完成，开合点不可能漏掉任何一件。 */
 const draftPanelEl = () => $("draftPanel");
 const draftPanelOpen = () => !!(draftPanelEl() && draftPanelEl().classList.contains("show"));
 export function openDraftPanel(): void {
-  const el = draftPanelEl();
-  if (!el || !el.classList) return;
-  el.classList.add("show");
-  syncScrollLock();
+  setModalLayer("draftPanel", draftPanelEl(), true, { order: 46, close: closeDraftPanel });
 }
 export function closeDraftPanel(): void {
-  const el = draftPanelEl();
-  if (!el || !el.classList) return;
-  el.classList.remove("show");
-  syncScrollLock();
+  setModalLayer("draftPanel", draftPanelEl(), false, { order: 46, close: closeDraftPanel });
 }
 export function toggleDraftPanel(): void {
   if (draftPanelOpen()) closeDraftPanel(); else openDraftPanel();
 }
+/* 启动即登记：层表从引导起就完整（Esc 在首次开合前也认识这层）。
+   open/close 里的 setModalLayer 以同一 spec 幂等覆盖，二者不冲突。 */
 registerLayer({ id: "draftPanel", isOpen: draftPanelOpen, close: closeDraftPanel, order: 46, modal: true });
 
 export { draft, decks, activeDeckId, deckRenameId, loadDecks, saveDecks, activeDeck, deckSeq, newDeck, syncFromActive, saveDraft, loadDraft, pruneDraft, draftTotal, COPY_LIMIT, LEGEND_COPY_LIMIT, copyLimit, draftAdd, draftRemoveChar, draftRemoveCard, draftSetCount, draftClear, draftLoadCurrent, deckProblems, draftEncode, renderDraft, renderDraftPanel, commitDeckRename };

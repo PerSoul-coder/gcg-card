@@ -142,6 +142,18 @@ return (async () => {
   const bl = backlinks.get("跃升");
   assert(!!bl && bl.size > 0, "反链：跃升 被引用（出边来自构建期）");
 
+  /* ===== 8. 规则下沉守护：映射覆盖 / 叙事不出边 / 哑弹已除 ===== */
+  const kinds = new Set();
+  for (const [, es] of termIndex) for (const e of es) kinds.add(e.kind);
+  const missingKind = [...kinds].filter(k => !KIND_ZH[k]);
+  assert(missingKind.length === 0,
+    "KIND_ZH 覆盖概念索引全部 kind（" + kinds.size + " 种" + (missingKind.length ? "，缺：" + missingKind.join(",") : "") + "）");
+  const badRefs = DATASET.records.filter(r => r.kind === "char" && (r.refs || []).length);
+  assert(badRefs.length === 0,
+    "角色记录 refs 全空（叙事文本永不产生出边；构建期断言的运行时复核）");
+  assert(!("desc" in pool[0]), "PoolEntry 不再有按 kind 暗示语义的 desc 字段（误链哑弹已除）");
+  assert(SKILLS.every(s => s.desc === undefined), "SkillEntry 不再有与 effect 同值双写的 desc 字段");
+
 })();
 `;
 

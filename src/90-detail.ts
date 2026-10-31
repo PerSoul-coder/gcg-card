@@ -10,10 +10,11 @@ import { R_STYLE, reqElement } from "./30-deps";
 import { termEntries } from "./40-concepts";
 import { state } from "./data/state";
 import type { GcgRecord, OverlayEntry } from "./types";
-import { recordOfId, nameOfId, isCharId, isShadowId, cardRecords } from "./data/records";
+import { recordOfId, nameOfId, isCharId, isShadowId, cardRecords, keyIdOf } from "./data/records";
 import { ELE_ZH, ELE_COLOR, tagZh, eleIcon, enPips, imgFull, ICON_X, ICON_SWAP, ICON_STAR } from "./core/resources";
 import { esc, toast, copyText } from "./core/dom";
-import { registerLayer, syncScrollLock } from "./core/layers";
+import { registerLayer, syncScrollLock, setModalLayer } from "./core/layers";
+import { animateExit } from "./core/motion";
 import { overlayHashOf, overlayHashParse, overlayHashPush, overlayHashReplace, overlayHashBack, overlayHashCloseAll, overlayHashPop, overlayHashAdopt, overlayPushDepth, overlayHashClear } from "./core/history";
 import { cardArtHtml, artFallback, artIconFail, artIconReady } from "./data/model";
 import { dataOrigins } from "./20-data";
@@ -66,7 +67,7 @@ function charTalentChips(charId: number, excludeId: number | null = null, onlyFo
     if (!self || !self.stats.tagsRaw.includes("GCG_TAG_TALENT")) return "";
   }
   return `<div class="drel"><b>天赋牌</b><span class="blchips">` + list.map(r => {
-    const cid = Number(r.key.slice(5));
+    const cid = keyIdOf(r.key);
     return `<button class="blchip${cid === excludeId ? " self" : ""}" data-goto="${cid}" title="${esc(r.name)}${cid === excludeId ? "（当前卡牌）" : ""}">${esc(r.name)}</button>`;
   }).join("") + `</span></div>`;
 }
@@ -103,48 +104,37 @@ const overlayOpen = () => $("overlay").classList.contains("show");
    于是"在弹层里上下滑，背景的卡面视图跟着动"。锁滚动与 scrollbar 补偿
    都收在 core/layers 里，其他浮层共用同一套。 */
 /* 退场动画只在「支持且未关闭动效」时播放：reduced-motion 与测试环境（无 matchMedia）
-   都直接瞬时关闭——与 CSS 的 reduced-motion 归零语义一致，也不拖慢同步断言。 */
-function motionOK(): boolean {
-  try {
-    return typeof window.matchMedia === "function"
-      && !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  } catch (e) { return false; }
-}
-/* 退场动画进行中又重新打开：取消挂起的关闭回调——否则它会在动画结束/兜底定时器
-   触发时把刚开好的弹层摘掉（.show 被误删，弹层开着却不可交互）。 */
+   都直接瞬时关闭——与 CSS 的 reduced-motion 归零语义一致，也不拖慢同步断言。
+   生命周期本体（取消/守卫/兜底/收尾）收在 core/motion 的 animateExit，
+   这里只提供类名与回调——此前这段是六步手工序列，两轮事故都发生在这里。 */
+/* 退场动画进行中又重新打开：先 cancel 再自己摆正类名——否则挂起的收尾
+   会在动画结束/兜底定时器触发时把刚开好的弹层摘掉（.show 被误删，弹层开着却不可交互）。 */
 let cancelOverlayClose: (() => void) | null = null;
 function setOverlayOpen(open: boolean) {
   const ov = $("overlay");
   if (!ov || !ov.classList) return;
-  if (!open && ov.classList.contains("show") && motionOK()) {
-    /* 退场：立刻摘 .show（层即刻算关闭，滚动锁随退场开始就释放——布局抖动与
-       淡出重叠，而不是淡出结束后突兀一跳），再用 .closing 播淡出。
-       .closing 自带 display:flex，可见性不依赖 .show。
-       兜底定时器防止 animationend 因元素复用而丢失。 */
+  if (!open && ov.classList.contains("show")) {
+    /* 退场：.show 即刻摘除（层即刻算关闭，滚动锁随退场开始就释放——布局抖动与
+       淡出重叠，而不是淡出结束后突兀一跳），再用 .closing 播淡出；
+       animationend 只认 ovl-out 且只认自己（.detail 的 dlg-out 更早结束，会冒泡上来）。 */
     cancelOverlayClose?.();
-    let done = false;
-    const fin = () => {
-      if (done) return;
-      done = true;
-      cancelOverlayClose = null;
-      ov.classList.remove("closing");
-      ov.removeEventListener("animationend", onEnd);
-    };
-    /* .detail 的 dlg-out（160ms）会先于 ovl-out（180ms）冒泡上来——
-       只认自己的动画名，否则淡出被提前掐断（末尾 20ms 骤隐）。 */
-    const onEnd = (ev: AnimationEvent) => { if (ev.animationName === "ovl-out") fin(); };
-    cancelOverlayClose = () => { done = true; ov.removeEventListener("animationend", onEnd); };
-    ov.addEventListener("animationend", onEnd);
-    ov.classList.remove("show");
-    ov.classList.add("closing");
-    setTimeout(fin, 280);
-    syncScrollLock();
+    cancelOverlayClose = animateExit({
+      el: ov, openCls: "show", closingCls: "closing", anim: "ovl-out",
+      onStart: syncScrollLock,
+    });
+    /* 翻页方向类不能残留：display:none 期间动画被重置，重开时会重播一次翻页滑入 */
+    const detail = $("detail");
+    if (detail && detail.classList) detail.classList.remove("pg-prev", "pg-next");
     return;
   }
   cancelOverlayClose?.();
   cancelOverlayClose = null;
   ov.classList.remove("closing");
   ov.classList.toggle("show", open);
+  if (!open) {
+    const detail = $("detail");
+    if (detail && detail.classList) detail.classList.remove("pg-prev", "pg-next");
+  }
   syncScrollLock();
   if (open) hideTip();      /* 弹层盖上来时，残留的悬浮预览会浮在遮罩之上 */
 }
@@ -433,30 +423,42 @@ document.addEventListener("click", ev => {
 /* ---------- 卡面灯箱：详情页点击卡面 → 全屏原尺寸查看 ----------
    图片地址与详情页同源（imgFull 同 id），浏览器已缓存，打开零等待。
    ←/→ 沿详情的同级列表翻页（与详情翻页键位一致），Esc / 点空白关闭。 */
+/* 退场动画进行中又重开/再关：先 cancel 再摆正类名（与 overlay 同一契约） */
+let cancelLbClose: (() => void) | null = null;
 function showLightbox(refId: number): void {
   const top = topView();
   const ids = top && top.kind === "detail" ? top.ids : [refId];
   let box = $("lightbox");
   if (!box || !box.classList) { box = document.createElement("div"); box.id = "lightbox"; if (document.body.appendChild) document.body.appendChild(box); }
+  cancelLbClose?.(); cancelLbClose = null;
+  box.classList.remove("closing");
   box.innerHTML = `<img src="${imgFull(refId)}" alt="" width="420" height="720" decoding="async">
     <button class="lb-x" data-act="close" title="关闭 (Esc)">${ICON_X}</button>
     ${ids.length > 1 ? `<button class="lb-nav lb-prev" data-lbstep="-1" title="上一张 (←)">‹</button><button class="lb-nav lb-next" data-lbstep="1" title="下一张 (→)">›</button>` : ""}`;
   box.dataset.ids = ids.join(",");
   box.dataset.idx = String(Math.max(0, ids.indexOf(refId)));
-  box.classList.add("show");
   hideTip();
-  registerLayer({ id: "lightbox", isOpen: () => !!box.classList && box.classList.contains("show"), close: closeLightbox, order: 55, modal: true });
-  syncScrollLock();
+  /* 打开走 setModalLayer（类名 + 登记 + 锁三事成对）；关闭带退场动画，锁由其 onStart 释放 */
+  setModalLayer("lightbox", box, true, { order: 55, close: closeLightbox });
 }
 function closeLightbox(): void {
   const box = $("lightbox");
-  if (box && box.classList) box.classList.remove("show");
+  if (!box || !box.classList) return;
+  cancelLbClose?.(); cancelLbClose = null;
+  if (box.classList.contains("show")) {
+    /* 退场动画：遮罩淡出（reduced-motion / 测试环境走瞬时路径），锁随退场开始释放 */
+    cancelLbClose = animateExit({ el: box, openCls: "show", closingCls: "closing", anim: "lb-out", onStart: syncScrollLock });
+    return;
+  }
+  box.classList.remove("closing");   /* 退场中被打断：就地结束 */
   syncScrollLock();
 }
 const lightboxOpen = (): boolean => {
   const box = $("lightbox");
   return !!(box && box.classList && box.classList.contains("show"));
 };
+/* 启动即登记（元素可以懒建，层表不懒）：Esc 在首次开灯箱前也认识这层 */
+registerLayer({ id: "lightbox", isOpen: lightboxOpen, close: closeLightbox, order: 55, modal: true });
 function lightboxStep(d: number): void {
   const box = $("lightbox");
   if (!box || !box.dataset || !box.dataset.ids) return;
@@ -537,9 +539,15 @@ document.body.appendChild(tip);
    触摸设备点按会先合成一次 mousemove，把预览点亮；紧接着 click 打开概念页，
    预览却没人收掉 —— 结果就是一个正常大小的弹层，外加一个小一号、被屏幕边缘
    切掉一半的预览框（它的 z-index 比遮罩高，浮在最上层）。 */
+/* 悬停能力只随设备变，不在每次 mousemove 里现查 matchMedia：
+   缓存 MediaQueryList，系统切换悬停偏好时 matches 自动跟随。 */
+let hoverMQL: { matches: boolean } | null | undefined;
 function canHover() {
   try {
-    return !(typeof matchMedia === "function") || matchMedia("(hover: hover) and (pointer: fine)").matches;
+    if (hoverMQL === undefined) {
+      hoverMQL = typeof matchMedia === "function" ? matchMedia("(hover: hover) and (pointer: fine)") : null;
+    }
+    return !hoverMQL || hoverMQL.matches;
   } catch { return true; }
 }
 let tipTerm: string | null = null;      /* 预览当前展示的术语名，用于避免重复重建 DOM */
@@ -650,7 +658,13 @@ document.addEventListener("mousemove", ev => {
 /* 指针离开 / 页面滚动 / 触摸开始 → 收起预览（触摸开始就收，避免它跟着手指残留在屏幕上） */
 document.addEventListener("touchstart", hideTip, { passive: true });
 /* 滚动事件不冒泡，用捕获阶段在文档上兜住任意滚动容器 */
-document.addEventListener("scroll", hideTip, true);
+document.addEventListener("scroll", ev => {
+  /* tip 内部滚动（读长释义）不算离开：目标是 tip 自身或其后代时不隐藏 */
+  const t = ev.target as Node | null;
+  if (t && typeof (tip as unknown as { contains?: (n: Node) => boolean }).contains === "function"
+    && (tip as unknown as { contains: (n: Node) => boolean }).contains(t)) return;
+  hideTip();
+}, true);
 /* 概念页：一个名字可能匹配多个条目（如「结晶」= 场地牌 + 反应术语），
    从上到下并列；带卡牌/角色身份的条目附「查看详情」直达其详情页 */
 function renderTermView(v) {
@@ -734,9 +748,12 @@ document.addEventListener("error", ev => {
   if (t.classList.contains("noart-icon")) { artIconFail(t); return; }
   artFallback(t);
 }, true);
-/* 弹层内方向键导航；Esc 统一由全局处理器逐层关闭（见文末快捷键区） */
+/* 弹层内方向键导航；Esc 统一由全局处理器逐层关闭（见文末快捷键区）。
+   灯箱打开时 ←/→ 归灯箱翻页（99-main 的全局处理器负责）——这里同时再翻一次详情
+   会触发整弹层的不可见全量重渲染（双触发事故）。 */
 document.addEventListener("keydown", ev => {
   if (!$("overlay").classList.contains("show")) return;
+  if (lightboxOpen()) return;
   if (ev.key === "ArrowLeft") modalStep(-1);
   if (ev.key === "ArrowRight") modalStep(1);
 });

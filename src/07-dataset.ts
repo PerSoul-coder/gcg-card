@@ -52,6 +52,16 @@ async function decodeBinaryBase64(b64: string, fmt: "gzip" | "brotli"): Promise<
   }
 }
 
+/* 网络挂起不会自己好：15s 没响应就放弃，交给 gz → br → json 的降级链与错误提示，
+   spinner 不再无限转。测试 stub 的 fetch 只收 URL，多余参数无害。 */
+async function fetchWithTimeout(url: string): Promise<Response> {
+  if (typeof AbortController !== "function") return fetch(url);
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), 15000);
+  try { return await fetch(url, { signal: ac.signal } as RequestInit); }
+  finally { clearTimeout(timer); }
+}
+
 async function readDatasetResponse(res: Response, url: string): Promise<unknown> {
   if (!res || !res.ok) throw new Error("HTTP " + (res && res.status));
   const fmt = /\.gz(\?|$)/.test(url) ? "gzip" : /\.br(\?|$)/.test(url) ? "brotli" : null;
@@ -97,7 +107,7 @@ async function loadDataset(force = false): Promise<Dataset | null> {
   const bust = force ? `?t=${Date.now()}` : "";
   for (const url of [DATASET_GZ_URL, DATASET_BR_URL, DATASET_JSON_URL]) {
     try {
-      const j = await readDatasetResponse(await fetch(url + bust), url);
+      const j = await readDatasetResponse(await fetchWithTimeout(url + bust), url);
       if (isDataset(j)) return adopt(j, "network");
     } catch {
       /* 依次降级：gz → br → json，全失败返回 null 由调用方提示 */

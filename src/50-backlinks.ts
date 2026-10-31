@@ -3,6 +3,7 @@ import { DATASET, dsByKey, dsReady } from "./07-dataset";
 import { costText } from "./30-deps";
 import { esc } from "./core/dom";
 import { cardArtHtml } from "./data/model";
+import { keyIdOf } from "./data/records";
 import { linkifyExcept } from "./40-concepts";
 import type { GcgRecord, TermEntry } from "./types";
 
@@ -25,11 +26,11 @@ function buildBacklinks(): void {
   /* 引用者归到卡牌 / 角色 id（技能归其所属），反链面板按 id 跳详情 */
   const srcIdOf = (r: GcgRecord): number | null => {
     if (r.kind === "char" || r.kind === "card") {
-      const n = Number(String(r.key).split(":")[1]);
+      const n = keyIdOf(r.key);
       return Number.isFinite(n) ? n : null;
     }
     if (r.kind === "skill" && r.rel.ownerKey) {
-      const n = Number(String(r.rel.ownerKey).split(":")[1]);
+      const n = keyIdOf(r.rel.ownerKey);
       return Number.isFinite(n) ? n : null;
     }
     return null;

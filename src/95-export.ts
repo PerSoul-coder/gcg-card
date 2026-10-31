@@ -1,7 +1,7 @@
 /* 95-export.ts —— 导出：JSON / CSV / 文本，字段形状是对外契约。 */
 import { allReqs, costText } from "./30-deps";
 import { recordOfId, shareOfId } from "./data/records";
-import { $ } from "./core/dom";
+import { $, copyText } from "./core/dom";
 import { skillsOf, showSkillIdx } from "./47-skills";
 import { showDeckDiff } from "./88-compare";
 import { showOdds } from "./86-odds";
@@ -10,7 +10,7 @@ import { decodeRaw, encodeRaw } from "./10-codec";
 import { state } from "./data/state";
 import type { ExportCard, ExportChar } from "./types";
 import { API, LANG, imgFull, tagZh } from "./core/resources";
-import { toast, copyText } from "./core/dom";
+import { toast } from "./core/dom";   /* copyText 已在上面与 $ 一并导入 */
 import { registerLayer } from "./core/layers";
 
 /* ---------- 导出：文本 / Markdown / 结构化 JSON / CSV ---------- */
@@ -49,7 +49,7 @@ function deckMarkdown() {
     L.push(`|---|---|---|---|---|---|---|`);
     for (const x of state.current!.groups[t]) {
       const r = allReqs(x).map(r => r.short).join("·") || "—";
-      const d = (x.desc || "").replace(/\|/g, "\\|").replace(/\n/g, " ");
+      const d = (x.effect || "").replace(/\|/g, "\\|").replace(/\n/g, " ");
       L.push(`| ${x.count} | ${x.name} | ${costText(x.playCost) || "—"} | ${r} | ${x.related || "—"} | ${x.since || "—"} | ${d} |`);
     }
   }
@@ -96,7 +96,7 @@ function buildExport() {
         name: s.name, type: s.tag || null, typeZh: s.tagZh,
         cost: (s.cost as Array<{ type: string; count: number }>).map(pc => ({ type: pc.type, count: pc.count })),
         prepared: !!s.prepared, prepareTurns: s.prepareTurns || 0,
-        description: s.effect || s.desc || "",
+        description: s.effect || "",
       })),
       image: imgFull(c.id),
     };
@@ -132,7 +132,7 @@ function toCSV() {
   for (const t of state.current!.order) for (const x of state.current!.groups[t]) {
     rows.push([t, x.count, x.name, x.type, costText(x.playCost), x.dice, x.energy,
       allReqs(x).map(r => r.label).join("；"), x.related || "", x.tags.join("·"), x.since || "",
-      shareOfId(x.id) ?? "", x.id, x.desc].map(q).join(","));
+      shareOfId(x.id) ?? "", x.id, x.effect].map(q).join(","));
   }
   return "\ufeff" + head.map(q).join(",") + "\n" + rows.join("\n");
 }
@@ -209,7 +209,9 @@ function encodeCurrent() {
 $("btnCopyCode").addEventListener("click", async () => {
   try {
     const code = encodeCurrent();
-    await navigator.clipboard.writeText(code);
+    /* copyText 自带 execCommand 兜底：file:// / 非安全上下文下 navigator.clipboard
+       直接访问是 undefined → TypeError，报一个误导性的失败（兜底本可成功） */
+    await copyText(code);
     toast("分享码已复制（已通过解码自校验）");
   } catch (e) { toast("生成失败：" + (e as Error).message, true); }
 });
