@@ -6,6 +6,7 @@ import { overlayHashParse } from "./core/history";
 import { browseState, parseBrowseHash, renderBrowse, renderBrowseResults, renderGrid, renderList, setShowFavsOnly, setShowUnbuildable, syncBrowseHash } from "./85-views";
 import { ensureData, onDataReady } from "./20-data";
 import { loadFavs, pool, pruneFavs } from "./45-pool";
+import { loadRecentCards, pruneRecentCards, refreshRecentStrip } from "./46-recent";
 import { termEntries } from "./40-concepts";
 import { skillOf, showSkill, renderSkillsView } from "./47-skills";
 import { beginRenameDeck, closeDraftPanel, deleteDeckById, draftClear, draftEncode, draftLoadCurrent, draftRemoveCard, draftRemoveChar, draftSetCount, duplicateDeck, loadDraft, newDeck, pruneDraft, renderDraft, renderDraftPanel, syncFromActive, toggleDraftPanel } from "./80-deck";
@@ -324,7 +325,7 @@ function tileStep(cur: HTMLElement, key: string): boolean {
 /* ---------- 启动：hash 路由（#分享码 / #card=id / #q=关键词 / #b=卡库筛选） ---------- */
 /* 数据装载完成后刷新依赖数据的界面块。回调在本模块初始化时注册，
    触发时机在 20-data 的 loadData 末尾（此时各索引已建好）。 */
-onDataReady(() => { pruneDraft(); pruneFavs(); renderDraft(); });
+onDataReady(() => { pruneDraft(); pruneFavs(); pruneRecentCards(); refreshRecentStrip(); renderDraft(); });
 /* hash → 视图/动作。启动时执行一次；之后由 hashchange / popstate 驱动。 */
 function routeHash() {
   routedHash = location.hash;
@@ -482,6 +483,7 @@ function routeHashSafe(): void {
 export function boot(): void {
   loadDraft();
   loadFavs();
+  loadRecentCards();
   renderDraft();
   try {
     routeHash();

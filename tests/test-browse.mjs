@@ -480,6 +480,22 @@ return (async () => {
   assert(qrContent("file:///D:/x/gcg.html", "ABC") === "file:///D:/x/gcg.html#ABC", "qrContent：file:// 也编成本页深链");
   assert(qrContent("https://example.com/p/a.html#old", "ABC") === "https://example.com/p/a.html#ABC", "qrContent：去旧 hash 换分享码");
 
+  /* ===== 18. 最近查看的卡（46-recent：去重前插 / 上限 / 失效清除） ===== */
+  resetRecent();
+  pushRecentCard(1101); pushRecentCard(1101); pushRecentCard(1102);
+  assert(recentCards().length === 2 && recentCards()[0] === 1102 && recentCards()[1] === 1101, "最近查看：去重前插");
+  pushRecentCard(999999999);
+  assert(recentCards().length === 2, "最近查看：无效 id 不入列");
+  const rcIds = cards().filter(r => r.kind === "card").map(r => keyIdOf(r.key));
+  for (let i = 0; i < 20; i++) pushRecentCard(rcIds[i]);
+  assert(recentCards().length === 12 && recentCards()[0] === rcIds[19], "最近查看：上限 12、最新在前");
+  localStorage.setItem("gi-viewer-recent-cards", JSON.stringify([1101, 999999999]));
+  loadRecentCards(); pruneRecentCards();
+  assert(recentCards().length === 1 && recentCards()[0] === 1101, "最近查看：prune 清掉失效 id");
+  const strip = rcStripHtml();
+  assert(strip.includes("rc-strip") && strip.includes('data-goto="1101"'), "最近查看：横带 HTML 含缩略入口");
+  resetRecent();
+
 })();
 `;
 

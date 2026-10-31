@@ -7,6 +7,7 @@ import { renderSkillView, showSkill, skillOf } from "./47-skills";
 import { compareState, renderCompareView, renderDeckDiffView } from "./88-compare";
 import { renderQrView } from "./97-qr";
 import { R_STYLE, reqElement } from "./30-deps";
+import { pushRecentCard, refreshRecentStrip } from "./46-recent";
 import { termEntries } from "./40-concepts";
 import { state } from "./data/state";
 import type { GcgRecord, OverlayEntry } from "./types";
@@ -201,6 +202,7 @@ function showDetail(id: number, ids?: number[], fromHistory = false) {
   const h = overlayHashOf(nt);
   if (!fromHistory && h) { overlayHashPush(h); nt!.hpushed = true; }   /* 写入历史：后退键逐层回退 */
   renderOverlay();
+  pushRecentCard(id); refreshRecentStrip();   /* 最近查看：低摩擦记忆条（46-recent） */
 }
 function overlayBack() {
   const top = topView();

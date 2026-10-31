@@ -724,6 +724,14 @@ body.cmp-on #draftPanel { bottom: 136px; }
 .dk-val .val-item:hover:not(:disabled) { text-decoration: underline; }
 .dk-val .val-item:disabled { cursor: default; }
 
+/* ===== 最近查看（46-recent）：卡库页签顶部的小缩略横带 ===== */
+.rc-strip { display: flex; align-items: center; gap: 6px; overflow-x: auto; padding: 2px 0 8px; scrollbar-width: none; }
+.rc-strip::-webkit-scrollbar { display: none; }
+.rc-title { flex: none; color: var(--dim); font-size: var(--fs-12); letter-spacing: 1px; margin-right: 2px; }
+.rc-card { flex: none; width: 34px; padding: 0; border: 1px solid var(--line); border-radius: 5px; background: var(--bg2); overflow: hidden; cursor: pointer; transition: border-color var(--t-fast); }
+.rc-card:hover { border-color: var(--gold-dim); }
+.rc-card img { display: block; width: 100%; height: auto; }
+
 /* ===== 详情弹层：关联角色 / 天赋牌 / 反链 ===== */
 .detail .drel { margin: 12px 0 0; display: flex; gap: 10px; align-items: baseline; }
 .detail .drel b { flex: none; color: var(--gold-dim); font-size: var(--fs-12); letter-spacing: 2px; font-weight: normal; }

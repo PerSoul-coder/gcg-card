@@ -35,4 +35,5 @@ export * from "./90-detail";
 export * from "./95-export";
 export * from "./96-share";
 export * from "./97-qr";
+export * from "./46-recent";
 export * from "./99-main";

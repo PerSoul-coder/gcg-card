@@ -13,6 +13,7 @@ import { openTermName, showDetail } from "./90-detail";
 import { state } from "./data/state";
 import { STORAGE_KEYS, imgFull, ELE_ZH, ELE_COLOR, ENERGY_ICON, ELE_ICONS, eleIcon, enPips, ICON_PLUS, ICON_STAR } from "./core/resources";
 import { favs, isFav, toggleFav } from "./45-pool";
+import { rcStripHtml } from "./46-recent";
 import { esc } from "./core/dom";
 import type { PoolEntry, SearchHit } from "./types";
 import { TYPE_ZH, cardArtHtml } from "./data/model";
@@ -724,7 +725,7 @@ function browseSearchHtml() {
 function renderBrowse() {
   const st = browseState;
   const facets = facetCounts(st);
-  $("view-browse").innerHTML = browseSearchHtml() + browseBarHtml(st, facets) +
+  $("view-browse").innerHTML = rcStripHtml() + browseSearchHtml() + browseBarHtml(st, facets) +
     `<div id="browseResults"></div>`;
   renderBrowseResults();
 }

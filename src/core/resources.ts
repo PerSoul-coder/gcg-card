@@ -20,6 +20,7 @@ export const STORAGE_KEYS = {
   view: "gi-viewer-view",
   theme: "gi-viewer-theme",
   favs: "gi-viewer-favs",
+  recentCards: "gi-viewer-recent-cards",
 } as const;
 
 export const imgFull = (id: number): string => `${API}/image/${id}`;
