@@ -126,9 +126,9 @@ async function decodeAndRender(code: string, opts: { noHash?: boolean; noHistory
   }
 }
 
-/* ---------- 顶部输入框：只解析牌组分享码 ----------
-   卡牌检索已移入「卡库浏览」的独立检索框，不再与分享码共用入口；
-   这里不再自动把非分享码文本当成检索词，避免两个功能互相误触发。 */
+/* ---------- 牌组操作条输入框：只解析牌组分享码 ----------
+   输入框随牌组操作条只在牌组页签出现；卡牌检索在「卡库浏览」的独立检索框，
+   不与分享码共用入口——非分享码文本不当成检索词，避免两个功能互相误触发。 */
 const CODE_RE = /^[A-Za-z0-9+/]{50,}={0,2}$/;
 function looksLikeCode(text) {
   return CODE_RE.test((text || "").replace(/\s+/g, ""));

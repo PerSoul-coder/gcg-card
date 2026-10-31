@@ -1143,6 +1143,8 @@ body.cmp-on .wrap { padding-bottom: 180px; }
   .detail .navbtns { gap: 4px; }
   .detail .navbtns .lbtn { padding: 6px 6px; font-size: var(--fs-12); }
   .detail .navbtns .jbtn { padding: 6px 10px; }
+  /* 图鉴网格落单栏：minmax(400px,…) 在 ≤420px 视口会横向溢出 */
+  #view-skills .skillidx-list { grid-template-columns: 1fr; }
   /* 技能行在窄屏上收紧内边距；费用单独成行，避免和名字挤在一行换行错位 */
   .detail .skill, #view-skills .skill { padding: 9px 10px; }
   .detail .skhead { gap: 5px; }
@@ -1173,13 +1175,18 @@ body.cmp-on .wrap { padding-bottom: 180px; }
 .skillidx-bar input { width: 100%; background: var(--bg2); border: 1px solid var(--line); color: var(--text); border-radius: var(--r-md); padding: 9px 13px; font-size: var(--fs-14); transition: border-color var(--t-fast), box-shadow var(--t-fast); }
 .skillidx-bar input:focus { outline: none; border-color: var(--gold-dim); box-shadow: var(--ring); }
 .skillidx-chips { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
-.skillidx-list { margin-top: 2px; }
-.skidx-group { margin-top: 14px; }
-.skidx-head { display: flex; align-items: center; gap: 8px; }
-.skidx-head .skidx-art { width: 34px; border-radius: var(--r-sm); overflow: hidden; flex: none; box-shadow: var(--elev-1); }
+/* 结果区 = 图鉴卡片墙：所属分组各成一块面板，双栏自适应（窄屏落单栏）。
+   align-items:start 让高矮不一的组保持各自高度，不留拉伸空腔。 */
+.skillidx-list { margin-top: 12px; display: grid; grid-template-columns: repeat(auto-fill, minmax(400px, 1fr)); gap: 12px; align-items: start; }
+.skidx-group { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-md); padding: 10px 10px 9px; min-width: 0; }
+.skidx-head { display: flex; align-items: center; gap: 10px; padding-bottom: 9px; margin-bottom: 9px; border-bottom: 1px solid var(--line); }
+/* 组头牌面 = 所属卡的小牌（完整比例，与卡库同一观感），不再是无框缩略图 */
+.skidx-head .skidx-art { width: 44px; border-radius: var(--r-sm); overflow: hidden; flex: none; box-shadow: var(--elev-2); border: 1px solid var(--line); background: var(--bg2); }
 .skidx-head .skidx-art img { width: 100%; height: auto; display: block; }
-.skidx-head small { color: var(--dim); font-size: var(--fs-11); }
-.skidx-group .skill { cursor: pointer; }
+.skidx-head .blchip { font-size: var(--fs-13); color: var(--text); padding: 3px 12px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.skidx-head small { margin-left: auto; color: var(--dim); font-size: var(--fs-11); flex: none; }
+.skidx-group .skill { cursor: pointer; margin-bottom: 8px; }
+.skidx-group .skill:last-child { margin-bottom: 0; }
 
 /* ===== 卡面灯箱：详情页点击卡面 → 全屏原尺寸（层序在弹层之上） ===== */
 #lightbox { display: none; position: fixed; inset: 0; z-index: var(--z-lightbox); background: color-mix(in srgb, var(--scrim) 92%, transparent); align-items: center; justify-content: center; }
