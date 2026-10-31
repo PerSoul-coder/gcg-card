@@ -28,11 +28,15 @@ export function resetConceptIndex(): void {
 
 /* 记录 → 展示条目。纯字段映射：收不收、取哪条、排第几都已由构建期确定。 */
 function projectTerm(r: GcgRecord, kind: string): TermEntry {
+  /* desc 回退链：效果优先；都没有时角色会落到 story（简介）。story 是叙事文本，
+     永不参与链接——打上 story 标记，渲染端只转义不 linkify（与详情页简介区同一规则）。 */
+  const desc = r.desc.effect || r.desc.story || r.desc.rules || "";
   const entry: TermEntry = {
     src: r.source === "piovium" ? 0 : 1,
     kind,
     name: r.name,
-    desc: r.desc.effect || r.desc.story || r.desc.rules || "",
+    desc,
+    story: !r.desc.effect && !!r.desc.story,
     /* 牌面副本与同名身份都表示「检索不单列」：前者已不进概念索引，
        这里保留判断是为了让检索对 dupIdentity 条目也去重 */
     mirrorCard: r.flags.mirror || !!r.flags.dupIdentity,

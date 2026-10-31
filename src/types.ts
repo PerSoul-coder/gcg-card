@@ -462,6 +462,8 @@ export interface TermEntry {
   kind: string;
   name: string;
   desc: string;
+  /** desc 来自角色简介（叙事文本）：只展示、不链接——与详情页简介区同一规则。 */
+  story?: boolean;
   mirrorCard?: boolean;
   type?: string;
   cost?: unknown;

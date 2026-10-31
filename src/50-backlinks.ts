@@ -76,10 +76,15 @@ function termBodyHtml(info: TermEntry, big: boolean, showKind: boolean, hideName
     ? `<button class="blchip term-jump" data-skill="${esc(info.key)}" title="打开「${esc(info.name)}」技能页">查看技能</button>`
     : big && info.id != null && (info.kind === "card" || info.kind === "char")
     ? `<button class="blchip term-jump" data-goto="${info.id}" title="打开「${esc(info.name)}」详情">查看详情</button>` : "";
+  /* 角色简介（story）是叙事文本：与详情页简介区同一规则，只展示不链接；
+     其余释义正常走术语链接（自己的名字除外）。 */
+  const body = info.story
+    ? esc(info.desc || "（暂无描述）")
+    : linkifyExcept(esc(info.desc || "（暂无描述）"), info.name);
   return `<div class="term-body${showKind ? " term-body-multi" : ""}">${art}<div>
     ${showKind ? `<small class="term-kind">${kindLabel}</small>` : ""}
     ${nameLine}${metaLine}
-    <p>${linkifyExcept(esc(info.desc || "（暂无描述）"), info.name)}</p>${jump}</div></div>`;
+    <p>${body}</p>${jump}</div></div>`;
 }
 /* 一个概念名可能匹配多个不同种类的条目（如"护盾"：状态牌 + 关键词）——
    悬浮提示与概念页中从上到下并列展示，每个条目带种类标识 */
