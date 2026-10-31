@@ -10,3 +10,4 @@ Thumbs.db
 .build-tools/*.json
 .build-tools/*.err
 .zcode/
+publish/

@@ -3,7 +3,7 @@ import { KIND_ZH, backlinks } from "./50-backlinks";
 import { $ } from "./core/dom";
 import { copyLimit, draft, draftAdd, draftRemoveCard, draftRemoveChar } from "./80-deck";
 import { browseVisibleIds } from "./85-views";
-import { renderSkillView, renderSkillIdxView, showSkill, skillOf } from "./47-skills";
+import { renderSkillView, showSkill, skillOf } from "./47-skills";
 import { compareState, renderCompareView, renderDeckDiffView } from "./88-compare";
 import { renderOddsView } from "./86-odds";
 import { R_STYLE, reqElement } from "./30-deps";
@@ -11,7 +11,7 @@ import { termEntries } from "./40-concepts";
 import { state } from "./data/state";
 import type { GcgRecord, OverlayEntry } from "./types";
 import { recordOfId, nameOfId, isCharId, isShadowId, cardRecords, keyIdOf } from "./data/records";
-import { ELE_ZH, ELE_COLOR, tagZh, eleIcon, enPips, imgFull, ICON_X, ICON_SWAP, ICON_STAR } from "./core/resources";
+import { ELE_ZH, ELE_COLOR, tagZh, eleIcon, enPips, imgFull, ICON_X, ICON_SWAP, ICON_STAR, ICON_LINK } from "./core/resources";
 import { esc, toast, copyText } from "./core/dom";
 import { registerLayer, syncScrollLock, setModalLayer } from "./core/layers";
 import { animateExit } from "./core/motion";
@@ -171,7 +171,6 @@ function renderOverlay(resetScroll = false) {
   if (reset) { top.scrollTop = 0; top.cmpLeft = 0; }
   if (top.kind === "term") renderTermView(top);
   else if (top.kind === "skill") renderSkillView(top);
-  else if (top.kind === "skillidx") renderSkillIdxView();
   else if (top.kind === "compare") renderCompareView(top);
   else if (top.kind === "deckdiff") renderDeckDiffView(top);
   else if (top.kind === "odds") renderOddsView(top);
@@ -233,7 +232,7 @@ function syncOverlayToHash(targetDepth: number, want) {
       continue;
     }
     /* 无条目层分两类：
-       · 普通层（compare / odds / 图鉴）——hash 认它就留，且打开在基座上时后退不关它；
+       · 普通层（compare / odds / deckdiff）——hash 认它就留，且打开在基座上时后退不关它；
        · 无条目的可回退层（深链开的详情）——hash 不认它就是陈旧视图，始终弹掉。 */
     if (isH(top)) {
       if (want && overlayMatches(top, want) && entryDepth() >= targetDepth) break;
@@ -315,7 +314,7 @@ function renderDetailView(v) {
   /* 已选 2 张及以上时，详情里就能直接打开对比面板；返回仍回到这张卡 */
   const cmpOpenBtn = compareState.ids.length >= 2
     ? `<button class="lbtn" data-cmpopen="1" title="打开卡牌对比面板">${ICON_SWAP} ${compareState.ids.length}</button>` : "";
-  const nav = navBar(`${pagerHtml(v)}${joinBtn}${cmpBtn}${cmpOpenBtn}<button class="lbtn${isFav(v.id) ? " on" : ""}" data-fav="${v.id}" aria-pressed="${isFav(v.id)}" title="${isFav(v.id) ? "取消收藏" : "收藏"}">${ICON_STAR} ${isFav(v.id) ? "已收藏" : "收藏"}</button><button class="lbtn" title="复制该卡链接" data-act="copyLink">复制链接</button>`);
+  const nav = navBar(`${pagerHtml(v)}${joinBtn}${cmpBtn}${cmpOpenBtn}<button class="lbtn${isFav(v.id) ? " on" : ""}" data-fav="${v.id}" aria-pressed="${isFav(v.id)}" title="${isFav(v.id) ? "取消收藏" : "收藏"}">${ICON_STAR} ${isFav(v.id) ? "已收藏" : "收藏"}</button><button class="lbtn" title="复制该卡链接" data-act="copyLink">${ICON_LINK}</button>`);
   let html;
   if (c) {
     const el = c.stats.element;
@@ -489,7 +488,7 @@ function showHelp() {
     <div class="dinfo"><h2>快捷键与说明</h2>
     <div class="dtext">
 <b>快捷键</b>
-1 / 2 / 3　切换 卡面视图 / 列表视图 / 卡库浏览
+1 / 2 / 3 / 4　切换 卡面视图 / 列表视图 / 卡库浏览 / 技能图鉴
 /　聚焦卡库检索框（不在卡库时先切换过去）
 ?　打开本帮助（无弹层时）
 Esc　逐层回退：概念下钻（每次退一层）→ 上一视图 → 关闭弹层 → 牌组管理 → 历史面板
@@ -500,7 +499,7 @@ Ctrl+P　打印当前列表视图
 <b>使用说明</b>
 · 顶部输入框只解析牌组分享码。卡牌检索在「卡库浏览」顶部：先按类别 / 元素 / 费用等筛选卡池，再在筛选结果内按关键词检索，两个阶段互不重置。
 · 卡文中的术语（如「感电」「幻戏倒计时」）可悬浮预览释义；点击进入概念页，一个名字有多条解释时并列展示。
-· <b>技能图鉴</b>（牌组工具 → 技能图鉴）收录全部角色技能与装备牌特技：按所属分组、类型筛选（特技 / 被动 / 隐藏…）、支持名字 / 拼音 / 所属检索；点行进技能页，点组头看所属卡。
+· <b>技能图鉴</b>是独立主页签（快捷键 4），收录全部角色技能与装备牌特技：按所属分组、类型筛选（特技 / 被动 / 隐藏…）、支持名字 / 拼音 / 所属检索；点行进技能页（可分享链接），点组头看所属卡。
 · 详情页<b>点击卡面看大图</b>：灯箱里 ← / → 沿同级列表翻页，Esc 或点空白关闭。
 · <b>角色技能</b>全部列出（含被动技能与准备技能），技能行右侧是它的费用：元素骰 + 充能。点技能行看完整效果；准备技能会标出「准备 n 轮」，并可跳到它的「准备中状态」。
 · <b>类型</b>以数据源为准：装备牌 / 支援牌（场地、伙伴、道具由标签额外标出）/ 事件牌 / 状态牌（挂在角色上）/ 队伍状态（挂在队伍上）/ 召唤物 / 附加状态。后四类是对局中生成的实体，不进入牌组；卡库里归入「对局实体与历史变体」折叠分组，并标为「不可构筑」。
@@ -514,7 +513,7 @@ Ctrl+P　打印当前列表视图
 · 牌组限制会实时校验：不满足「才能加入牌组」的卡无法加入当前牌组，管理面板也会列出缺口（如「需要牌组中包含至少 2 名冰元素角色（当前 1）」）。
 · 卡库浏览支持多维筛选，筛选状态会编码进地址栏（#b=...），复制链接即可分享当前视图。「显示不可构筑」开关（u=1）与检索词（q=）也编在里面，对方打开就是同一屏；但链接只改这一屏，不会动对方本机的默认偏好。
 · 卡块上的「⇄」把卡加入对比（最多 4 张）；对比面板的「相似卡」按同类型 / 同费用 / 标签重合给出替换候选，可直接换入对比。
-· 「牌组工具 → 牌组对比」比较两套分享码；「牌组工具 → 抽牌概率」查看费用曲线与关键牌起手 / 前几回合的抽到概率（超几何分布，不含调度）。
+· 「牌组工具 → 牌组对比」比较两套分享码；「牌组工具 → 抽牌概率」查看费用曲线与关键牌起手 / 前几回合的抽到概率（超几何分布），并附<b>回合模拟</b>：按官方规则（起手 5 张、每回合抓 2 张、每回合投 8 枚元素骰、元素调和、秘传必在起手）模拟每回合「到手」与「打得出」的概率；不模拟卡片效果触发与角色充能。示例牌组也在牌组工具菜单里。
 · 底部牌组栏可管理多套牌组；凑齐 3 角色 + 30 行动牌后「生成分享码」，可复制给他人导入。
 
 <b>数据来源</b>

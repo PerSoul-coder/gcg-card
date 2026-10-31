@@ -114,7 +114,12 @@ body {
 
 header { position: relative; padding-bottom: 4px; }
 /* 页头右上角的全局动作（刷新数据 / 数据信息 / 说明）：与牌组无关，任何视图都在 */
-.hd-actions { position: absolute; top: 6px; right: 0; }
+.hd-actions { position: absolute; top: 6px; right: 0; display: flex; gap: 6px; }
+/* 页头图标按钮：悬浮 title 说明功能；空钮在 JS 注入图标前不占位面 */
+.hdbtn, .hd-actions button { width: 32px; height: 32px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: var(--fs-16); color: var(--text-3); background: var(--panel2); border: 1px solid var(--line); border-radius: var(--r-md); cursor: pointer; transition: color var(--t-fast), border-color var(--t-fast), background var(--t-fast); }
+.hd-actions button:hover { color: var(--gold); border-color: var(--gold-dim); background: var(--gold-6); }
+.hd-actions button .ico { width: 16px; height: 16px; }
+.hd-actions button[aria-pressed="true"] { color: var(--gold); border-color: var(--gold-dim); }
 header h1 {
   font-size: var(--fs-24); letter-spacing: 3px; padding-right: 96px;
   background: linear-gradient(180deg, var(--gold-2) 0%, var(--gold) 55%, var(--gold-deep) 100%);
@@ -370,7 +375,8 @@ footer { margin-top: 46px; color: var(--faint); font-size: var(--fs-12); text-al
   header h1::before { font-size: var(--fs-13); }
   /* 窄屏没有横向余量给右上角的「更多」：改为紧跟标题的普通流内一行，
      不再绝对定位，否则会和标题挤在同一行互相压字 */
-  .hd-actions { position: static; margin-top: 10px; display: flex; justify-content: flex-end; }
+  .hd-actions { position: static; margin-top: 10px; display: flex; justify-content: flex-end; gap: 8px; }
+  .hd-actions button { width: 36px; height: 36px; }
   .char-card { width: calc((100% - 24px) / 3); min-width: 108px; }
   .char-row { gap: 12px; }
   .card-grid { --tile-min: 100px; --tile-gap: 10px; }
@@ -744,7 +750,7 @@ body.cmp-on #draftPanel { bottom: 136px; }
 /* 打印：仅列表视图 */
 @media print {
   body { background: #fff; color: #111; }
-  .controls, #status, #dataInfo, .tabs, .summary, #view-grid, #view-browse, footer, #toasts, .list-tools, #histPanel, #draftBar, #draftPanel { display: none !important; }
+  .controls, #status, #dataInfo, .tabs, .summary, #view-grid, #view-browse, #view-skills, footer, #toasts, .list-tools, #histPanel, #draftBar, #draftPanel { display: none !important; }
   .browse-bar, .bsentinel { display: none !important; }
   .view { display: block !important; }
   table { font-size: var(--fs-11); }
@@ -1041,6 +1047,7 @@ body.cmp-on .wrap { padding-bottom: 180px; }
 .odds-table td b { color: var(--gold); font-variant-numeric: tabular-nums; }
 .odds-table .odds-pbar { display: inline-block; width: 72px; height: 5px; margin-left: 8px; border-radius: 3px; background: var(--bg3); vertical-align: middle; overflow: hidden; }
 .odds-table .odds-pbar i { display: block; height: 100%; background: linear-gradient(90deg, var(--gold-35), var(--gold)); }
+.odds-simmeta { margin: 8px 0 10px; color: var(--dim); font-size: var(--fs-12); line-height: 1.7; }
 .odds-hint { color: var(--dim); font-size: var(--fs-12); line-height: 1.8; margin-top: 10px; }
 
 @media (max-width: 760px) {
@@ -1157,8 +1164,8 @@ body.cmp-on .wrap { padding-bottom: 180px; }
   .nbhead .nbact { order: 3; }
 }
 
-/* ===== 技能图鉴（牌组工具 → 技能图鉴）：整栈替换式弹层视图 ===== */
-.skillidx-view { flex: 1; min-width: 0; width: 100%; }
+/* ===== 技能图鉴（独立主页签，快捷键 4）：静态视图 ===== */
+.skillidx-view { width: 100%; min-width: 0; }
 .skillidx-bar { margin-top: 12px; }
 .skillidx-bar input { width: 100%; background: var(--bg2); border: 1px solid var(--line); color: var(--text); border-radius: var(--r-md); padding: 9px 13px; font-size: var(--fs-14); transition: border-color var(--t-fast), box-shadow var(--t-fast); }
 .skillidx-bar input:focus { outline: none; border-color: var(--gold-dim); box-shadow: var(--ring); }

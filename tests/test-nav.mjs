@@ -243,7 +243,37 @@ return (async () => {
   assert(od.includes("费用曲线") && od.includes("起手 5 张") && od.includes("至少 1 张"),
     "抽牌面板：曲线 / 起手 / 概率表");
   assert(od.includes("data-oddspick") && od.includes("平均费用"), "抽牌面板：关键牌选择器与统计");
+  assert(od.includes("回合模拟") && od.includes("可打出 · 含调和"), "抽牌面板：回合模拟区块（规则常量源自官方规则词条）");
   overlayClose();
+
+  /* ===== 13. 回合模拟（蒙特卡洛，种子确定性） ===== */
+  const pickCard = stats.uniq.find(x => x.count >= 2) || stats.uniq[0];
+  const sim = simTurns({ total: 30, copies: pickCard.count, playCost: pickCard.playCost, seed: 7 });
+  const sim2 = simTurns({ total: 30, copies: pickCard.count, playCost: pickCard.playCost, seed: 7 });
+  assert(JSON.stringify(sim) === JSON.stringify(sim2), "模拟：同种子两次运行逐位一致（确定性）");
+  /* turn0 = 起手 5 张：非秘传牌的到手率应落在超几何解析值 ±1.5%（2 万次抽样噪声 ≈ 0.35%） */
+  const analytic0 = hyperAtLeast(30, pickCard.count, 5, 1);
+  assert(Math.abs(sim.inHand[0] - analytic0) < 0.015,
+    "模拟 vs 解析：起手到手率一致（模拟 " + sim.inHand[0].toFixed(3) + " / 解析 " + analytic0.toFixed(3) + "）");
+  const analyticLast = hyperAtLeast(30, pickCard.count, 5 + sim.turns.length - 1 <= 30 ? (5 + (sim.turns.length - 1) * 2) : 30, 1);
+  assert(Math.abs(sim.inHand[sim.turns.length - 1] - Math.min(1, analyticLast)) < 0.015,
+    "模拟 vs 解析：末回合到手率一致");
+  const mono = (arr) => arr.every((v, i) => i === 0 || v >= arr[i - 1] - 1e-9);
+  assert(mono(sim.inHand) && mono(sim.playable), "曲线单调不降（手牌只增、关键牌不弃）");
+  assert(sim.playable.every((v, i) => v >= sim.playableRaw[i] - 1e-9),
+    "含调和的可打出率 ≥ 不调和（同一批骰子抽样，配对比较）");
+  /* 秘传必在起手：playCost 带 GCG_COST_LEGEND 的牌到手率起手即 1 */
+  const legendCard = stats.uniq.find(x => (x.playCost || []).some(pc => pc.type === "GCG_COST_LEGEND"));
+  if (legendCard) {
+    const simL = simTurns({ total: 30, copies: legendCard.count, playCost: legendCard.playCost, seed: 3 });
+    assert(simL.inHand[0] === 1, "秘传必在起手（官方规则词条）：模拟起手到手率 = 1");
+  }
+  /* parseCost：充能/秘传位不计骰子，元素与万能位归一 */
+  const pc = parseCost([{ type: "GCG_COST_DICE_PYRO", count: 2 }, { type: "GCG_COST_ENERGY", count: 2 }, { type: "GCG_COST_DICE_VOID", count: 1 }]);
+  assert(pc.diceTotal === 3 && pc.needs.PYRO === 2 && pc.needs.VOID === 1, "parseCost：充能位剔除、元素/万能归一");
+  /* minTunes：万能先补缺口，剩余缺口就是最少调和数 */
+  assert(minTunes({ PYRO: 1, VOID: 1 }, { PYRO: 2 }) === 0, "minTunes：万能补缺口");
+  assert(minTunes({ HYDRO: 2 }, { PYRO: 1, CRYO: 1 }) === 2, "minTunes：双色全缺 = 2 次调和");
 
 })();
 `;

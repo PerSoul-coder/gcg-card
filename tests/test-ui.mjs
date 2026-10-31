@@ -56,16 +56,19 @@ assert(/id="codeInput"/.test(deckTools), "分享码输入在牌组操作条内")
 assert(!/id="codeInput"/.test(headerHtml), "分享码输入不在页头（不再总是置顶）");
 assert(/id="deckTools"/.test(deckTools) && /class="controls"/.test(deckTools), "牌组操作条复用 controls 样式类");
 
-/* ===== 3. 全局动作与牌组动作分家 ===== */
+/* ===== 3. 全局动作升页头图标钮；示例牌组归位牌组工具；图鉴是独立页签 ===== */
 assert(/class="hd-actions"/.test(headerHtml), "页头有独立动作区");
-const moreMenu = blockOfId("moreMenu");
-assert(/id="btnRefresh"/.test(moreMenu) && /id="btnDataInfo"/.test(moreMenu) && /id="btnHelp"/.test(moreMenu),
-  "页头「更多」含全局动作：刷新数据 / 数据信息 / 说明");
+assert(/id="btnTheme"/.test(headerHtml) && /id="btnRefresh"/.test(headerHtml)
+  && /id="btnDataInfo"/.test(headerHtml) && /id="btnHelp"/.test(headerHtml),
+  "页头四图标钮：主题 / 刷新 / 数据信息 / 帮助（原「更多」菜单已解散）");
+assert(!/id="moreMenu"/.test(headerHtml) && !/id="btnMore"/.test(headerHtml), "「更多」菜单不复存在");
 const deckMenu = blockOfId("deckToolsMenu");
 assert(/id="btnHistory"/.test(deckMenu) && /id="btnDeckDiff"/.test(deckMenu) && /id="btnOdds"/.test(deckMenu),
   "牌组工具菜单含历史 / 对比 / 概率");
-assert(!/id="btnOdds"/.test(moreMenu) && !/id="btnHistory"/.test(moreMenu),
-  "牌组专用动作不混进页头菜单");
+assert(/id="btnSample"/.test(deckMenu), "加载示例牌组在牌组工具菜单（牌组功能归位）");
+assert(!/id="btnSkillIdx"/.test(deckMenu) && !/id="btnSkillIdx"/.test(headerHtml),
+  "技能图鉴不在任何菜单（独立主页签）");
+assert(/data-view="skills"/.test(html) && /id="view-skills"/.test(html), "技能图鉴是第 4 个页签/视图");
 
 /* ===== 4. 显隐由视图驱动（CSS），不靠每个入口记得调 ===== */
 const controlsRule = firstRule(".controls");
@@ -85,6 +88,7 @@ assert(/switchView\(VIEW_RENDER\[v\] \? v : "browse\)/.test(mainSrc) || /VIEW_RE
 assert(/ev\.key === "1"\) switchView\("browse"\)/.test(mainSrc), "快捷键 1 = 卡库");
 assert(/ev\.key === "2"\) switchView\("grid"\)/.test(mainSrc), "快捷键 2 = 牌组卡面");
 assert(/ev\.key === "3"\) switchView\("list"\)/.test(mainSrc), "快捷键 3 = 牌组列表");
+assert(/ev\.key === "4"\) switchView\("skills"\)/.test(mainSrc), "快捷键 4 = 技能图鉴");
 assert(/bottom: 快捷键|快捷键：1 卡库/.test(html), "页脚快捷键说明与实际一致");
 
 /* ===== 6. 首屏不替用户做决定 ===== */

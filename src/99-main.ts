@@ -9,13 +9,14 @@ import { pool, resetPool, loadFavs, pruneFavs } from "./45-pool";
 import { resetConceptIndex, termEntries } from "./40-concepts";
 import { dsStats } from "./07-dataset";
 import { resetBacklinks } from "./50-backlinks";
-import { SKILLS, resetSkillIndex, skillOf, showSkill } from "./47-skills";
+import { SKILLS, resetSkillIndex, skillOf, showSkill, renderSkillsView } from "./47-skills";
 import { beginRenameDeck, closeDraftPanel, deleteDeckById, draftClear, draftEncode, draftLoadCurrent, draftRemoveCard, draftRemoveChar, draftSetCount, duplicateDeck, loadDraft, newDeck, pruneDraft, renderDraft, renderDraftPanel, syncFromActive, toggleDraftPanel } from "./80-deck";
 import { overlayOpen, showDetail, showHelp, showTermModal, syncOverlayToHash, lightboxOpen, lightboxStep, closeLightbox, renderOverlay } from "./90-detail";
 import { resetViewState, state } from "./data/state";
 import { recordOfId, charRecords, resetRecordIndex } from "./data/records";
-import { SAMPLE, STORAGE_KEYS } from "./core/resources";
+import { ICON_AUTO, ICON_HELP, ICON_INFO, ICON_MOON, ICON_REFRESH, ICON_SUN, SAMPLE, STORAGE_KEYS } from "./core/resources";
 import { closeTopLayer } from "./core/layers";
+import { closeMenus } from "./95-export";
 import { setStatus, toast, copyText } from "./core/dom";
 import { dataReady } from "./20-data";
 import { backlinks } from "./50-backlinks";
@@ -36,29 +37,54 @@ document.addEventListener("click", ev => {
   if ((ev.target as HTMLElement).closest("#suggest") || (ev.target as HTMLElement).id === "browseSearch") return;
   closeSuggest();
 });
-/* 示例牌组：载入后直接跳到卡面视图——用户点它就是要看一副牌 */
+/* 示例牌组：载入后直接跳到卡面视图——用户点它就是要看一副牌（入口在牌组工具菜单） */
 $("btnSample").addEventListener("click", () => {
-  $("moreMenu").classList.remove("show");
+  closeMenus();
   $<HTMLInputElement>("codeInput").value = SAMPLE;
   decodeAndRender(SAMPLE).then(() => switchView("grid")).catch(() => {});
 });
-/* ---------- 主题：切换 / 持久化 / theme-color 同步 ----------
-   初始值由 deck-viewer.html 头部的内联脚本在样式表之前落定（防 FOUC，跟随系统）；
-   这里只负责按钮切换。深色是缺省（html 上不写 data-theme），浅色写 data-theme="light"。 */
+/* ---------- 主题：auto / light / dark 三态 ----------
+   初始解析由 deck-viewer.html 头部内联脚本在样式表之前完成（防 FOUC）。
+   auto = 跟随系统（matchMedia 实时监听，系统切换即时生效）；按钮循环三态，
+   data-theme 始终写「解析结果」（CSS 只认 light 属性），模式本身持久化。 */
 const THEME_COLORS = { dark: "#12161d", light: "#f3eee2" };
+const THEME_MODES = ["auto", "light", "dark"] as const;
+type ThemeMode = (typeof THEME_MODES)[number];
+const THEME_ZH: Record<ThemeMode, string> = { auto: "跟随系统", light: "浅色", dark: "深色" };
+const THEME_ICON: Record<ThemeMode, string> = { auto: ICON_AUTO, light: ICON_SUN, dark: ICON_MOON };
+const themeMq: { matches: boolean } | null = (() => {
+  try { return typeof matchMedia === "function" ? matchMedia("(prefers-color-scheme: light)") : null; } catch (e) { return null; }
+})();
+let themeMode: ThemeMode = (() => {
+  try {
+    const v = localStorage.getItem(STORAGE_KEYS.theme) as ThemeMode | null;
+    return v === "light" || v === "dark" ? v : "auto";
+  } catch (e) { return "auto"; }
+})();
+const resolvedTheme = (): "light" | "dark" =>
+  themeMode === "auto" ? (themeMq && themeMq.matches ? "light" : "dark") : themeMode;
 function syncThemeUI(): void {
-  const light = document.documentElement.dataset.theme === "light";
-  $("btnTheme").textContent = light ? "☾ 深色" : "☀ 浅色";
+  const light = resolvedTheme() === "light";
+  if (light) document.documentElement.dataset.theme = "light";
+  else delete document.documentElement.dataset.theme;
   const meta = document.querySelector('meta[name="theme-color"]');
   if (meta && meta.setAttribute) meta.setAttribute("content", light ? THEME_COLORS.light : THEME_COLORS.dark);
+  $("btnTheme").innerHTML = THEME_ICON[themeMode];
+  $("btnTheme").title = `主题：${THEME_ZH[themeMode]}（当前${light ? "浅色" : "深色"}）· 点击切换`;
 }
 $("btnTheme").addEventListener("click", () => {
-  const light = document.documentElement.dataset.theme === "light";
-  if (light) delete document.documentElement.dataset.theme;
-  else document.documentElement.dataset.theme = "light";
-  try { localStorage.setItem(STORAGE_KEYS.theme, light ? "dark" : "light"); } catch (e) {}
+  themeMode = THEME_MODES[(THEME_MODES.indexOf(themeMode) + 1) % THEME_MODES.length];
+  try { localStorage.setItem(STORAGE_KEYS.theme, themeMode); } catch (e) {}
   syncThemeUI();
 });
+/* auto 模式下系统主题切换实时跟随；guarded：测试 stub 可能没有 addEventListener */
+if (themeMq && typeof (themeMq as unknown as { addEventListener?: unknown }).addEventListener === "function") {
+  (themeMq as unknown as MediaQueryList).addEventListener("change", () => { if (themeMode === "auto") syncThemeUI(); });
+}
+/* 页头图标按钮：HTML 里是空钮，图标单点来自 resources（悬浮 title 在 HTML 上） */
+$("btnRefresh").innerHTML = ICON_REFRESH;
+$("btnDataInfo").innerHTML = ICON_INFO;
+$("btnHelp").innerHTML = ICON_HELP;
 syncThemeUI();
 $("btnHistory").addEventListener("click", () => { renderHistory(); toggleHistoryPanel(); });
 $("histPanel").addEventListener("click", ev => {
@@ -70,7 +96,9 @@ document.addEventListener("click", ev => {
 });
 /* ---------- 视图切换（含状态持久化与数据懒加载） ---------- */
 const VIEW_KEY = STORAGE_KEYS.view;
-const VIEW_RENDER = { grid: renderGrid, list: renderList, browse: renderBrowse };
+const VIEW_RENDER = { grid: renderGrid, list: renderList, browse: renderBrowse, skills: renderSkillsView };
+/* 依赖全量数据的视图：未就绪时先挂骨架屏，拉取完成由各自渲染函数整体覆盖 */
+const DATA_VIEWS: Record<string, string> = { browse: "view-browse", skills: "view-skills" };
 function switchView(name) {
   /* 卡库是主入口：未知视图一律落到 browse，而不是「空牌组的卡面」 */
   if (!VIEW_RENDER[name]) name = "browse";
@@ -82,28 +110,31 @@ function switchView(name) {
   document.body.dataset.view = name;
   try { localStorage.setItem(VIEW_KEY, name); } catch (e) {}
   const render = VIEW_RENDER[name] || renderBrowse;
-  /* 数据未就绪时卡库先挂骨架屏（尺寸与卡块一致，加载完成不跳动）；
-     数据就绪后 renderBrowse 会整体覆盖这段内容 */
-  if (name === "browse" && !dataReady && !$("view-browse").innerHTML) {
-    $("view-browse").innerHTML = `<div class="card-grid">${Array.from({ length: 12 }, () =>
-      `<div class="skel-tile"><div class="skel"></div><div class="skel-line"></div><div class="skel-line short"></div></div>`).join("")}</div>`;
+  /* 数据未就绪时先挂骨架屏（尺寸与真实内容一致，加载完成不跳动）；
+     数据就绪后渲染函数会整体覆盖这段内容 */
+  const skelBox = DATA_VIEWS[name];
+  if (skelBox && !dataReady && !$(skelBox).innerHTML) {
+    $(skelBox).innerHTML = name === "browse"
+      ? `<div class="card-grid">${Array.from({ length: 12 }, () =>
+          `<div class="skel-tile"><div class="skel"></div><div class="skel-line"></div><div class="skel-line short"></div></div>`).join("")}</div>`
+      : `<div class="skillidx-view">${Array.from({ length: 8 }, () => `<div class="skel-line"></div>`).join("")}</div>`;
   }
   /* 牌组摘要是「卡面视图」的头部信息，切到卡库/列表时收起：
      否则解析过牌组之后，整块摘要会一直压在标签栏上方（手机上约占半屏） */
   const sum = $("summary");
   if (sum) sum.style.display = (name === "grid" && typeof state.current !== "undefined" && state.current) ? "block" : "none";
-  /* 卡库依赖全量数据：未加载则先拉取，就绪后再渲染 */
-  if (!dataReady && name === "browse") {
-    ensureData().then(render).catch(e => { clearBrowseSkeleton(); setStatus("数据加载失败：" + e.message, "err"); });
+  /* 卡库与图鉴依赖全量数据：未加载则先拉取，就绪后再渲染 */
+  if (skelBox && !dataReady) {
+    ensureData().then(render).catch(e => { clearSkeleton(skelBox); setStatus("数据加载失败：" + e.message, "err"); });
     return;
   }
   render();
 }
-/* 骨架屏的失败出口：shimmer 瓦片只有成功路径（renderBrowse 整体覆盖 innerHTML）
+/* 骨架屏的失败出口：shimmer 占位只有成功路径（渲染函数整体覆盖 innerHTML）
    会摘掉——数据拉不起来时它们会无限闪下去。失败即清空，交给状态条报错。 */
-function clearBrowseSkeleton(): void {
-  const box = $("view-browse");
-  if (box && box.querySelector && box.querySelector(".skel-tile")) box.innerHTML = "";
+function clearSkeleton(id: string): void {
+  const box = $(id);
+  if (box && box.querySelector && box.querySelector("[class*=skel]")) box.innerHTML = "";
 }
 document.querySelectorAll(".tab").forEach(t => t.addEventListener("click", () => switchView(t.dataset.view)));
 
@@ -281,6 +312,7 @@ document.addEventListener("keydown", ev => {
   if (ev.key === "1") switchView("browse");
   if (ev.key === "2") switchView("grid");
   if (ev.key === "3") switchView("list");
+  if (ev.key === "4") switchView("skills");
   if (ev.key === "/") { ev.preventDefault(); focusBrowseSearch(); }
   /* 卡库网格方向键：焦点已在瓦片上时接管（否则方向键保持页面滚动） */
   if (ev.key.startsWith("Arrow")) {
@@ -367,9 +399,10 @@ function routeHash() {
     return (async () => {
       try {
         await ensureData();
-        if (skillOf(key)) showSkill(key, true);
+        /* 深链落在图鉴视图之上：技能页的「来源」就是图鉴，Esc/返回回图鉴 */
+        if (skillOf(key)) { switchView("skills"); showSkill(key, true); }
         else setStatus("链接中的技能不存在或已失效", "err");
-      } catch (e) { setStatus("加载失败：" + (e as Error).message, "err"); }
+      } catch (e) { clearSkeleton("view-skills"); setStatus("加载失败：" + (e as Error).message, "err"); }
     })();
   }
   if (h.startsWith("q=")) {
@@ -377,7 +410,7 @@ function routeHash() {
     searchState.q = q;
     return (async () => {
       try { await ensureData(); switchView("browse"); }
-      catch (e) { clearBrowseSkeleton(); setStatus("加载失败：" + (e as Error).message, "err"); }
+      catch (e) { clearSkeleton("view-browse"); setStatus("加载失败：" + (e as Error).message, "err"); }
     })();
   }
   if (raw.startsWith("b=")) {
@@ -394,7 +427,7 @@ function routeHash() {
     }
     return (async () => {
       try { await ensureData(); switchView("browse"); }
-      catch (e) { clearBrowseSkeleton(); setStatus("加载失败：" + (e as Error).message, "err"); }
+      catch (e) { clearSkeleton("view-browse"); setStatus("加载失败：" + (e as Error).message, "err"); }
     })();
   }
   if (h) {   /* 分享码 */
@@ -409,7 +442,7 @@ function routeHash() {
      示例牌组改为按需（页头「更多 → 加载示例牌组」），不再每次打开都解析一遍并写进历史。 */
   return (async () => {
     try { await ensureData(); restoreView(); }
-    catch (e) { clearBrowseSkeleton(); setStatus("加载失败：" + (e as Error).message, "err"); }
+    catch (e) { clearSkeleton("view-browse"); setStatus("加载失败：" + (e as Error).message, "err"); }
   })();
 }
 /* 恢复上次停留的视图（hash 指定具体视图时不恢复） */
@@ -466,7 +499,7 @@ function reportRuntimeError(reason: unknown): void {
 if (window.addEventListener) {
   window.addEventListener("error", ev => {
     if (!window.__giBooted) {
-      setStatus("初始化失败：" + (ev.message || "未知错误") + "。请刷新页面重试；若反复出现，可用「更多 → 刷新数据」重新拉取数据", "err");
+      setStatus("初始化失败：" + (ev.message || "未知错误") + "。请刷新页面重试；若反复出现，可点页头的刷新按钮重新拉取数据", "err");
       return;
     }
     reportRuntimeError(ev.error || ev.message || "未知错误");

@@ -5,11 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="theme-color" content="#12161d">
 <title>七圣召唤 · 卡牌与牌组浏览器</title>
-<!-- 主题在样式表之前落定：读本地偏好，否则跟随系统。内联执行避免浅色用户先看到深色闪一下（FOUC） -->
+<!-- 主题在样式表之前落定：auto/light/dark 三态（默认跟随系统）。内联执行避免浅色用户先看到深色闪一下（FOUC） -->
 <script>
 try {
   var t = localStorage.getItem("gi-viewer-theme");
-  if (t === "light" || (t !== "dark" && matchMedia("(prefers-color-scheme: light)").matches))
+  var sysLight = false;
+  try { sysLight = matchMedia("(prefers-color-scheme: light)").matches; } catch (e) {}
+  if (t === "light" || ((t === null || t === "auto") && sysLight))
     document.documentElement.dataset.theme = "light";
 } catch (e) {}
 /* 引导期错误横幅：应用全局监听注册于 99-main（模块依赖图末段），任一模块求值期
@@ -31,19 +33,14 @@ window.addEventListener("error", function (ev) {
 <div class="wrap">
   <header>
     <h1>七圣召唤 · 卡牌与牌组浏览器</h1>
-    <!-- 全局功能（刷新数据 / 数据信息 / 说明）与牌组无关，放页头；
-         牌组专用操作（分享码、导出、历史、对比、概率）跟着牌组视图走 -->
+    <!-- 全局功能升为图标按钮（悬浮 title 说明）：主题三态 / 刷新 / 数据信息 / 帮助。
+         原先这些收在「更多」菜单里，点两层才够到；图标内容由 99-main 在启动时注入
+         （图标定义单点在 resources）。牌组相关的「加载示例牌组」移入牌组工具菜单。 -->
     <div class="hd-actions">
-      <button id="btnTheme" title="切换深色 / 浅色主题">☀ 浅色</button>
-      <div class="expwrap">
-        <button id="btnMore">更多 ▾</button>
-        <div class="menu" id="moreMenu">
-          <button id="btnSample">加载示例牌组</button>
-          <button id="btnRefresh" title="从官方数据服务重新拉取最新数据（失败时自动回退到本地数据）">刷新数据</button>
-          <button id="btnDataInfo">数据信息</button>
-          <button id="btnHelp">快捷键与说明</button>
-        </div>
-      </div>
+      <button id="btnTheme" title="主题"></button>
+      <button id="btnRefresh" title="刷新数据：从官方数据服务重新拉取最新数据（失败时自动回退到本地数据）"></button>
+      <button id="btnDataInfo" aria-pressed="false" title="数据信息：来源与规模"></button>
+      <button id="btnHelp" title="快捷键与说明（?）"></button>
     </div>
     <div class="sub">卡库筛选与检索 · 牌组分享码解析与生成 · 多卡对比与牌组差异 · 概念词典 · 构筑校验 · 多牌组 · 抽牌概率</div>
   </header>
@@ -52,11 +49,12 @@ window.addEventListener("error", function (ev) {
   <div id="dataInfo"></div>
   <div id="histPanel"></div>
 
-  <!-- 一级视图：卡库（浏览器的主用途）在前，牌组在后 -->
+  <!-- 一级视图：卡库（浏览器的主用途）在前，牌组在后，图鉴是资料查询页 -->
   <div class="tabs" id="tabs">
     <button class="tab active" data-view="browse">卡库浏览</button>
     <button class="tab" data-view="grid">牌组 · 卡面</button>
     <button class="tab" data-view="list">牌组 · 列表</button>
+    <button class="tab" data-view="skills">技能图鉴</button>
   </div>
 
   <!-- 牌组操作条：只在牌组视图出现。卡库浏览时不占顶部空间，
@@ -80,8 +78,8 @@ window.addEventListener("error", function (ev) {
     <div class="expwrap">
       <button id="btnDeckTools">牌组工具 ▾</button>
       <div class="menu" id="deckToolsMenu">
+        <button id="btnSample" title="载入一副内置的示例牌组">加载示例牌组</button>
         <button id="btnHistory">历史记录</button>
-        <button id="btnSkillIdx">技能图鉴</button>
         <button id="btnDeckDiff">牌组对比</button>
         <button id="btnOdds">抽牌概率</button>
         <button id="btnPrint" title="打印当前牌表（列表视图）">打印牌表</button>
@@ -94,8 +92,9 @@ window.addEventListener("error", function (ev) {
   <div class="view" id="view-grid"></div>
   <div class="view" id="view-list"></div>
   <div class="view active" id="view-browse"></div>
+  <div class="view" id="view-skills"></div>
 
-  <footer>解码与编码逻辑移植自 genius-invokation @gi-tcg/assets-manager（AGPL-3.0） · 卡牌数据缓存于浏览器本地 · 快捷键：1 卡库 / 2 牌组卡面 / 3 牌组列表，/ 聚焦卡库检索框，←/→ 详情翻页，Esc 逐层返回</footer>
+  <footer>解码与编码逻辑移植自 genius-invokation @gi-tcg/assets-manager（AGPL-3.0） · 卡牌数据缓存于浏览器本地 · 快捷键：1 卡库 / 2 牌组卡面 / 3 牌组列表 / 4 技能图鉴，/ 聚焦卡库检索框，←/→ 详情翻页，Esc 逐层返回</footer>
 </div>
 
 <div id="draftBar"></div>

@@ -69,7 +69,7 @@ function renderCompareBar() {
   if (body && body.classList) body.classList.add("cmp-on");
   bar.innerHTML = `<span class="cmpbar-title">对比 <b>${ids.length}</b>/${COMPARE_MAX}</span>
     <span class="cmpbar-chips">${ids.map(id => `<span class="cmpbar-chip"><button class="cmpbar-name" data-goto="${id}" title="查看详情">${esc(compareName(id))}</button><button data-cmprm="${id}" title="移出对比">${ICON_X}</button></span>`).join("")}</span>
-    <span class="cmpbar-acts"><button data-cmpclear="1">清空</button><button class="primary" data-cmpopen="1"${ids.length < 2 ? " disabled" : ""} title="${ids.length < 2 ? "至少选择 2 张" : "开始对比"}">对比</button></span>`;
+    <span class="cmpbar-acts"><button data-cmpclear="1" title="清空对比选择">${ICON_X}</button><button class="primary" data-cmpopen="1"${ids.length < 2 ? " disabled" : ""} title="${ids.length < 2 ? "至少选择 2 张" : "开始对比"}">对比</button></span>`;
 }
 
 /* ---------- 多卡对比：字段模型 ----------

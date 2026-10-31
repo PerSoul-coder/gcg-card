@@ -2,7 +2,7 @@
 import { allReqs, costText } from "./30-deps";
 import { recordOfId, shareOfId } from "./data/records";
 import { $, copyText } from "./core/dom";
-import { skillsOf, showSkillIdx } from "./47-skills";
+import { skillsOf } from "./47-skills";
 import { showDeckDiff } from "./88-compare";
 import { showOdds } from "./86-odds";
 import { showHelp } from "./90-detail";
@@ -141,10 +141,11 @@ function fileStamp() {
   return `gi-deck-${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`;
 }
 
-/* ---------- 导出菜单 / 更多菜单 ----------
-   三个下拉互斥，共用一个层：Esc 只按一次就该把「当前打开的那个」关掉，
-   而不是先关一个、再按一次关另一个。 */
-const MENU_OF: Record<string, string> = { btnExport: "exportMenu", btnDeckTools: "deckToolsMenu", btnMore: "moreMenu" };
+/* ---------- 下拉菜单 ----------
+   两个下拉互斥，共用一个层：Esc 只按一次就该把「当前打开的那个」关掉，
+   而不是先关一个、再按一次关另一个。页头全局动作已升为图标按钮（99-main 注入
+   图标），「更多」菜单解散：示例牌组归位牌组工具，其余升页头。 */
+const MENU_OF: Record<string, string> = { btnExport: "exportMenu", btnDeckTools: "deckToolsMenu" };
 const MENU_IDS = Object.values(MENU_OF);
 const menuEl = (id: string) => $(id);
 const menusOpen = () => MENU_IDS.some(id => { const el = menuEl(id); return !!(el && el.classList && el.classList.contains("show")); });
@@ -161,19 +162,16 @@ const openMenu = (btn: string) => {
 };
 $("btnExport").addEventListener("click", ev => { ev.stopPropagation(); openMenu("btnExport"); });
 $("btnDeckTools").addEventListener("click", ev => { ev.stopPropagation(); openMenu("btnDeckTools"); });
-$("btnMore").addEventListener("click", ev => { ev.stopPropagation(); openMenu("btnMore"); });
 document.addEventListener("click", ev => {
   if (!(ev.target as HTMLElement).closest(".expwrap")) closeMenus();
 });
-/* 页头「更多」菜单动作：全局功能，任何视图都可用 */
+/* 页头图标钮「数据信息」：显隐切换记录在 aria-pressed（图标不换字） */
 $("btnDataInfo").addEventListener("click", () => {
   const el = $("dataInfo");
   const show = el.style.display === "none";
   el.style.display = show ? "" : "none";
-  $("btnDataInfo").textContent = show ? "隐藏数据信息" : "数据信息";
-  closeMenus();
+  $("btnDataInfo").setAttribute("aria-pressed", show ? "true" : "false");
 });
-$("btnSkillIdx").addEventListener("click", () => { closeMenus(); showSkillIdx(); });
 $("btnDeckDiff").addEventListener("click", () => { closeMenus(); showDeckDiff(); });
 $("btnOdds").addEventListener("click", () => { closeMenus(); showOdds(); });
 $("btnPrint").addEventListener("click", () => { closeMenus(); window.print(); });
@@ -216,4 +214,4 @@ $("btnCopyCode").addEventListener("click", async () => {
   } catch (e) { toast("生成失败：" + (e as Error).message, true); }
 });
 
-export { download, deckText, deckMarkdown, buildExport, toCSV, fileStamp, openMenu, encodeCurrent };
+export { download, deckText, deckMarkdown, buildExport, toCSV, fileStamp, openMenu, closeMenus, encodeCurrent };

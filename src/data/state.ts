@@ -8,7 +8,7 @@
 
 import type { ParsedDeck, OverlayEntry } from "../types";
 
-export type ViewName = "grid" | "list" | "browse";
+export type ViewName = "grid" | "list" | "browse" | "skills";
 
 export interface AppState {
   /** 当前详情对象（卡牌 / 角色 / 技能）。 */

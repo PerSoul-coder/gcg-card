@@ -29,18 +29,21 @@ return (async () => {
   assert(skillIdxMatches().length > 0 && skillIdxMatches().every(s => s.ownerName.includes("芙宁娜")), "所属角色检索");
   skillIdxState.q = "";
 
-  /* ===== 2. 图鉴视图 ===== */
-  showSkillIdx();
-  assert(topView() && topView().kind === "skillidx", "整栈替换：skillidx 在栈顶");
-  const html = String($("detail").innerHTML || "");
+  /* ===== 2. 图鉴视图（独立主页签，不再是弹层） ===== */
+  switchView("skills");
+  assert(state.currentView === "skills", "switchView(skills)：图鉴是当前视图");
+  assert(document.body.dataset.view === "skills", "body[data-view=skills]：deckTools 由 CSS 收起");
+  const html = String($("view-skills").innerHTML || "");
   assert(html.includes("技能图鉴") && html.includes("data-skidxtag"), "视图渲染：标题 + 类型 chips");
   /* stub 无 DOM 树：分块挂载写进 #skillIdxList（独立元素），行内容单独断言 */
   const listHtml = String($("skillIdxList").innerHTML || "");
   assert(listHtml.includes("data-skill") && listHtml.includes("skidx-art"), "分组挂载：技能行 + 所属牌面组头");
+  assert(!overlayOpen(), "图鉴是静态视图：不占弹层栈、不锁滚动");
   showSkill(skillIdxMatches()[0].key);
-  assert(topView().kind === "skill", "图鉴行 → 技能页压栈");
+  assert(topView() && topView().kind === "skill", "图鉴行 → 技能页弹层压空栈打开");
+  assert(topView() && topView().hpushed === true, "从图鉴打开技能页写历史（hpushed；本文件用默认 no-op history stub，hash 断言在 test-history 覆盖）");
   overlayClose();
-  assert(!overlayOpen(), "关闭图鉴");
+  assert(!overlayOpen() && state.currentView === "skills", "关闭技能页回到图鉴视图");
 
   /* ===== 3. 卡面灯箱 ===== */
   const rec = cardRecords().find(r => r.kind === "card" && r.share != null);

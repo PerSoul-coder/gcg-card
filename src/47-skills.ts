@@ -4,7 +4,7 @@ import { cardRecords, keyIdOf } from "./data/records";
 import { $ } from "./core/dom";
 import { costHtml, costText } from "./30-deps";
 import { overlayBack, overlayOpen, renderOverlay, topView } from "./90-detail";
-import { overlayHashOf, overlayHashPush, overlayHashClear } from "./core/history";
+import { overlayHashOf, overlayHashPush } from "./core/history";
 import { pinyinOf } from "./70-search";
 import { state } from "./data/state";
 import type { SkillEntry } from "./types";
@@ -159,9 +159,10 @@ function showSkill(key, fromHistory = false) {
 }
 
 /* ---------- 技能图鉴：全部技能（角色技能 + 装备牌特技）的检索式总览 ----------
-   整栈替换式弹层视图（与抽牌概率 / 牌组差异同模式，不进历史）。按所属分组，
-   类型 chips 数据驱动（出现什么类型就列什么），检索覆盖 名字 / 拼音 / 所属 / 英文。
-   数据只有一份（SKILLS），这里只做投影；行点击复用 data-skill 的既有委托。 */
+   独立主页签（switchView("skills")），不再是弹层。按所属分组，类型 chips
+   数据驱动（出现什么类型就列什么），检索覆盖 名字 / 拼音 / 所属 / 英文。
+   数据只有一份（SKILLS），这里只做投影；行点击复用 data-skill 的既有委托
+   （从图鉴点进技能页 = 弹层压空栈打开，照常写 #s= 历史，可分享）。 */
 export const skillIdxState: { tag: string; q: string } = { tag: "", q: "" };
 
 export function skillIdxMatches(): SkillEntry[] {
@@ -220,20 +221,19 @@ function skidxGrow(): void {
   skidxMounted = to;
   if (html) list.insertAdjacentHTML("beforeend", html);
 }
-/* 分块挂载的哨兵观察器。检索重挂会整体重建结果区，IO 必须跟着重建——
-   旧实现在「结果 ≤1 批」时 disconnect 即弃且从不重连：搜一个窄词再清空，
-   列表停在首批、滚动加载整场失效。收敛成「确保存在」：需要分块而 IO 不在就重建。 */
+/* 分块挂载的哨兵观察器。图鉴是静态视图：滚动根是视口本身（root=null +
+   rootMargin 600px，哨兵接近视口即增长）。检索重挂会整体重建结果区，IO 必须
+   跟着重挂重建——收敛成「确保存在」：需要分块而 IO 不在就重建。 */
 function ensureSkidxIO(): void {
-  const sc = $("detail");
-  if (!sc || typeof IntersectionObserver !== "function" || skidxIO) return;
+  if (typeof IntersectionObserver !== "function" || skidxIO) return;
   const io = new IntersectionObserver(() => {
     if (skidxMounted >= skidxGroups.length) {
       io.disconnect();
       if (skidxIO === io) skidxIO = null;   /* 自断后清引用，下次重挂才能重建 */
       return;
     }
-    if (sc.scrollTop + sc.clientHeight > sc.scrollHeight - 600) skidxGrow();
-  }, { root: sc, rootMargin: "600px" });
+    skidxGrow();
+  }, { rootMargin: "600px" });
   io.observe($("skillIdxSentinel"));
   skidxIO = io;
 }
@@ -254,7 +254,7 @@ function skidxRefresh(): void {
   const cnt = $("skillIdxCount");
   if (cnt) cnt.textContent = String(skidxGroups.reduce((s, g) => s + g.rows.length, 0));
 }
-function renderSkillIdxView(): void {
+function renderSkillsView(): void {
   const matches = skillIdxMatches();
   /* 类型 chips 数据驱动：技能里出现什么类型就列什么（特技/被动/隐藏…） */
   const tags: Array<{ tag: string; zh: string; n: number }> = [];
@@ -268,34 +268,30 @@ function renderSkillIdxView(): void {
     `<button class="fchip${skillIdxState.tag === tag ? " on" : ""}" data-skidxtag="${tag}">${esc(label)} <b>${n}</b></button>`;
   const chips = [chip("", "全部", SKILLS.length), ...tags.map(t => chip(t.tag, t.zh, t.n)),
     chip("hidden", "隐藏", SKILLS.filter(s => s.hidden).length)];
-  $("detail").innerHTML = `${navBar()}<div class="skillidx-view cmp-view">
+  /* 静态视图（主页签）：无 navBar——没有返回/关闭语义，切页签即离开 */
+  $("view-skills").innerHTML = `<div class="skillidx-view">
     <h2 class="cmp-title">技能图鉴 <small id="skillIdxCount">${matches.length}</small></h2>
     <div class="skillidx-bar"><input id="skillIdxQ" placeholder="检索：技能名 / 拼音全拼或首字母 / 所属角色 / 英文…" value="${esc(skillIdxState.q)}" spellcheck="false" autocomplete="off"></div>
     <div class="skillidx-chips">${chips.join("")}</div>
     <div class="skillidx-list" id="skillIdxList"></div>
     <div id="skillIdxSentinel"></div></div>`;
-  /* 整视图重建：哨兵是 #detail 的新子节点，旧 IO 的 root/sentinel 全部失效——
+  /* 整视图重建：哨兵是新节点，旧 IO 全部失效——
      先断旧 IO，分块与否交给 skidxRefresh 里的 ensureSkidxIO 统一决定 */
   skidxIO?.disconnect?.();
   skidxIO = null;
   skidxRefresh();
 }
-function showSkillIdx(): void {
-  overlayHashClear();   /* 整栈替换（与概率 / 差异同模式），先清已推的弹层历史 */
-  state.overlayStack = [{ kind: "skillidx" }];
-  renderOverlay();
-}
 /* 图鉴内的检索与 chips：输入即时过滤（只重挂结果区），chips 重渲染整视图 */
-$("detail").addEventListener("input", ev => {
+$("view-skills").addEventListener("input", ev => {
   if ((ev.target as HTMLElement).id !== "skillIdxQ") return;
   skillIdxState.q = (ev.target as HTMLInputElement).value;
   skidxRefresh();
 });
-$("detail").addEventListener("click", ev => {
+$("view-skills").addEventListener("click", ev => {
   const c = (ev.target as HTMLElement).closest("[data-skidxtag]") as HTMLElement | null;
   if (!c) return;
   skillIdxState.tag = c.dataset.skidxtag || "";
-  renderSkillIdxView();
+  renderSkillsView();
 });
 
-export { SKILL_TAG_ZH, SKILL_TAG_ORDER, SKILLS, skillByKey, skillByName, skillsOfOwner, buildSkillIndex, skillsOf, skillsOfCard, skillOf, skillsNamed, skillCostText, skillRowHtml, skillsHtml, skillsHtmlCard, equipSkillsHtml, renderSkillView, showSkill, renderSkillIdxView, showSkillIdx };
+export { SKILL_TAG_ZH, SKILL_TAG_ORDER, SKILLS, skillByKey, skillByName, skillsOfOwner, buildSkillIndex, skillsOf, skillsOfCard, skillOf, skillsNamed, skillCostText, skillRowHtml, skillsHtml, skillsHtmlCard, equipSkillsHtml, renderSkillView, showSkill, renderSkillsView };
