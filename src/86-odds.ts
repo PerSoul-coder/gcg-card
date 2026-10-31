@@ -81,9 +81,12 @@ function oddsRows(N: number, K: number): OddsRow[] {
    运行时可经概念页查原文）：
    · 起手抓 5 张，每回合结束双方各抓 2 张（「手牌」词条）
    · 每回合投掷阶段投 8 枚元素骰：7 种元素 + 万能各 1/8；骰子每回合重投、不继承（「元素骰」词条）
+   · 投骰后每回合可重投一次，重投枚数 0~8 自选（「元素骰」词条）；模拟采用理性策略：
+     对支付本牌费用无贡献的「闲置骰」全部重投——保留元素位匹配骰与缺口内的万能骰，
+     通用骰（VOID）费用任何骰都能付，重投后等价可付、视为闲置
    · 元素调和：弃 1 张手牌，把 1 枚骰转换成任意元素（「元素调和」词条）
-   · 秘传必在起始手牌（「秘传」词条）
-   不模拟：卡片效果触发、角色充能（费用中的充能视作可满足）、调度换牌、骰子重投。
+   · 秘传必在起始手牌（「秘传」词条）；纯秘传标记（无骰子费用）的牌在手即可打出
+   不模拟：卡片效果触发、角色充能（费用中的充能视作可满足）、调度换牌。
    「可打出」的语义：第 t 回合内目标牌在手（本回合新抽算入）且——把目标牌当作
    本回合第一优先支出时——骰子够付。含调和/不含调和两列共用同一批骰子抽样
    （配对比较，只差在是否允许弃牌转色）。 */
@@ -146,11 +149,12 @@ export interface SimResult {
 
 export function simTurns(opts: {
   total: number; copies: number; playCost: CostEntry[] | undefined;
-  turns?: number; trials?: number; seed?: number;
+  turns?: number; trials?: number; seed?: number; reroll?: boolean;
 }): SimResult {
   const T = Math.max(1, Math.min(opts.turns ?? SIM_TURNS, 20));
   const trials = Math.max(1, opts.trials ?? SIM_TRIALS);
   const rng = rng32(opts.seed ?? 20261031);
+  const reroll = opts.reroll !== false;   /* 默认按官方规则重投（测试可关闭做配对比较） */
   const { diceTotal, needs } = parseCost(opts.playCost);
   const isLegend = (opts.playCost || []).some(pc => pc.type === "GCG_COST_LEGEND");
   /* 秘传必在起始手牌：把一张固定放进起手，其余照常洗在牌堆里 */
@@ -170,13 +174,47 @@ export function simTurns(opts: {
   const snap = (t: number) => {
     inHand[t] += pickInHand > 0 ? 1 : 0;
     handAvg[t] += hand;
-    if (pickInHand > 0 && diceTotal > 0 && diceTotal <= DICE_PER_TURN) {
-      /* 投 8 骰：每枚 1/8 万能，其余 7 色均匀 */
-      const pool: Record<string, number> = {};
-      for (let d = 0; d < DICE_PER_TURN; d++) {
+    if (pickInHand > 0 && diceTotal <= DICE_PER_TURN) {
+      if (diceTotal === 0) {
+        /* 0 骰费用（如纯秘传标记牌）：在手即打出，无需投骰 */
+        playable[t] += 1;
+        playableRaw[t] += 1;
+        return;
+      }
+      /* 投 8 骰：每枚 1/8 万能，其余 7 色均匀。重投候选 8 枚也固定预抽——
+         无论是否启用重投都消费等量随机数，同 seed 下两档共享同一批初始骰
+         与候选骰，「重投单调不劣」的配对比较才能逐位成立。 */
+      const roll: string[] = [];
+      for (let i = 0; i < DICE_PER_TURN * 2; i++) {
         const f = (rng() * 8) | 0;
-        const k = f < 7 ? ELEMS[f] : OMNI;
-        pool[k] = (pool[k] || 0) + 1;
+        roll.push(f < 7 ? ELEMS[f] : OMNI);
+      }
+      let pool: Record<string, number> = {};
+      for (const k of roll.slice(0, DICE_PER_TURN)) pool[k] = (pool[k] || 0) + 1;
+      if (reroll) {
+        /* 重投阶段：保留有贡献的骰子（元素位匹配 + 缺口内的万能骰），闲置骰全部重投。
+           只替换无贡献者，def 单调不升；通用骰（VOID）费用任何骰都能付，重投等价。 */
+        let kept = 0, omniDemand = 0;
+        for (const k of Object.keys(needs)) {
+          if (k === OMNI) continue;
+          const m = Math.min(needs[k], pool[k] || 0);
+          kept += m;
+          omniDemand += needs[k] - m;
+        }
+        kept += Math.min(pool[OMNI] || 0, omniDemand);
+        if (kept < DICE_PER_TURN) {
+          const keptPool: Record<string, number> = {};
+          for (const k of Object.keys(needs)) {
+            if (k === OMNI) continue;
+            const m = Math.min(needs[k], pool[k] || 0);
+            if (m) keptPool[k] = m;
+          }
+          const om = Math.min(pool[OMNI] || 0, omniDemand);
+          if (om) keptPool[OMNI] = om;
+          for (const k of roll.slice(DICE_PER_TURN, DICE_PER_TURN + (DICE_PER_TURN - kept)))
+            keptPool[k] = (keptPool[k] || 0) + 1;
+          pool = keptPool;   /* 收敛成「重投后的最终骰池」 */
+        }
       }
       const def = minTunes(pool, needs);
       if (def <= hand - 1) playable[t] += 1;          /* 弃牌转色：每转 1 色弃 1 张手牌（目标牌自己不弃） */
@@ -286,6 +324,7 @@ function renderOddsView(v) {
         const sim = simFor(`${state.current!.code}|${pick.id}|${stats.total}`,
           { total: stats.total, copies: pick.count, playCost: pick.playCost });
         const isLegend = (pick.playCost || []).some(pc => pc.type === "GCG_COST_LEGEND");
+        const zeroCost = parseCost(pick.playCost).diceTotal === 0;
         const row = (t: number, key: boolean) => `<tr${key ? ' class="key"' : ""}>
           <td>${t === 0 ? `起手 ${DRAW_START} 张` : `第 ${t} 回合（已看 ${Math.min(stats.total, DRAW_START + t * DRAW_PER_TURN)} 张）`}</td>
           <td><b>${fmtPct(sim.inHand[t])}</b></td>
@@ -294,12 +333,12 @@ function renderOddsView(v) {
           <td>${sim.handAvg[t].toFixed(1)}</td></tr>`;
         return `<div class="odds-sec">
         <h3>回合模拟 <small>蒙特卡洛 · ${sim.trials.toLocaleString()} 次</small></h3>
-        <div class="odds-simmeta">规则：起手 ${DRAW_START} 张 · 每回合抓 ${DRAW_PER_TURN} 张 · 每回合投 ${DICE_PER_TURN} 枚元素骰（万能 1/8，不继承）· 秘传必在起手${isLegend ? "（本牌是秘传，起手必带）" : ""} · 不模拟效果触发与充能（充能费用视作可满足）</div>
+        <div class="odds-simmeta">规则：起手 ${DRAW_START} 张 · 每回合抓 ${DRAW_PER_TURN} 张 · 每回合投 ${DICE_PER_TURN} 枚元素骰（万能 1/8，不继承），投后可重投一次（闲置骰全部重投）· 秘传必在起手${isLegend ? `（本牌是秘传，起手必带${zeroCost ? "；0 费在手即打出" : ""}）` : ""} · 不模拟效果触发与充能（充能费用视作可满足）</div>
         <table class="odds-table">
           <tr><th>回合</th><th>到手</th><th>可打出 · 含调和</th><th>可打出 · 不调和</th><th>平均手牌</th></tr>
           ${sim.turns.map(t => row(t, t === 0)).join("")}
         </table>
-        <div class="odds-hint">「含调和」按官方元素调和计：每弃 1 张手牌可把 1 枚骰转成任意元素；「可打出」把关键牌当作该回合的第一优先支出，不含先打其它牌的占用。</div>
+        <div class="odds-hint">「含调和」按官方元素调和计：每弃 1 张手牌可把 1 枚骰转成任意元素；「可打出」把关键牌当作该回合的第一优先支出，不含先打其它牌的占用。重投按理性策略计：对支付本牌费用无贡献的闲置骰全部重投（枚数 0~8 随局面）。</div>
       </div>`;
       })()}
     </div>`;

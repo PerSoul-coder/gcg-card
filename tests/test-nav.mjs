@@ -268,6 +268,19 @@ return (async () => {
     const simL = simTurns({ total: 30, copies: legendCard.count, playCost: legendCard.playCost, seed: 3 });
     assert(simL.inHand[0] === 1, "秘传必在起手（官方规则词条）：模拟起手到手率 = 1");
   }
+  /* 纯秘传标记（0 骰费用）：在手即可打出——曾因 diceTotal>0 闸门被误判为永不可打出 */
+  const simZ = simTurns({ total: 30, copies: 1, playCost: [{ type: "GCG_COST_LEGEND", count: 1 }], seed: 5 });
+  assert(simZ.inHand[0] === 1 && simZ.playable[0] === 1 && simZ.playableRaw[0] === 1,
+    "纯秘传标记（0 骰费用）：起手必带且在手即打出（两列同为 100%）");
+  /* 重投（官方规则：投骰后每回合可重投一次）：同种子配对下，重投后的可打出率逐回合 ≥ 不重投 */
+  const simR = simTurns({ total: 30, copies: 1, playCost: [{ type: "GCG_COST_DICE_PYRO", count: 3 }], seed: 11 });
+  const simN = simTurns({ total: 30, copies: 1, playCost: [{ type: "GCG_COST_DICE_PYRO", count: 3 }], seed: 11, reroll: false });
+  assert(simR.playable.every((v, i) => v >= simN.playable[i] - 1e-9)
+    && simR.playableRaw.every((v, i) => v >= simN.playableRaw[i] - 1e-9),
+    "重投（闲置骰全重投）：同种子配对下可打出率单调不降");
+  assert(simR.playableRaw[simR.turns.length - 1] > simN.playableRaw[simN.turns.length - 1],
+    "重投对元素需求牌有实质增益（末回合不调和列严格更高："
+    + simR.playableRaw[simR.turns.length - 1].toFixed(3) + " > " + simN.playableRaw[simN.turns.length - 1].toFixed(3) + "）");
   /* parseCost：充能/秘传位不计骰子，元素与万能位归一 */
   const pc = parseCost([{ type: "GCG_COST_DICE_PYRO", count: 2 }, { type: "GCG_COST_ENERGY", count: 2 }, { type: "GCG_COST_DICE_VOID", count: 1 }]);
   assert(pc.diceTotal === 3 && pc.needs.PYRO === 2 && pc.needs.VOID === 1, "parseCost：充能位剔除、元素/万能归一");
