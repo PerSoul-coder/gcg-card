@@ -732,6 +732,10 @@ body.cmp-on #draftPanel { bottom: 136px; }
 .rc-card:hover { border-color: var(--gold-dim); }
 .rc-card img { display: block; width: 100%; height: auto; }
 
+/* 检索描述命中的上下文片段（为什么命中） */
+.tsnip { color: var(--dim); font-size: var(--fs-12); line-height: 1.5; margin-top: 3px; overflow-wrap: anywhere; }
+.tsnip mark { background: color-mix(in srgb, var(--gold) 26%, transparent); color: var(--gold); padding: 0 1px; border-radius: 3px; }
+
 /* ===== 详情弹层：关联角色 / 天赋牌 / 反链 ===== */
 .detail .drel { margin: 12px 0 0; display: flex; gap: 10px; align-items: baseline; }
 .detail .drel b { flex: none; color: var(--gold-dim); font-size: var(--fs-12); letter-spacing: 2px; font-weight: normal; }

@@ -289,14 +289,14 @@ function searchCards(q: string, opts: { scope?: SearchScope; corpus?: PoolEntry[
     for (const x of corpus) {
       if (nameKeys.has(x.kind + ":" + x.name)) continue;
       if (x.descAll && x.descAll.includes(rawLower))
-        pushDesc({ kind: x.kind, id: x.id, name: x.name, score: 100, match: "desc", ver: x.ver, noShare: x.kind === "card" && x.share == null, buildable: x.share != null });
+        pushDesc({ kind: x.kind, id: x.id, name: x.name, score: 100, match: "desc", ver: x.ver, noShare: x.kind === "card" && x.share == null, buildable: x.share != null, descText: recordOfId(x.id)?.desc?.effect || "" });
     }
     for (const [name, entries] of termIndex) {
       if (!isConceptRow(entries) || !conceptInCorpus(name, corpusIds)) continue;
       const ck = conceptKeyOf(name);
       if (conceptKeys.has(ck) || nameKeys.has("concept:" + name)) continue;
       const concept = conceptEntriesOf(entries).find(e => !e.mirrorCard && conceptTextOf([e]).toLowerCase().includes(rawLower));
-      if (concept && pushDesc({ kind: "concept", id: null, name, score: 100, match: "desc", ckind: concept.kind }))
+      if (concept && pushDesc({ kind: "concept", id: null, name, score: 100, match: "desc", ckind: concept.kind, descText: conceptTextOf([concept]) }))
         conceptKeys.add(ck);
     }
   }
@@ -316,6 +316,21 @@ function searchCards(q: string, opts: { scope?: SearchScope; corpus?: PoolEntry[
   descOut.sort(compareResults);
   const descCap = Math.max(0, Math.min(30, limit - keep.length));
   return keep.concat(descOut.slice(0, descCap));
+}
+
+/* 描述命中的上下文片段（首个命中 ±radius 字），命中段 <mark> 高亮。
+   描述检索的结果瓦片只有一枚「描述」chip，看不出命中原因——片段补上这个解释。
+   纯函数；大小写不敏感（与检索同口径），原文大小写原样保留。 */
+export function descSnippet(text: string, q: string, radius = 22): string | null {
+  const needle = q.trim().toLowerCase();
+  if (!needle) return null;
+  const i = text.toLowerCase().indexOf(needle);
+  if (i < 0) return null;
+  const start = Math.max(0, i - radius), end = Math.min(text.length, i + needle.length + radius);
+  const lead = start > 0 ? "…" : "";
+  const body = lead + text.slice(start, end) + (end < text.length ? "…" : "");
+  const at = i - start + lead.length;
+  return esc(body.slice(0, at)) + "<mark>" + esc(body.slice(at, at + needle.length)) + "</mark>" + esc(body.slice(at + needle.length));
 }
 
 /* 空态近似词：放宽间隔限制，只用于"没找到"时给下一步线索 */

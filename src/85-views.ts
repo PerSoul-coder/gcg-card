@@ -3,7 +3,7 @@ import { R_STYLE, R_ZH, allReqs, depBadges, reqElement } from "./30-deps";
 import { recordOfId, isCharId, nameCmp } from "./data/records";
 import { $ } from "./core/dom";
 import { safeReplaceState } from "./core/history";
-import { CAT_ORDER, clearBrowseFilters, corpusKey, hlText, loadRecent, nearNames, resultTypeLabel, searchCards, searchState, toggleSearchScope } from "./70-search";
+import { CAT_ORDER, clearBrowseFilters, corpusKey, descSnippet, hlText, loadRecent, nearNames, resultTypeLabel, searchCards, searchState, toggleSearchScope } from "./70-search";
 import { termEntries } from "./40-concepts";
 import { MECHS, mechLabel, mechMaskOf } from "./44-mechs";
 import { POOL_TYPE_ORDER, pool, poolStats, poolVersion, verCmp } from "./45-pool";
@@ -232,7 +232,8 @@ function searchTile(r) {
         return `<div class="tile stile" data-term="${esc(r.name)}" title="点击查看技能">
           <div class="imgbox">${entry.artId != null ? cardArtHtml(entry.artId, { kind: "tile", alt: r.name }) : `<div class="cbox"><span>${esc(entry.type || "技能")}</span></div>`}</div>
           <div class="tname">${hlName(r.name)}</div>
-          <div class="tmeta">${esc(meta)} ${matchChip(r)}</div></div>`;
+          <div class="tmeta">${esc(meta)} ${matchChip(r)}</div>
+          ${r.match === "desc" && r.descText ? `<div class="tsnip">${descSnippet(r.descText, searchState.q) || ""}</div>` : ""}</div>`;
       }
     }
     /* 用行上携带的具体种类（ckind），而不是词条列表首项——
@@ -241,7 +242,8 @@ function searchTile(r) {
     return `<div class="tile stile" data-term="${esc(r.name)}" title="点击查看概念解释">
       <div class="cbox"><span>${esc(KIND_ZH[k] || "概念")}</span></div>
       <div class="tname">${hlName(r.name)}</div>
-      <div class="tmeta">${esc(KIND_ZH[k] || "概念")} ${matchChip(r)}</div></div>`;
+      <div class="tmeta">${esc(KIND_ZH[k] || "概念")} ${matchChip(r)}</div>
+      ${r.match === "desc" && r.descText ? `<div class="tsnip">${descSnippet(r.descText, searchState.q) || ""}</div>` : ""}</div>`;
   }
   const isChar = r.kind === "char";
   /* kind 为角色/卡牌时 id 必定存在（概念命中走上面分支），这里取到的是原始记录 */
@@ -265,6 +267,7 @@ function searchTile(r) {
       ${badges ? `<div class="badges">${badges}</div>` : ""}${qtyBadge}${cmpBtnHtml(r.id)}</div>
     <div class="tname">${hlName(r.name)}${noShareWarn}</div>
     <div class="tmeta">${meta} ${matchChip(r)}</div>
+    ${r.match === "desc" && r.descText ? `<div class="tsnip">${descSnippet(r.descText, searchState.q) || ""}</div>` : ""}
     ${r.noShare ? "" : `<button class="addbtn" data-add="${r.id}" title="加入当前牌组">${ICON_PLUS}</button>`}</div>`;
 }
 /* 检索结果 HTML：结果已经在第二阶段按当前卡库子集算好（searchState.results） */

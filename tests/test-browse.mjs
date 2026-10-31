@@ -496,6 +496,15 @@ return (async () => {
   assert(strip.includes("rc-strip") && strip.includes('data-goto="1101"'), "最近查看：横带 HTML 含缩略入口");
   resetRecent();
 
+  /* ===== 19. 描述命中片段（descSnippet：切片 / 高亮 / 大小写不敏感） ===== */
+  const snip = descSnippet("战斗行动：我方出战角色为甘雨时，装备此牌。", "甘雨");
+  assert(snip && snip.includes("<mark>甘雨</mark>") && snip.includes("出战角色为"), "描述片段：命中段高亮且带上下文");
+  assert(descSnippet(" abc DEF ", "dEf") && descSnippet(" abc DEF ", "dEf").includes("<mark>DEF</mark>"), "描述片段：大小写不敏感且保留原文");
+  assert(descSnippet("短文本", "长") === null, "描述片段：未命中返回 null");
+  const long = "前".repeat(40) + "关键词" + "后".repeat(40);
+  const snip2 = descSnippet(long, "关键词", 10);
+  assert(snip2.startsWith("…") && snip2.endsWith("…") && snip2.includes("<mark>关键词</mark>"), "描述片段：长文本两侧省略号");
+
 })();
 `;
 

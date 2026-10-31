@@ -389,6 +389,8 @@ export interface SearchHit {
   noShare?: boolean;
   /** 概念命中时记录它实际对应的类别（术语 / 技能 / 卡牌…），用于结果分组。 */
   ckind?: string;
+  /** 描述命中的原文（descSnippet 在渲染时切片高亮）——瓦片要解释「为什么命中」。 */
+  descText?: string;
 }
 
 /** 检索建议（输入框下拉）的一条：gap 越小越靠前。 */
