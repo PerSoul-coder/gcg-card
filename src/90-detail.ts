@@ -5,7 +5,6 @@ import { copyLimit, draft, draftAdd, draftRemoveCard, draftRemoveChar } from "./
 import { browseVisibleIds } from "./85-views";
 import { renderSkillView, showSkill, skillOf } from "./47-skills";
 import { compareState, renderCompareView, renderDeckDiffView } from "./88-compare";
-import { renderOddsView } from "./86-odds";
 import { R_STYLE, reqElement } from "./30-deps";
 import { termEntries } from "./40-concepts";
 import { state } from "./data/state";
@@ -173,7 +172,6 @@ function renderOverlay(resetScroll = false) {
   else if (top.kind === "skill") renderSkillView(top);
   else if (top.kind === "compare") renderCompareView(top);
   else if (top.kind === "deckdiff") renderDeckDiffView(top);
-  else if (top.kind === "odds") renderOddsView(top);
   else renderDetailView(top);
   setOverlayOpen(true);
   if (detail && typeof detail.scrollTop === "number") detail.scrollTop = top.scrollTop || 0;
@@ -210,7 +208,7 @@ function overlayClose() {
   state.overlayStack = []; setOverlayOpen(false);
 }
 /* popstate 差量同步：把可回退层弹到目标深度（不触发历史），缺的层按 hash 重开。
-   后退 = 弹栈；前进 = 重开；夹在中间的普通层（compare / odds）一并清掉。
+   后退 = 弹栈；前进 = 重开；夹在中间的普通层（compare）一并清掉。
    99-main 的 popstate 监听负责调用它。 */
 function overlayMatches(top, want): boolean {
   if (!top || !want) return false;
@@ -232,7 +230,7 @@ function syncOverlayToHash(targetDepth: number, want) {
       continue;
     }
     /* 无条目层分两类：
-       · 普通层（compare / odds / deckdiff）——hash 认它就留，且打开在基座上时后退不关它；
+       · 普通层（compare / deckdiff）——hash 认它就留，且打开在基座上时后退不关它；
        · 无条目的可回退层（深链开的详情）——hash 不认它就是陈旧视图，始终弹掉。 */
     if (isH(top)) {
       if (want && overlayMatches(top, want) && entryDepth() >= targetDepth) break;
@@ -277,7 +275,6 @@ function viewLabel(v) {
   if (v.kind === "skill") { const s = skillOf(v.key); return s ? s.name : "技能"; }
   if (v.kind === "compare") return "卡牌对比";
   if (v.kind === "deckdiff") return "牌组对比";
-  if (v.kind === "odds") return "抽牌概率";
   return nameOfId(v.id) || "上一页";
 }
 /* 弹层顶栏：返回（仅栈深 > 1 时出现）+ 自定义按钮组 + 关闭 */
@@ -521,7 +518,7 @@ Ctrl+P　打印当前列表视图
 · 限制分两组：牌组限制（加入前校验，管理面板列出缺口）与打出限制（对局中生效——秘传限 1、天赋须在场、武器限定等）；卡面左上角徽标是同一套信息的简写。
 · 底部牌组栏可管理多套牌组，凑齐 3 角色 + 30 行动牌后「生成分享码」给他人导入；「牌组工具 → 加载示例牌组」一键载入示例。
 · 牌组分享码的解析框在牌组页签（卡面 / 列表）上方的操作条里，粘贴即自动解析。
-· 「牌组工具 → 牌组对比」比较两套分享码；「抽牌概率」看费用曲线与关键牌到手机率，并附回合模拟（起手 5 张、每回合抓 2 张投 8 骰、元素调和、秘传必在起手；不模拟效果触发与角色充能）。
+· 「牌组工具 → 牌组对比」比较两套分享码：粘贴两套分享码或「用当前」，并排看新增 / 移除 / 数量变化。
 
 <b>数据</b>
 · 卡牌数据来自 piovium 官方静态数据（简体中文），规则与术语释义来自 genshin-db 快照${dataOrigins.has("builtin")

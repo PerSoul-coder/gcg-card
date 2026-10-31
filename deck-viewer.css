@@ -458,9 +458,6 @@ footer { margin-top: 46px; color: var(--faint); font-size: var(--fs-12); text-al
 .cnum { font-size: var(--fs-11); color: var(--gold-dim); line-height: 1; }
 .clabel { font-size: var(--fs-11); color: var(--dim); line-height: 1; }
 .ctitle { position: absolute; right: 0; top: -16px; font-size: var(--fs-11); color: var(--dim); }
-.curve[data-odds] { cursor: pointer; border-radius: 8px; }
-.curve[data-odds]:hover .ctitle { color: var(--gold); }
-.curve[data-odds]:focus-visible { outline: 2px solid rgba(211,188,142,.45); outline-offset: 3px; }
 
 /* ===== 列表排序表头 ===== */
 th.sortable { cursor: pointer; user-select: none; }
@@ -978,12 +975,6 @@ body.cmp-on .wrap { padding-bottom: 180px; }
 .dd-empty { color: var(--dim); padding: 16px 4px; text-align: center; }
 
 /* ===== 相似卡替换建议 ===== */
-.sum-odds {
-  align-self: center; background: none; border: 1px solid var(--gold-30);
-  color: var(--gold-dim); border-radius: 8px; padding: 2px 10px; font-size: var(--fs-12);
-  box-shadow: none;
-}
-.sum-odds:hover { color: var(--gold); border-color: var(--gold-dim); box-shadow: none; }
 .cmp-sim-sec { margin-top: 18px; }
 .cmp-sim-sec h3 {
   display: flex; align-items: baseline; gap: 10px; font-size: var(--fs-13); font-weight: normal;
@@ -1001,51 +992,7 @@ body.cmp-on .wrap { padding-bottom: 180px; }
 .sim-meta { color: var(--dim); font-size: var(--fs-12); }
 .sim-why { color: var(--gold-dim); font-size: var(--fs-11); background: var(--gold-10); border: 1px solid var(--gold-20); border-radius: 8px; padding: 1px 8px; }
 .sim-in { color: var(--ok); font-size: var(--fs-11); }
-.sim-swap { margin-left: auto; padding: 4px 10px; font-size: var(--fs-12); border-radius: 8px; background: var(--bg2); border: 1px solid var(--line); color: var(--dim); }
-.sim-swap:hover { color: var(--gold); border-color: var(--gold-dim); }
-.sim-swap:disabled { opacity: .45; cursor: default; }
-.sim-empty { color: var(--dim); font-size: var(--fs-12); padding: 10px 12px; }
 
-/* ===== 抽牌概率与费用曲线 ===== */
-.odds-view { flex: 1; min-width: 0; width: 100%; }
-.odds-kpis { display: flex; gap: 10px; flex-wrap: wrap; margin: 12px 0 4px; }
-.odds-kpi { flex: 0 1 auto; background: var(--bg2); border: 1px solid var(--line); border-radius: 10px; padding: 8px 14px; min-width: 92px; }
-.odds-kpi small { display: block; color: var(--dim); font-size: var(--fs-11); letter-spacing: 1px; }
-.odds-kpi b { color: var(--gold); font-size: var(--fs-16); font-variant-numeric: tabular-nums; }
-.odds-sec { margin-top: 18px; }
-.odds-sec h3 { display: flex; align-items: baseline; gap: 10px; font-size: var(--fs-13); color: var(--gold-dim); letter-spacing: 2px; font-weight: normal; margin-bottom: 8px; }
-.odds-sec h3 small { color: var(--dim); font-size: var(--fs-11); letter-spacing: 0; }
-.odds-bars { display: flex; flex-direction: column; gap: 7px; }
-.odds-bar-row { display: grid; grid-template-columns: 44px 1fr 96px; align-items: center; gap: 10px; }
-.odds-bar-label { color: var(--dim); font-size: var(--fs-12); text-align: right; font-variant-numeric: tabular-nums; }
-.odds-bar-track { height: 16px; border-radius: 5px; background: var(--bg3); border: 1px solid var(--line); overflow: hidden; }
-.odds-bar-fill { display: block; height: 100%; border-radius: 4px; background: linear-gradient(90deg, var(--gold-30), var(--gold-75)); transition: width var(--t-slow); }
-.odds-bar-val { color: var(--text-2); font-size: var(--fs-12); font-variant-numeric: tabular-nums; white-space: nowrap; }
-.odds-chips { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
-.odds-chip { font-size: var(--fs-12); color: var(--text-2); background: var(--bg2); border: 1px solid var(--line); border-radius: 10px; padding: 2px 9px; }
-.odds-pick { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
-.odds-pick > span { color: var(--gold-dim); font-size: var(--fs-12); letter-spacing: 1px; }
-.odds-pick select {
-  flex: 1 1 220px; max-width: 340px; background: var(--bg2); border: 1px solid var(--line);
-  color: var(--text); border-radius: 8px; padding: 8px 10px; font-size: var(--fs-12);
-}
-.odds-pick select:focus { outline: none; border-color: var(--gold-dim); box-shadow: var(--ring); }
-.odds-pick-meta { flex: 1 1 100%; color: var(--dim); font-size: var(--fs-12); }
-.odds-take {
-  color: var(--text-2); font-size: var(--fs-12); line-height: 1.7;
-  background: var(--gold-6); border: 1px solid var(--gold-20);
-  border-radius: 9px; padding: 8px 12px; margin-bottom: 10px;
-}
-.odds-take b { color: var(--gold); }
-.odds-table { width: 100%; border-collapse: collapse; font-size: var(--fs-12); }
-.odds-table th { text-align: left; color: var(--gold-dim); font-weight: normal; font-size: var(--fs-11); letter-spacing: 1px; padding: 7px 9px; border-bottom: 1px solid var(--line); }
-.odds-table td { padding: 7px 9px; border-bottom: 1px solid color-mix(in srgb, var(--line) 60%, transparent); color: var(--text-2); }
-.odds-table tr.key td { background: var(--gold-6); }
-.odds-table td b { color: var(--gold); font-variant-numeric: tabular-nums; }
-.odds-table .odds-pbar { display: inline-block; width: 72px; height: 5px; margin-left: 8px; border-radius: 3px; background: var(--bg3); vertical-align: middle; overflow: hidden; }
-.odds-table .odds-pbar i { display: block; height: 100%; background: linear-gradient(90deg, var(--gold-35), var(--gold)); }
-.odds-simmeta { margin: 8px 0 10px; color: var(--dim); font-size: var(--fs-12); line-height: 1.7; }
-.odds-hint { color: var(--dim); font-size: var(--fs-12); line-height: 1.8; margin-top: 10px; }
 
 @media (max-width: 760px) {
   /* 对比栏贴边显示；卡名 chips 改为单行横向滑动，避免 4 张卡时把栏撑成三行 */
@@ -1072,12 +1019,6 @@ body.cmp-on .wrap { padding-bottom: 180px; }
   .dd-actions .primary, .dd-actions .dd-mini { flex: 1 1 auto; }
   .dd-actions .dd-tip { flex: 1 1 100%; }
   .sim-item { align-items: flex-start; }
-  .sim-swap { margin-left: 0; }
-  .odds-pick select { flex: 1 1 100%; max-width: none; }
-  .odds-bar-row { grid-template-columns: 36px 1fr 84px; }
-  .odds-kpi { min-width: 78px; padding: 7px 11px; }
-  .odds-table th, .odds-table td { padding: 6px 7px; }
-  .odds-table .odds-pbar { display: none; }
 }
 
 /* ===== 触屏（手机 / 平板）：去掉悬停残影、补足触控目标、避免 iOS 聚焦缩放 ===== */
@@ -1092,9 +1033,7 @@ body.cmp-on .wrap { padding-bottom: 180px; }
   button, .tile, .chip, .fchip, .blchip { -webkit-tap-highlight-color: transparent; }
 
   /* iOS Safari 对字号 < 16px 的输入控件会在聚焦时放大整页 */
-  .dd-field input, .odds-pick select, .list-tools input, .bg-sel, .dk-rename { font-size: var(--fs-16); }
-  .dd-field input { padding: 9px 10px; }
-  .odds-pick select { padding: 9px 10px; }
+  .dd-field input { padding: 9px 10px; font-size: var(--fs-16); }
   .bg-sel { padding: 8px 10px; }
 
   /* 触控目标：卡片选择 / 对比表移除 / 弹层顶栏按钮 */
@@ -1102,7 +1041,6 @@ body.cmp-on .wrap { padding-bottom: 180px; }
   .cmp-hx { width: 28px; height: 28px; font-size: var(--fs-12); }
   .detail .navbtns button { min-height: 36px; }
   .detail .navbtns .pgbar button { min-height: 32px; }
-  .sim-swap { padding: 8px 12px; }
   .dd-mini, .dd-swap { min-height: 38px; }
   .blchip { padding: 4px 12px; }
 
@@ -1151,7 +1089,6 @@ body.cmp-on .wrap { padding-bottom: 180px; }
   .cmp-hcell img { width: 52px; }
   .cmp-hcell .noart-cmp { width: 42px; }
   #compareBar { padding: 7px 10px; gap: 7px; }
-  .odds-table { font-size: var(--fs-12); }
   /* 开关在触屏上给足点按面积（≥40px），并允许和计数行一起换行 */
   .bg-sw { padding: 9px 12px; }
   .bg-sw .sw { width: 30px; height: 16px; }

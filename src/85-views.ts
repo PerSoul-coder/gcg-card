@@ -3,7 +3,6 @@ import { R_STYLE, R_ZH, allReqs, depBadges, reqElement } from "./30-deps";
 import { recordOfId, isCharId, nameCmp } from "./data/records";
 import { $ } from "./core/dom";
 import { safeReplaceState } from "./core/history";
-import { showOdds } from "./86-odds";
 import { CAT_ORDER, clearBrowseFilters, corpusKey, hlText, loadRecent, nearNames, resultTypeLabel, searchCards, searchState, toggleSearchScope } from "./70-search";
 import { termEntries } from "./40-concepts";
 import { POOL_TYPE_ORDER, pool, poolStats, poolVersion, verCmp } from "./45-pool";
@@ -40,7 +39,7 @@ function renderSummary() {
     for (const r of x.deckReqs || []) { dCount[r.code] = (dCount[r.code] || 0) + x.count; dCards += x.count; }
   }
   const maxB = Math.max(...buckets, 1);
-  const curve = `<div class="curve" data-odds="1" role="button" tabindex="0" title="打开抽牌概率与费用曲线" aria-label="打开抽牌概率与费用曲线">${buckets.map((n, i) => `
+  const curve = `<div class="curve" title="元素骰费用分布（0~4 / 5+，按张数计重）">${buckets.map((n, i) => `
     <div class="cbar" title="元素骰费用 ${i === 5 ? "5+" : i}：${n} 张">
       <span class="cnum">${n || ""}</span>
       <div class="cfill" style="height:${Math.round(n / maxB * 100)}%"></div>
@@ -59,19 +58,11 @@ function renderSummary() {
       <span class="chip"><span class="edot" style="--ec:${ELE_COLOR[c.element || ""] || "var(--faint)"}">${ELE_ICONS[c.element || ""] || ""}</span>${esc(c.name)}<small class="chip-en">${enPips(c.energy || 0)}</small></span>`).join("")}
     </div>
     <div class="sum-types"><span>元素构成：<b>${elesHtml}</b></span><span>${typeCounts}</span><span>版本跨度：<b>${esc(vers.join(" ~ "))}</b></span></div>
-    <div class="sum-extra">${energyChip}${rChips}<button class="sum-odds" data-odds="1" title="查看费用曲线与关键牌起手 / 前几回合的抽到概率">抽牌概率与费用曲线 ›</button></div>
+    <div class="sum-extra">${energyChip}${rChips}</div>
     ${curve}`;
 }
-/* 费用曲线整体可点：键盘 Enter / 空格与点击一致 */
-$("summary").addEventListener("keydown", ev => {
-  if ((ev.key === "Enter" || ev.key === " ") && (ev.target as HTMLElement).closest("[data-odds]")) {
-    ev.preventDefault();
-    showOdds();
-  }
-});
 /* 点击概览中的限制统计 → 跳到列表视图并过滤 */
 $("summary").addEventListener("click", ev => {
-  if ((ev.target as HTMLElement).closest("[data-odds]")) { showOdds(); return; }
   const a = (ev.target as HTMLElement).closest("[data-filter]");
   if (!a) return;
   listFilter = a.dataset.filter || "";

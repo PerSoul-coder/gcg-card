@@ -292,7 +292,7 @@ type Record = {
 - Esc 按层栈逐层关闭；
 - 触摸：`touch-action: pan-y` 明确手势，避免背景抢滚动。
 
-**弹层 ↔ 浏览器历史桥（P6，`src/core/history.ts`）**：detail / term / skill 三类「可回退层」打开时写入一条历史（`#card=` / `#t=` / `#s=`，layer 上打 `hpushed` 标记），compare / odds / deckdiff 不是可回退层、不写历史但整栈替换时会清账（`overlayHashClear`）。浏览器返回键 → popstate → `syncOverlayToHash` 差量同步：带条目的层弹到目标深度（后退）、按 hash 重开缺的层（前进，`overlayHashAdopt` 认领条目）、夹在中间的普通层一并清掉；随后的 hashchange 打跳过标记防重复路由。深链打开的层没有条目，因此同步按「带条目的层数」对齐而不是数全部可回退层。测试环境无 `history.back` / `window.addEventListener`，全部退化为旧的即时行为。
+**弹层 ↔ 浏览器历史桥（P6，`src/core/history.ts`）**：detail / term / skill 三类「可回退层」打开时写入一条历史（`#card=` / `#t=` / `#s=`，layer 上打 `hpushed` 标记），compare / deckdiff（odds 已于 15.3 归档）不是可回退层、不写历史但整栈替换时会清账（`overlayHashClear`）。浏览器返回键 → popstate → `syncOverlayToHash` 差量同步：带条目的层弹到目标深度（后退）、按 hash 重开缺的层（前进，`overlayHashAdopt` 认领条目）、夹在中间的普通层一并清掉；随后的 hashchange 打跳过标记防重复路由。深链打开的层没有条目，因此同步按「带条目的层数」对齐而不是数全部可回退层。测试环境无 `history.back` / `window.addEventListener`，全部退化为旧的即时行为。
 
 ---
 
@@ -500,7 +500,12 @@ TermEntry desc/story 下沉后，同构哑弹与散落约定的清除：
 （CSS 只认 light 属性），模式持久化；auto 用 matchMedia 实时监听、系统切换即时生效。
 按钮循环三态、图标随模式（◐/☀/☾）、title 注明当前解析值。头部 FOUC 脚本同步三态。
 
-### 15.3 回合模拟（86-odds）
+### 15.3 抽牌概率与回合模拟（86-odds）【已归档】
+
+> **2026-10-31 归档**：概率/模拟的估计口径对实际对局过于粗略与乐观（不模拟效果触发、
+> 费用互相占用与对局取舍），对用户的实际决策价值有限，整体移除（菜单入口、面板、
+> 概率与模拟模型）。完整实现保留在提交 26727a8 及更早历史中；概览条里的
+> 「元素骰费用曲线」保留为静态可视化。以下为归档时的设计记录。
 
 在超几何精确值之下新增蒙特卡洛面板，规则常量全部来自官方规则词条
 （build-concepts.mjs 人工校订表）：起手 5 张、每回合抓 2 张、每回合投 8 枚元素骰

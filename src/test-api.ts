@@ -29,7 +29,6 @@ export * from "./60-parse";
 export * from "./70-search";
 export * from "./80-deck";
 export * from "./85-views";
-export * from "./86-odds";
 export * from "./88-compare";
 export * from "./90-detail";
 export * from "./95-export";

@@ -63,8 +63,8 @@ assert(/id="btnTheme"/.test(headerHtml) && /id="btnRefresh"/.test(headerHtml)
   "页头三图标钮：主题 / 刷新 / 帮助（数据信息钮已删，原「更多」菜单已解散）");
 assert(!/id="moreMenu"/.test(headerHtml) && !/id="btnMore"/.test(headerHtml), "「更多」菜单不复存在");
 const deckMenu = blockOfId("deckToolsMenu");
-assert(/id="btnHistory"/.test(deckMenu) && /id="btnDeckDiff"/.test(deckMenu) && /id="btnOdds"/.test(deckMenu),
-  "牌组工具菜单含历史 / 对比 / 概率");
+assert(/id="btnHistory"/.test(deckMenu) && /id="btnDeckDiff"/.test(deckMenu),
+  "牌组工具菜单含历史 / 对比（抽牌概率已归档移除）");
 assert(/id="btnSample"/.test(deckMenu), "加载示例牌组在牌组工具菜单（牌组功能归位）");
 assert(!/id="btnSkillIdx"/.test(deckMenu) && !/id="btnSkillIdx"/.test(headerHtml),
   "技能图鉴不在任何菜单（独立主页签）");

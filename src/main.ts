@@ -20,7 +20,6 @@ import "./60-parse";
 import "./70-search";
 import "./80-deck";
 import "./85-views";
-import "./86-odds";
 import "./88-compare";
 import "./90-detail";
 import "./95-export";

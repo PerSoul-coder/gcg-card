@@ -228,7 +228,7 @@ export interface ParsedDeck {
   order: string[];
 }
 
-/** 弹层栈的一层。detail / term 可继续下钻，odds 与 deckdiff 是互斥的整屏弹层。 */
+/** 弹层栈的一层。detail / term 可继续下钻，deckdiff 是互斥的整屏弹层。 */
 /** 牌组差异视图：两段分享码 + 解析结果 + 两个显示开关。 */
 export interface DeckDiffEntry {
   kind: "deckdiff";
@@ -259,7 +259,6 @@ export type OverlayEntry =
   | (OverlayBase & { kind: "term"; name: string })
   | (OverlayBase & { kind: "skill"; key: string })
   | (OverlayBase & { kind: "compare"; ids: number[]; onlyDiff: boolean; showSim: boolean })
-  | (OverlayBase & { kind: "odds"; pick?: unknown })
   | (OverlayBase & DeckDiffEntry);
 
 /* ---------- 卡池条目 ----------

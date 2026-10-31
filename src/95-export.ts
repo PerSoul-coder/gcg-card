@@ -4,7 +4,6 @@ import { recordOfId, shareOfId } from "./data/records";
 import { $, copyText } from "./core/dom";
 import { skillsOf } from "./47-skills";
 import { showDeckDiff } from "./88-compare";
-import { showOdds } from "./86-odds";
 import { showHelp } from "./90-detail";
 import { decodeRaw, encodeRaw } from "./10-codec";
 import { state } from "./data/state";
@@ -166,7 +165,6 @@ document.addEventListener("click", ev => {
   if (!(ev.target as HTMLElement).closest(".expwrap")) closeMenus();
 });
 $("btnDeckDiff").addEventListener("click", () => { closeMenus(); showDeckDiff(); });
-$("btnOdds").addEventListener("click", () => { closeMenus(); showOdds(); });
 $("btnPrint").addEventListener("click", () => { closeMenus(); window.print(); });
 $("btnHelp").addEventListener("click", () => { closeMenus(); showHelp(); });
 $("exportMenu").addEventListener("click", ev => {

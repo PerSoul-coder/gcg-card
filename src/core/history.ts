@@ -2,7 +2,7 @@
  *
  * detail / term / skill 三类「可回退层」在打开时写入一条历史记录（#card= / #t= / #s=），
  * 浏览器返回键因此可以逐层关弹层、前进键重开——与用户对「后退」的直觉一致。
- * compare / odds / deckdiff 不是可回退层：它们不写历史，但整栈替换时会清掉
+ * compare / deckdiff 不是可回退层：它们不写历史，但整栈替换时会清掉
  * 已写的记录（overlayHashClear），保证 hash 与弹层栈一致。
  *
  * pushDepth 记录当前链上自己推了多少条：UI 关闭据此决定是 history.back()
@@ -123,7 +123,7 @@ export const overlayHashPop = (): void => { if (pushDepth > 0) pushDepth--; };
 /** 前进重开：把「已存在的历史条目」重新认领回来（pushDepth 与真实深度保持一致）。 */
 export const overlayHashAdopt = (): void => { pushDepth++; };
 
-/** 整链作废（odds / deckdiff / 帮助等清栈动作）：计数归零；hash 若指向弹层则抹掉。 */
+/** 整链作废（deckdiff / 帮助等清栈动作）：计数归零；hash 若指向弹层则抹掉。 */
 export function overlayHashClear(): void {
   pushDepth = 0;
   if (typeof location === "undefined") return;
