@@ -110,26 +110,37 @@ function motionOK(): boolean {
       && !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   } catch (e) { return false; }
 }
+/* 退场动画进行中又重新打开：取消挂起的关闭回调——否则它会在动画结束/兜底定时器
+   触发时把刚开好的弹层摘掉（.show 被误删，弹层开着却不可交互）。 */
+let cancelOverlayClose: (() => void) | null = null;
 function setOverlayOpen(open: boolean) {
   const ov = $("overlay");
   if (!ov || !ov.classList) return;
   if (!open && ov.classList.contains("show") && motionOK()) {
     /* 退场：先播 .closing（淡出 + 下沉），动画结束再摘 .show。
-       兜底定时器防止 animationend 因元素复用而丢失；期间滚动锁同步解除。 */
-    ov.classList.add("closing");
+       兜底定时器防止 animationend 因元素复用而丢失。
+       滚动锁必须等 .show 真正摘除后再同步——动画期间层仍算打开，
+       此刻同步会让锁永远留在 html 上（页面对弹层一关就再也滚不动）。 */
+    cancelOverlayClose?.();
     let done = false;
     const fin = () => {
       if (done) return;
       done = true;
+      cancelOverlayClose = null;
       ov.classList.remove("show", "closing");
       ov.removeEventListener("animationend", fin);
+      syncScrollLock();
     };
+    cancelOverlayClose = () => { done = true; ov.removeEventListener("animationend", fin); };
     ov.addEventListener("animationend", fin);
     setTimeout(fin, 280);
-  } else {
-    ov.classList.remove("closing");
-    ov.classList.toggle("show", open);
+    if (open) hideTip();
+    return;
   }
+  cancelOverlayClose?.();
+  cancelOverlayClose = null;
+  ov.classList.remove("closing");
+  ov.classList.toggle("show", open);
   syncScrollLock();
   if (open) hideTip();      /* 弹层盖上来时，残留的悬浮预览会浮在遮罩之上 */
 }

@@ -3,14 +3,16 @@
    99-main 的 popstate 接线 + 90-detail 的差量同步 + core/history 的记账。 */
 import { createTest } from "./_env.mjs";
 
-/* window：注册监听 + reduced-motion（退场动画瞬时化，断言同步可判） */
+/* window：注册监听 + reduced-motion（缺省瞬时关闭，动效相关断言用 __setMotion 切换） */
 function fakeWindow() {
   const ls = {};
+  let reduced = true;
   return {
     addEventListener: (t, fn) => { (ls[t] ??= []).push(fn); },
     removeEventListener: (t, fn) => { ls[t] = (ls[t] || []).filter(f => f !== fn); },
     __fire: (t, ev) => { for (const fn of [...(ls[t] || [])]) fn(ev); },
-    matchMedia: () => ({ matches: true }),
+    matchMedia: () => ({ matches: reduced }),
+    __setMotion: on => { reduced = !on; },
   };
 }
 /* 可编程假 history：导航时同步 location.hash，并按浏览器次序派发 popstate → hashchange */
@@ -106,6 +108,28 @@ return (async () => {
   routeHash();
   await flush();
   assert(!overlayOpen(), "无效概念深链：不开弹层");
+
+  /* ===== 10. 退场动画：滚动锁必须随 .show 摘除而释放（回归：看过详情后页面锁死） ===== */
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  const locked = () => document.documentElement.classList.contains("layer-lock");
+  window.__setMotion(true);   /* 允许退场动画（motionOK = true） */
+  showDetail(idOf(cardA));
+  assert(locked(), "弹层打开：滚动锁上");
+  closeTopLayer();            /* Esc → 动画退场：.show 尚未摘除，锁保持到动画结束 */
+  assert(locked(), "退场动画期间锁保持（弹层仍算打开）");
+  await sleep(340);
+  assert(!overlayOpen(), "动画结束：弹层已关闭");
+  assert(!locked(), "动画结束：滚动锁释放（回归：看过一次详情后牌库锁死）");
+  /* 退场动画中立刻重开：挂起的关闭回调被取消，弹层保持打开 */
+  showDetail(idOf(cardA));
+  closeTopLayer();
+  showDetail(idOf(cardB));    /* 280ms 兜底定时器触发前重开 */
+  await sleep(340);
+  assert(overlayOpen() && topView() && topView().id === idOf(cardB), "退场动画中重开：旧关闭回调被取消，弹层保持打开");
+  window.__setMotion(false);  /* 恢复瞬时关闭 */
+  closeTopLayer();
+  await flush();
+  assert(!overlayOpen() && !locked(), "恢复瞬时后正常关闭并解锁");
 })();
 
 `;
