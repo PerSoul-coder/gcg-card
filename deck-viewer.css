@@ -795,7 +795,7 @@ body.cmp-on #draftPanel { bottom: 136px; }
   }
   body { background: #fff; color: #111; }
   .controls, #status, .tabs, .summary, #view-grid, #view-browse, #view-skills, footer, #toasts, .list-tools, #histPanel, #draftBar, #draftPanel { display: none !important; }
-  .browse-bar, .bsentinel, .hd-actions, .expwrap, .navbtns, .corebtn, .addbtn, .favbtn, .cmpbtn { display: none !important; }
+  header, .browse-bar, .bsentinel, .hd-actions, .expwrap, .navbtns, .corebtn, .addbtn, .favbtn, .cmpbtn { display: none !important; }
   .view { display: block !important; }
   .print-head { display: block !important; margin: 0 0 12px; font-size: 15px; color: #111; }
   .print-head small { color: #666; }
