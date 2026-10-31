@@ -15,7 +15,7 @@ import { buildPool } from "./45-pool";
 import { buildBacklinks } from "./50-backlinks";
 import { setStatus } from "./core/dom";
 
-/* 数据就绪后的界面刷新回调（牌组摘要 / 数据信息行）。
+/* 数据就绪后的界面刷新回调（牌组摘要等）。
    数据层不反向 import 视图层与牌组层——那会成环，而循环导入下 esbuild
    的模块拆序不受控：视图层可能先于本模块求值，顶层启动就会踩到
    未初始化的绑定（P4 曾因此 boot 即崩：dataOrigins 尚未赋值）。
@@ -25,12 +25,8 @@ export function onDataReady(fn: () => void): void {
   readyHooks.push(fn);
 }
 
-/** 本次加载实际用到的来源，供数据信息行展示。 */
+/** 本次加载实际用到的来源（builtin / network），供帮助面板「数据」段与刷新路径判断。 */
 export const dataOrigins = new Set<string>();
-export const ORIGIN_ZH: Record<string, string> = {
-  builtin: "内置快照 · 离线可用",
-  network: "站点数据包",
-};
 
 export let dataReady = false;
 let dataFlight: Promise<void> | null = null;
@@ -66,6 +62,6 @@ async function loadData(forceNetwork = false): Promise<void> {
   for (const fn of readyHooks) fn();
   dataReady = true;
   /* 载入完成即清状态行：此前「正在载入卡牌数据…」永不清理，spinner 一直转，
-     看起来像没加载完。来源与规模由 dataInfo 行常驻展示；失败路径由调用方写错误。 */
+     看起来像没加载完。数据来源与规模见帮助面板「数据」段；失败路径由调用方写错误。 */
   setStatus("");
 }

@@ -165,13 +165,6 @@ $("btnDeckTools").addEventListener("click", ev => { ev.stopPropagation(); openMe
 document.addEventListener("click", ev => {
   if (!(ev.target as HTMLElement).closest(".expwrap")) closeMenus();
 });
-/* 页头图标钮「数据信息」：显隐切换记录在 aria-pressed（图标不换字） */
-$("btnDataInfo").addEventListener("click", () => {
-  const el = $("dataInfo");
-  const show = el.style.display === "none";
-  el.style.display = show ? "" : "none";
-  $("btnDataInfo").setAttribute("aria-pressed", show ? "true" : "false");
-});
 $("btnDeckDiff").addEventListener("click", () => { closeMenus(); showDeckDiff(); });
 $("btnOdds").addEventListener("click", () => { closeMenus(); showOdds(); });
 $("btnPrint").addEventListener("click", () => { closeMenus(); window.print(); });

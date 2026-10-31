@@ -331,8 +331,6 @@ return (async () => {
   assert(eleIcon("PYRO").includes("--ec:var(--pyro)"), "元素图标：按元素色着色（火 → --pyro）");
   assert(String($("view-browse").innerHTML).includes("ele-svg"), "卡库视图：元素 chip 使用官方矢量图标");
   setBrowseExpanded(false);
-  renderDataInfo();
-  assert(/概念/.test(String($("dataInfo").innerHTML)) && String($("dataInfo").innerHTML).includes(" 角色 · "), "数据信息行：动态计数渲染");
   assert(scopeRow().includes(String(searchCorpus().length)), "检索范围行：牌库规模动态化");
   assert(scopeRow().includes('data-scope="desc"'), "检索范围行：含描述开关（可关闭提速）");
 

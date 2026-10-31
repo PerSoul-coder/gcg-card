@@ -100,7 +100,7 @@ export const ENERGY_ICON =
 
 /* ---------- 动作图标（行内 SVG，currentColor 随上下文着色） ----------
    只覆盖最高频的动作语义：关闭 / 对比换位 / 加牌 / 收藏星标，以及页头图标按钮
-   （主题三态 / 刷新 / 数据信息 / 帮助 / 链接）；
+   （主题三态 / 刷新 / 帮助 / 链接）；
    其余文字符号（▾ ‹ › −）与中文文案混排，保持原样不做全面替换。 */
 const actionSvg = (d: string): string =>
   `<svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><path d="${d}" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
@@ -111,7 +111,6 @@ export const ICON_STAR =
   `<svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 1.6l2 4.05 4.47.65-3.24 3.15.77 4.45L8 11.78l-4 2.1.77-4.45L1.53 6.3 6 5.65z"/></svg>`;
 /* 页头图标按钮与详情动作行的语义图标 */
 export const ICON_REFRESH = actionSvg("M13 8a5 5 0 1 1-1.46-3.54M13 2.5V5h-2.5");
-export const ICON_INFO = actionSvg("M8 7.2v4.3M8 4.6v.2M2.5 8a5.5 5.5 0 1 0 11 0 5.5 5.5 0 0 0-11 0Z");
 export const ICON_HELP = actionSvg("M6 6a2 2 0 1 1 2.6 1.9c-.6.2-.6.8-.6 1.3v.3M8 12.2v.2M2.5 8a5.5 5.5 0 1 0 11 0 5.5 5.5 0 0 0-11 0Z");
 export const ICON_LINK = actionSvg("M6.5 9.5l3-3M7 5.5 8.6 3.9a2.4 2.4 0 0 1 3.4 3.4L10.4 8.9M9 10.5 7.4 12.1a2.4 2.4 0 0 1-3.4-3.4L5.6 7.1");
 export const ICON_SUN =

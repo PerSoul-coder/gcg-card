@@ -113,7 +113,7 @@ body {
 .wrap { max-width: 1280px; margin: 0 auto; padding: 22px 16px 110px; }
 
 header { position: relative; padding-bottom: 4px; }
-/* 页头右上角的全局动作（刷新数据 / 数据信息 / 说明）：与牌组无关，任何视图都在 */
+/* 页头右上角的全局动作（主题 / 刷新数据 / 说明）：与牌组无关，任何视图都在 */
 .hd-actions { position: absolute; top: 6px; right: 0; display: flex; gap: 6px; }
 /* 页头图标按钮：悬浮 title 说明功能；空钮在 JS 注入图标前不占位面 */
 .hdbtn, .hd-actions button { width: 32px; height: 32px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: var(--fs-16); color: var(--text-3); background: var(--panel2); border: 1px solid var(--line); border-radius: var(--r-md); cursor: pointer; transition: color var(--t-fast), border-color var(--t-fast), background var(--t-fast); }
@@ -656,9 +656,6 @@ body.cmp-on #draftPanel { bottom: 136px; }
   #draftPanel { bottom: 104px; }
 }
 
-/* ===== 数据信息行 ===== */
-#dataInfo { margin-top: 6px; font-size: var(--fs-12); color: var(--faint); line-height: 1.6; }
-
 /* ===== 卡库浏览：检索框（与顶部牌组码输入框分离） ===== */
 /* 检索是第二阶段：输入框常驻筛选栏上方，结果只作用于当前筛选出的子集 */
 .browse-search { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
@@ -750,7 +747,7 @@ body.cmp-on #draftPanel { bottom: 136px; }
 /* 打印：仅列表视图 */
 @media print {
   body { background: #fff; color: #111; }
-  .controls, #status, #dataInfo, .tabs, .summary, #view-grid, #view-browse, #view-skills, footer, #toasts, .list-tools, #histPanel, #draftBar, #draftPanel { display: none !important; }
+  .controls, #status, .tabs, .summary, #view-grid, #view-browse, #view-skills, footer, #toasts, .list-tools, #histPanel, #draftBar, #draftPanel { display: none !important; }
   .browse-bar, .bsentinel { display: none !important; }
   .view { display: block !important; }
   table { font-size: var(--fs-11); }

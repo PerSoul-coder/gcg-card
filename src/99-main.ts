@@ -1,20 +1,19 @@
-/* 99-main.ts —— 入口装配：事件绑定、菜单与快捷键、数据信息行。 */
+/* 99-main.ts —— 入口装配：事件绑定、菜单与快捷键。 */
 import { closeHistoryPanel, decodeAndRender, looksLikeCode, renderHistory, resolveInput, toggleHistoryPanel } from "./60-parse";
 import { $ } from "./core/dom";
 import { closeSuggest, moveSuggest, pushRecent, resetSuggestTimer, scheduleSuggest, searchState, selectSuggest, sugState } from "./70-search";
 import { overlayHashParse } from "./core/history";
 import { browseState, parseBrowseHash, renderBrowse, renderBrowseResults, renderGrid, renderList, setShowFavsOnly, setShowUnbuildable, syncBrowseHash } from "./85-views";
-import { ORIGIN_ZH, dataOrigins, ensureData, onDataReady, resetDataState } from "./20-data";
-import { pool, resetPool, loadFavs, pruneFavs } from "./45-pool";
+import { ensureData, onDataReady, resetDataState } from "./20-data";
+import { resetPool, loadFavs, pruneFavs } from "./45-pool";
 import { resetConceptIndex, termEntries } from "./40-concepts";
-import { dsStats } from "./07-dataset";
 import { resetBacklinks } from "./50-backlinks";
-import { SKILLS, resetSkillIndex, skillOf, showSkill, renderSkillsView } from "./47-skills";
+import { resetSkillIndex, skillOf, showSkill, renderSkillsView } from "./47-skills";
 import { beginRenameDeck, closeDraftPanel, deleteDeckById, draftClear, draftEncode, draftLoadCurrent, draftRemoveCard, draftRemoveChar, draftSetCount, duplicateDeck, loadDraft, newDeck, pruneDraft, renderDraft, renderDraftPanel, syncFromActive, toggleDraftPanel } from "./80-deck";
 import { overlayOpen, showDetail, showHelp, showTermModal, syncOverlayToHash, lightboxOpen, lightboxStep, closeLightbox, renderOverlay } from "./90-detail";
 import { resetViewState, state } from "./data/state";
-import { recordOfId, charRecords, resetRecordIndex } from "./data/records";
-import { ICON_AUTO, ICON_HELP, ICON_INFO, ICON_MOON, ICON_REFRESH, ICON_SUN, SAMPLE, STORAGE_KEYS } from "./core/resources";
+import { recordOfId, resetRecordIndex } from "./data/records";
+import { ICON_AUTO, ICON_HELP, ICON_MOON, ICON_REFRESH, ICON_SUN, SAMPLE, STORAGE_KEYS } from "./core/resources";
 import { closeTopLayer } from "./core/layers";
 import { closeMenus } from "./95-export";
 import { setStatus, toast, copyText } from "./core/dom";
@@ -83,7 +82,6 @@ if (themeMq && typeof (themeMq as unknown as { addEventListener?: unknown }).add
 }
 /* 页头图标按钮：HTML 里是空钮，图标单点来自 resources（悬浮 title 在 HTML 上） */
 $("btnRefresh").innerHTML = ICON_REFRESH;
-$("btnDataInfo").innerHTML = ICON_INFO;
 $("btnHelp").innerHTML = ICON_HELP;
 syncThemeUI();
 $("btnHistory").addEventListener("click", () => { renderHistory(); toggleHistoryPanel(); });
@@ -193,16 +191,7 @@ function focusBrowseSearch() {
   if (input) input.focus();
 }
 
-/* ---------- 数据信息行 + 刷新 ---------- */
-function renderDataInfo() {
-  const el = $("dataInfo"); if (!el) return;
-  /* 面向访客的一行摘要：来源 / 规模 / 可用性。测试卡过滤、准备状态并入这类
-     处理细节不上这行——访客关心的是「有什么、能不能离线」，不是内部怎么算 */
-  const origin = [...dataOrigins].map(k => ORIGIN_ZH[k] || k).join(" + ") || "—";
-  const imgNote = dataOrigins.has("builtin") && !dataOrigins.has("network") ? "　|　卡面图需联网" : "";
-  const ds = dsStats();
-  el.innerHTML = `数据源：piovium 官方静态数据　|　${charRecords().length} 角色 · ${pool.filter(x => x.kind === "card").length} 卡牌 · ${SKILLS.length} 技能 · ${ds ? ds.conceptNames : 0} 概念　|　${origin}${imgNote}`;
-}
+/* ---------- 刷新 ---------- */
 let refreshBusy = false;
 $("btnRefresh").addEventListener("click", async () => {
   /* file:// 下（单文件离线版）网络路径必然被浏览器拦截，而数据已经内置：
@@ -236,7 +225,6 @@ async function refreshData(): Promise<void> {
   try {
     await ensureData(true);
     (VIEW_RENDER[state.currentView] || renderGrid)();
-    renderDataInfo();
     toast("数据已刷新");
   } catch (e) {
     /* 刷新失败 → 回退到本地可用数据（内置快照或缓存），保证页面仍然可用 */
@@ -365,7 +353,7 @@ function tileStep(cur: HTMLElement, key: string): boolean {
 /* ---------- 启动：hash 路由（#分享码 / #card=id / #q=关键词 / #b=卡库筛选） ---------- */
 /* 数据装载完成后刷新依赖数据的界面块。回调在本模块初始化时注册，
    触发时机在 20-data 的 loadData 末尾（此时各索引已建好）。 */
-onDataReady(() => { pruneDraft(); pruneFavs(); renderDraft(); renderDataInfo(); });
+onDataReady(() => { pruneDraft(); pruneFavs(); renderDraft(); });
 /* hash → 视图/动作。启动时执行一次；之后由 hashchange / popstate 驱动。 */
 function routeHash() {
   routedHash = location.hash;
@@ -532,4 +520,4 @@ export function boot(): void {
   }
 }
 
-export { VIEW_KEY, VIEW_RENDER, switchView, focusBrowseSearch, renderDataInfo, routeHash, restoreView };
+export { VIEW_KEY, VIEW_RENDER, switchView, focusBrowseSearch, routeHash, restoreView };

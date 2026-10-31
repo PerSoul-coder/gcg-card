@@ -33,20 +33,18 @@ window.addEventListener("error", function (ev) {
 <div class="wrap">
   <header>
     <h1>七圣召唤 · 卡牌与牌组浏览器</h1>
-    <!-- 全局功能升为图标按钮（悬浮 title 说明）：主题三态 / 刷新 / 数据信息 / 帮助。
+    <!-- 全局功能升为图标按钮（悬浮 title 说明）：主题三态 / 刷新 / 帮助。
          原先这些收在「更多」菜单里，点两层才够到；图标内容由 99-main 在启动时注入
          （图标定义单点在 resources）。牌组相关的「加载示例牌组」移入牌组工具菜单。 -->
     <div class="hd-actions">
       <button id="btnTheme" title="主题"></button>
       <button id="btnRefresh" title="刷新数据：从官方数据服务重新拉取最新数据（失败时自动回退到本地数据）"></button>
-      <button id="btnDataInfo" aria-pressed="false" title="数据信息：来源与规模"></button>
       <button id="btnHelp" title="快捷键与说明（?）"></button>
     </div>
     <div class="sub">卡库筛选与检索 · 牌组分享码解析与生成 · 多卡对比与牌组差异 · 概念词典 · 构筑校验 · 多牌组 · 技能图鉴 · 抽牌概率与回合模拟</div>
   </header>
 
   <div id="status" role="status" aria-live="polite"></div>
-  <div id="dataInfo"></div>
   <div id="histPanel"></div>
 
   <!-- 一级视图：卡库（浏览器的主用途）在前，牌组在后，图鉴是资料查询页 -->

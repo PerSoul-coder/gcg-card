@@ -392,7 +392,7 @@ export interface SuggestHit {
   gap: number;
 }
 
-/** 卡池统计：筛选 chips 的计数、版本列表、数据信息行都读这里。 */
+/** 卡池统计：筛选 chips 的计数、版本列表等界面读数都从这里走。 */
 export interface PoolStats {
   total: number;
   buildable: number;

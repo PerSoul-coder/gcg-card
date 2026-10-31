@@ -94,7 +94,7 @@ function buildPool() {
     pool.push(poolEntryOf(r));
   }
 
-  /* 统计：筛选 chips 计数与全局数据信息行都读这里 */
+  /* 统计：筛选 chips 计数等界面读数都从这里走 */
   const byType: Record<string, number> = {}, byEl: Record<string, number> = {}, byTag: Record<string, number> = {};
   for (const x of pool) {
     byType[x.typeRaw] = (byType[x.typeRaw] || 0) + 1;
