@@ -109,17 +109,17 @@ return (async () => {
   await flush();
   assert(!overlayOpen(), "无效概念深链：不开弹层");
 
-  /* ===== 10. 退场动画：滚动锁必须随 .show 摘除而释放（回归：看过详情后页面锁死） ===== */
+  /* ===== 10. 退场动画：.show 即刻摘除（锁随退场释放），.closing 只负责淡出 ===== */
   const sleep = ms => new Promise(r => setTimeout(r, ms));
   const locked = () => document.documentElement.classList.contains("layer-lock");
   window.__setMotion(true);   /* 允许退场动画（motionOK = true） */
   showDetail(idOf(cardA));
   assert(locked(), "弹层打开：滚动锁上");
-  closeTopLayer();            /* Esc → 动画退场：.show 尚未摘除，锁保持到动画结束 */
-  assert(locked(), "退场动画期间锁保持（弹层仍算打开）");
+  closeTopLayer();            /* Esc → 退场：.show 即刻摘除，锁立即释放 */
+  assert(!overlayOpen() && !locked(), "退场开始：层即刻算关闭，滚动锁立即释放");
+  assert($("overlay").classList.contains("closing"), "退场中：淡出类挂在（display:flex 保持可见）");
   await sleep(340);
-  assert(!overlayOpen(), "动画结束：弹层已关闭");
-  assert(!locked(), "动画结束：滚动锁释放（回归：看过一次详情后牌库锁死）");
+  assert(!$("overlay").classList.contains("closing"), "动画结束：退场类清除");
   /* 退场动画中立刻重开：挂起的关闭回调被取消，弹层保持打开 */
   showDetail(idOf(cardA));
   closeTopLayer();

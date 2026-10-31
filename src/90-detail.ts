@@ -117,24 +117,28 @@ function setOverlayOpen(open: boolean) {
   const ov = $("overlay");
   if (!ov || !ov.classList) return;
   if (!open && ov.classList.contains("show") && motionOK()) {
-    /* 退场：先播 .closing（淡出 + 下沉），动画结束再摘 .show。
-       兜底定时器防止 animationend 因元素复用而丢失。
-       滚动锁必须等 .show 真正摘除后再同步——动画期间层仍算打开，
-       此刻同步会让锁永远留在 html 上（页面对弹层一关就再也滚不动）。 */
+    /* 退场：立刻摘 .show（层即刻算关闭，滚动锁随退场开始就释放——布局抖动与
+       淡出重叠，而不是淡出结束后突兀一跳），再用 .closing 播淡出。
+       .closing 自带 display:flex，可见性不依赖 .show。
+       兜底定时器防止 animationend 因元素复用而丢失。 */
     cancelOverlayClose?.();
     let done = false;
     const fin = () => {
       if (done) return;
       done = true;
       cancelOverlayClose = null;
-      ov.classList.remove("show", "closing");
-      ov.removeEventListener("animationend", fin);
-      syncScrollLock();
+      ov.classList.remove("closing");
+      ov.removeEventListener("animationend", onEnd);
     };
-    cancelOverlayClose = () => { done = true; ov.removeEventListener("animationend", fin); };
-    ov.addEventListener("animationend", fin);
+    /* .detail 的 dlg-out（160ms）会先于 ovl-out（180ms）冒泡上来——
+       只认自己的动画名，否则淡出被提前掐断（末尾 20ms 骤隐）。 */
+    const onEnd = (ev: AnimationEvent) => { if (ev.animationName === "ovl-out") fin(); };
+    cancelOverlayClose = () => { done = true; ov.removeEventListener("animationend", onEnd); };
+    ov.addEventListener("animationend", onEnd);
+    ov.classList.remove("show");
+    ov.classList.add("closing");
     setTimeout(fin, 280);
-    if (open) hideTip();
+    syncScrollLock();
     return;
   }
   cancelOverlayClose?.();

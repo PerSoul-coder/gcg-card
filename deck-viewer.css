@@ -794,7 +794,7 @@ body.cmp-on #draftPanel { bottom: 136px; }
 @keyframes ovl-in { from { opacity: 0; } }
 @keyframes dlg-in { from { opacity: 0; transform: translateY(10px) scale(.985); } }
 /* 弹层退场：与入场同一节奏的淡出（.closing 由 setOverlayOpen 挂上，动画结束才摘 .show） */
-#overlay.closing { animation: ovl-out .18s ease forwards; pointer-events: none; }
+#overlay.closing { display: flex; animation: ovl-out .18s ease forwards; pointer-events: none; }
 #overlay.closing .detail { animation: dlg-out .16s ease forwards; }
 @keyframes ovl-out { to { opacity: 0; } }
 @keyframes dlg-out { to { opacity: 0; transform: translateY(8px) scale(.99); } }
