@@ -461,9 +461,11 @@ export interface TermEntry {
   src: number;
   kind: string;
   name: string;
+  /** 可链接释义（效果 / 规则）。角色简介永远不进这里——它在 story 字段，
+      数据形状保证「把简介 linkify」这类事故无法发生。 */
   desc: string;
-  /** desc 来自角色简介（叙事文本）：只展示、不链接——与详情页简介区同一规则。 */
-  story?: boolean;
+  /** 角色简介（叙事文本）：展示只转义、检索可命中、永不参与链接。 */
+  story?: string;
   mirrorCard?: boolean;
   type?: string;
   cost?: unknown;

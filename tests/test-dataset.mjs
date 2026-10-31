@@ -58,7 +58,8 @@ return (async () => {
   assert(!story.includes('class="term"'), "简介区不产生概念链接");
   assert(!story.includes("data-term="), "简介区不含 data-term");
 
-  /* 悬浮预览 / 概念页的角色简介同规则：desc 回退到 story 的概念条目只展示不链接。
+  /* 悬浮预览 / 概念页的角色简介同规则（下沉后的数据形状）：简介在 story 字段、
+     desc 只装可链接文本——渲染端对 story 只转义不 linkify。
      （回归：tip 里角色简介被 linkify，叙事文本出现可点术语） */
   let storyChars = 0, badStory = "";
   for (const ch of DATASET.records) {
@@ -66,13 +67,13 @@ return (async () => {
     const e = termEntries(ch.name).find(x => x.kind === "char");
     if (!e) continue;
     storyChars++;
-    if (!e.story) { badStory = ch.name; break; }
+    if (!e.story || e.desc) { badStory = ch.name; break; }
   }
   assert(storyChars > 100 && !badStory,
-    "角色概念条目全部标记 story（" + storyChars + " 个" + (badStory ? "，首例未标：" + badStory : "") + "）");
+    "角色概念条目全部走 story 字段且 desc 为空（" + storyChars + " 个" + (badStory ? "，首例异常：" + badStory : "") + "）");
   const mln = termEntries("玛拉妮").find(x => x.kind === "char");
   if (mln) {
-    assert(mln.story === true && !termBodyHtml(mln, false, false).includes('class="term"'),
+    assert(!!mln.story && !termBodyHtml(mln, false, false).includes('class="term"'),
       "悬浮预览的角色简介不含术语链接（玛拉妮）");
   }
 

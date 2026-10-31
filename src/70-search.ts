@@ -269,7 +269,8 @@ function searchCards(q: string, opts: { scope?: SearchScope; corpus?: PoolEntry[
     const ck = conceptKeyOf(name);
     if (conceptKeys.has(ck)) continue;
     const ckind = conceptEntriesOf(entries).find(e => !e.mirrorCard)?.kind;
-    if (push("concept", null, name, { ckind }, { englishName: "", description: entries.map(e => e.desc || "").join("\n") }))
+    /* 描述检索同时扫 desc（可链接释义）与 story（角色简介）：搜得到简介、渲染时不链接 */
+    if (push("concept", null, name, { ckind }, { englishName: "", description: entries.map(e => e.desc || e.story || "").join("\n") }))
       conceptKeys.add(ck);
   }
 
@@ -293,7 +294,7 @@ function searchCards(q: string, opts: { scope?: SearchScope; corpus?: PoolEntry[
       if (!isConceptRow(entries) || !conceptInCorpus(name, corpusIds)) continue;
       const ck = conceptKeyOf(name);
       if (conceptKeys.has(ck) || nameKeys.has("concept:" + name)) continue;
-      const concept = conceptEntriesOf(entries).find(e => !e.mirrorCard && (e.desc || "").toLowerCase().includes(rawLower));
+      const concept = conceptEntriesOf(entries).find(e => !e.mirrorCard && ((e.desc || "") + " " + (e.story || "")).toLowerCase().includes(rawLower));
       if (concept && pushDesc({ kind: "concept", id: null, name, score: 100, match: "desc", ckind: concept.kind }))
         conceptKeys.add(ck);
     }
