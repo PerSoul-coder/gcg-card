@@ -524,6 +524,37 @@ return (async () => {
   assert(threw, "恢复：格式不对时抛错（toast 回音）");
   deleteDeckById(987654321);
 
+  /* ===== 21. 文本牌表回流导入（98-textimport：解析 / 匹配 / 检查 / 载入截断） ===== */
+  if (!state.current) await decodeAndRender(SAMPLE, { noHash: true });
+  const tiRes = parseTextDeck(deckText());
+  assert(tiRes.chars.length === 3 && tiRes.chars.every(l => l.resolved != null), "文本导入：3 名角色全部识别");
+  assert(tiRes.cards.reduce((a, l) => a + l.count, 0) === 30 && tiRes.cards.every(l => l.resolved != null), "文本导入：行动牌 30 张全部识别");
+  assert(tiRes.code === state.current.code, "文本导入：分享码行透传");
+  assert(!textImportChecks(tiRes).some(c => c.level === "err"), "文本导入：完整牌表无 err 级检查");
+  resetTextImportIndex();
+  const tiSrc2 = ["【角色】", "  甘雨", "【装备牌】", "  2× 明珠固化〔牌组·千年珍珠骏麟〕（千年珍珠骏麟·天赋）", "×2 湮远", "1、某张不存在的牌", "七圣召唤 · 卡牌与牌组浏览器"].join(String.fromCharCode(10));
+  const tiRes2 = parseTextDeck(tiSrc2);
+  assert(tiRes2.chars.length === 1 && tiRes2.chars[0].resolved != null, "文本导入：一行一名的角色段");
+  const mz = tiRes2.cards.find(l => l.name.includes("明珠固化"));
+  assert(mz && mz.count === 2 && mz.resolved != null && mz.raw.includes("〔牌组"), "文本导入：数量前缀 + 修饰剥离（〔依赖〕（关联））");
+  const ty = tiRes2.cards.find(l => l.name.includes("湮远"));
+  assert(ty && ty.count === 2, "文本导入：×2 前缀");
+  assert(tiRes2.cards.some(l => l.resolved == null), "文本导入：不存在的卡名标记未识别");
+  const checks2 = textImportChecks(tiRes2);
+  assert(checks2.some(c => c.level === "err" && c.text.includes("角色")), "文本导入：角色不足报 err");
+  /* 载入：创建新牌组；同名超限截断到 copyLimit、秘传只留 1 */
+  const beforeN = decks.length;
+  const tiSrc3 = ["【角色】甘雨 / 迪奥娜 / 凯亚", "【事件牌】", "5× " + recordOfId(tiRes.cards[0].resolved).name, "5× " + recordOfId(tiRes.cards[0].resolved).name].join(String.fromCharCode(10));
+  const overRes = parseTextDeck(tiSrc3);
+  const tiStat = loadTextDeck(overRes);
+  const tiDeck = decks.find(d => d.id === tiStat.id);
+  assert(decks.length === beforeN + 1 && tiDeck && tiDeck.name === "导入牌组", "文本导入：载入创建新牌组（不动现有）");
+  const loadedId = tiRes.cards[0].resolved;
+  assert(tiDeck.cards.every(([id, c]) => c <= copyLimit(id)) && tiDeck.cards.some(([id, c]) => id === loadedId), "文本导入：超限截断到 copyLimit");
+  assert(tiStat.total <= 30, "文本导入：截断后总张数不超 30");
+  deleteDeckById(tiStat.id);
+  resetTextImportIndex();
+
 })();
 `;
 

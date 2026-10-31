@@ -16,6 +16,7 @@ import { recordOfId } from "./data/records";
 import { ICON_AUTO, ICON_HELP, ICON_MOON, ICON_RANDOM, ICON_SUN, SAMPLE, STORAGE_KEYS } from "./core/resources";
 import { closeTopLayer } from "./core/layers";
 import { closeMenus } from "./95-export";
+import { showTextImport } from "./98-textimport";
 import { setStatus, toast, copyText } from "./core/dom";
 import { dataReady } from "./20-data";
 import { backlinks } from "./50-backlinks";
@@ -42,6 +43,8 @@ $("btnSample").addEventListener("click", () => {
   $<HTMLInputElement>("codeInput").value = SAMPLE;
   decodeAndRender(SAMPLE).then(() => switchView("grid")).catch(() => {});
 });
+/* 文本牌表回流导入（98-textimport：解析 → 确认弹页 → 载入为新牌组） */
+$("btnTextImport").addEventListener("click", () => { closeMenus(); showTextImport(); });
 /* ---------- 主题：auto / light / dark 三态 ----------
    初始解析由 deck-viewer.html 头部内联脚本在样式表之前完成（防 FOUC）。
    auto = 跟随系统（matchMedia 实时监听，系统切换即时生效）；按钮循环三态，

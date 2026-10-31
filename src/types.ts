@@ -260,7 +260,8 @@ export type OverlayEntry =
   | (OverlayBase & { kind: "skill"; key: string })
   | (OverlayBase & { kind: "compare"; ids: number[]; onlyDiff: boolean; showSim: boolean })
   | (OverlayBase & DeckDiffEntry)
-  | (OverlayBase & { kind: "qr" });
+  | (OverlayBase & { kind: "qr" })
+  | (OverlayBase & { kind: "textimport" });
 
 /* ---------- 卡池条目 ----------
    把角色与实体卡摊平成同一种形状，供卡库、检索、对比、导出共用。

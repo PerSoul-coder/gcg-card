@@ -736,6 +736,24 @@ body.cmp-on #draftPanel { bottom: 136px; }
 .tsnip { color: var(--dim); font-size: var(--fs-12); line-height: 1.5; margin-top: 3px; overflow-wrap: anywhere; }
 .tsnip mark { background: color-mix(in srgb, var(--gold) 26%, transparent); color: var(--gold); padding: 0 1px; border-radius: 3px; }
 
+/* ===== 文本牌表导入（98-textimport） ===== */
+.ti-text { width: 100%; box-sizing: border-box; background: var(--bg2); border: 1px solid var(--line); border-radius: 9px; color: var(--text); font: var(--fs-13)/1.7 var(--sans, sans-serif); padding: 10px 12px; resize: vertical; }
+.ti-hint { color: var(--dim); font-size: var(--fs-12); line-height: 1.8; margin: 10px 0 0; }
+.ti-acts { display: flex; gap: 8px; justify-content: flex-end; margin-top: 14px; }
+.ti-sec { margin: 16px 0 6px; color: var(--gold-dim); font-size: var(--fs-12); letter-spacing: 2px; }
+.ti-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; padding: 3px 0; font-size: var(--fs-13); border-bottom: 1px dashed color-mix(in srgb, var(--line) 55%, transparent); }
+.ti-row:last-of-type { border-bottom: 0; }
+.ti-n { color: var(--gold); font-weight: bold; }
+.ti-alt, .ti-raw { color: var(--dim); font-size: var(--fs-12); }
+.ti-miss { color: var(--err); }
+.ti-cands { display: inline-flex; flex-wrap: wrap; gap: 4px; }
+.ti-code { display: flex; gap: 10px; align-items: center; margin: 10px 0; padding: 8px 12px; border: 1px solid color-mix(in srgb, var(--gold) 35%, transparent); border-radius: 9px; color: var(--gold); font-size: var(--fs-13); }
+.ti-checks { margin-top: 6px; padding: 8px 12px; border-radius: 9px; border: 1px solid var(--line); background: var(--bg2); }
+.ti-checks.err { border-color: color-mix(in srgb, var(--err) 40%, transparent); }
+.ti-check { font-size: var(--fs-12); line-height: 1.9; color: var(--dim); }
+.ti-check.err { color: var(--err); }
+.ti-check.ok { color: var(--ok); }
+
 /* ===== 详情弹层：关联角色 / 天赋牌 / 反链 ===== */
 .detail .drel { margin: 12px 0 0; display: flex; gap: 10px; align-items: baseline; }
 .detail .drel b { flex: none; color: var(--gold-dim); font-size: var(--fs-12); letter-spacing: 2px; font-weight: normal; }
