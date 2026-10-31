@@ -3,7 +3,7 @@ import { KIND_ZH, backlinks } from "./50-backlinks";
 import { $ } from "./core/dom";
 import { copyLimit, draft, draftAdd, draftRemoveCard, draftRemoveChar } from "./80-deck";
 import { browseVisibleIds } from "./85-views";
-import { renderSkillView, showSkill, skillOf } from "./47-skills";
+import { renderSkillView, renderSkillIdxView, showSkill, skillOf } from "./47-skills";
 import { compareState, renderCompareView, renderDeckDiffView } from "./88-compare";
 import { renderOddsView } from "./86-odds";
 import { R_STYLE, reqElement } from "./30-deps";
@@ -11,7 +11,7 @@ import { termEntries } from "./40-concepts";
 import { state } from "./data/state";
 import type { GcgRecord, OverlayEntry } from "./types";
 import { recordOfId, nameOfId, isCharId, isShadowId, cardRecords } from "./data/records";
-import { ELE_ZH, ELE_COLOR, tagZh, eleIcon, enPips, ICON_X, ICON_SWAP, ICON_STAR } from "./core/resources";
+import { ELE_ZH, ELE_COLOR, tagZh, eleIcon, enPips, imgFull, ICON_X, ICON_SWAP, ICON_STAR } from "./core/resources";
 import { esc, toast, copyText } from "./core/dom";
 import { registerLayer, syncScrollLock } from "./core/layers";
 import { overlayHashOf, overlayHashParse, overlayHashPush, overlayHashReplace, overlayHashBack, overlayHashCloseAll, overlayHashPop, overlayHashAdopt, overlayPushDepth, overlayHashClear } from "./core/history";
@@ -166,6 +166,7 @@ function renderOverlay(resetScroll = false) {
   if (reset) { top.scrollTop = 0; top.cmpLeft = 0; }
   if (top.kind === "term") renderTermView(top);
   else if (top.kind === "skill") renderSkillView(top);
+  else if (top.kind === "skillidx") renderSkillIdxView();
   else if (top.kind === "compare") renderCompareView(top);
   else if (top.kind === "deckdiff") renderDeckDiffView(top);
   else if (top.kind === "odds") renderOddsView(top);
@@ -226,10 +227,16 @@ function syncOverlayToHash(targetDepth: number, want) {
       overlayHashPop();
       continue;
     }
-    /* 普通层（compare / odds）没有历史身份：一律弹。
-       无条目的可回退层：hash 认它就留，不认就弹。 */
-    if (isH(top) && want && overlayMatches(top, want) && entryDepth() >= targetDepth) break;
-    state.overlayStack.pop();
+    /* 无条目层分两类：
+       · 普通层（compare / odds / 图鉴）——hash 认它就留，且打开在基座上时后退不关它；
+       · 无条目的可回退层（深链开的详情）——hash 不认它就是陈旧视图，始终弹掉。 */
+    if (isH(top)) {
+      if (want && overlayMatches(top, want) && entryDepth() >= targetDepth) break;
+      state.overlayStack.pop();
+      continue;
+    }
+    if (entryDepth() > 0) { state.overlayStack.pop(); continue; }
+    break;
   }
   /* 前进重开：目标深度还没到，按 hash 补上缺的那层（不写历史，但认领该条目） */
   if (want && entryDepth() < targetDepth) {
@@ -308,7 +315,7 @@ function renderDetailView(v) {
   if (c) {
     const el = c.stats.element;
     const tags = c.stats.tagsRaw.filter(t => !t.startsWith("GCG_TAG_ELEMENT")).map(tagZh).filter(Boolean);
-    html = `${nav}<div class="dimg">${cardArtHtml(id, { kind: "detail", alt: c.name })}</div>
+    html = `${nav}<div class="dimg" data-lb="${id}" title="点击查看大图">${cardArtHtml(id, { kind: "detail", alt: c.name })}</div>
       <div class="dinfo"><h2>${esc(c.name)}</h2>
       <div class="meta">${el ? `<span class="tagpill">${eleIcon(el)}${esc(ELE_ZH[el] || el)}</span>` : ""}${tags.map(t => `<span class="tagpill">${esc(t)}</span>`).join("")}<span class="tagpill">生命 ${c.stats.hp}</span><span class="tagpill">充能上限 ${enPips(c.stats.maxEnergy || 0)}</span><span class="tagpill">${esc(c.version || "")}</span></div>
       ${c.desc.story ? `<div class="dtext dstory">${esc(c.desc.story)}</div>` : ""}
@@ -336,7 +343,7 @@ function renderDetailView(v) {
     </div>` : "";
     const relChip = e.rel.relatedCharacterId != null
       ? `<div class="drel"><b>关联角色</b><span class="blchips"><button class="blchip" data-goto="${e.rel.relatedCharacterId}">${eEl ? eleIcon(eEl) : ""}${esc(nameOfId(e.rel.relatedCharacterId))}</button></span></div>` : "";
-    html = `${nav}<div class="dimg">${cardArtHtml(id, { kind: "detail", alt: e.name })}</div>
+    html = `${nav}<div class="dimg" data-lb="${id}" title="点击查看大图">${cardArtHtml(id, { kind: "detail", alt: e.name })}</div>
       <div class="dinfo"><h2>${esc(e.name)}</h2>
       <div class="meta"><span class="tagpill">${esc(e.typeZh)}</span>${eEl ? `<span class="tagpill">${eleIcon(eEl)}${esc(ELE_ZH[eEl] || eEl)}</span>` : ""}${costHtml(e.stats.cost)}${tags.map(t => `<span class="tagpill">${esc(t)}</span>`).join("")}${e.rel.relatedCharacterId ? `<span class="tagpill">关联：${esc(nameOfId(e.rel.relatedCharacterId))}</span>` : ""}<span class="tagpill">${esc(e.version || "")}</span></div>
       ${e.domain === "field" ? `<div class="dnote">对局实体：由技能或卡牌效果在对局中生成，不可加入牌组。</div>` : ""}
@@ -378,6 +385,8 @@ function draftRemoveFromDetail(): void {
    等于把模块边界又打开了一次，重构时也没法靠类型发现遗漏。
    详情页的收藏钮也在这里就近分发（卡库瓦片的星标在 85-views 自己的委托里处理）。 */
 $("detail").addEventListener("click", ev => {
+  const lb = (ev.target as HTMLElement).closest("[data-lb]") as HTMLElement | null;
+  if (lb) { showLightbox(Number(lb.dataset.lb)); return; }
   const favB = (ev.target as HTMLElement).closest("[data-fav]") as HTMLElement | null;
   if (favB) {
     const on = toggleFav(Number(favB.dataset.fav));
@@ -406,6 +415,55 @@ document.addEventListener("click", ev => {
   showDetail(Number(g.dataset.goto));
 });
 
+/* ---------- 卡面灯箱：详情页点击卡面 → 全屏原尺寸查看 ----------
+   图片地址与详情页同源（imgFull 同 id），浏览器已缓存，打开零等待。
+   ←/→ 沿详情的同级列表翻页（与详情翻页键位一致），Esc / 点空白关闭。 */
+function showLightbox(refId: number): void {
+  const top = topView();
+  const ids = top && top.kind === "detail" ? top.ids : [refId];
+  let box = $("lightbox");
+  if (!box || !box.classList) { box = document.createElement("div"); box.id = "lightbox"; if (document.body.appendChild) document.body.appendChild(box); }
+  box.innerHTML = `<img src="${imgFull(refId)}" alt="" width="420" height="720" decoding="async">
+    <button class="lb-x" data-act="close" title="关闭 (Esc)">${ICON_X}</button>
+    ${ids.length > 1 ? `<button class="lb-nav lb-prev" data-lbstep="-1" title="上一张 (←)">‹</button><button class="lb-nav lb-next" data-lbstep="1" title="下一张 (→)">›</button>` : ""}`;
+  box.dataset.ids = ids.join(",");
+  box.dataset.idx = String(Math.max(0, ids.indexOf(refId)));
+  box.classList.add("show");
+  hideTip();
+  registerLayer({ id: "lightbox", isOpen: () => !!box.classList && box.classList.contains("show"), close: closeLightbox, order: 55, modal: true });
+  syncScrollLock();
+}
+function closeLightbox(): void {
+  const box = $("lightbox");
+  if (box && box.classList) box.classList.remove("show");
+  syncScrollLock();
+}
+const lightboxOpen = (): boolean => {
+  const box = $("lightbox");
+  return !!(box && box.classList && box.classList.contains("show"));
+};
+function lightboxStep(d: number): void {
+  const box = $("lightbox");
+  if (!box || !box.dataset || !box.dataset.ids) return;
+  const ids = box.dataset.ids.split(",").map(Number);
+  const idx = Math.min(ids.length - 1, Math.max(0, Number(box.dataset.idx) + d));
+  if (ids[idx] == null || box.dataset.idx === String(idx)) return;
+  box.dataset.idx = String(idx);
+  const img = box.querySelector ? box.querySelector("img") : null;
+  if (img) img.setAttribute("src", imgFull(ids[idx]));
+}
+/* 灯箱交互：按钮 / 空白点击都走 document 委托（灯箱挂在 body 上，不在 #detail 里） */
+document.addEventListener("click", ev => {
+  const box = $("lightbox");
+  if (!box || !box.classList || !box.classList.contains("show")) return;
+  const t = ev.target as HTMLElement;
+  const stepBtn = t.closest && (t.closest("[data-lbstep]") as HTMLElement | null);
+  if (stepBtn) { lightboxStep(Number(stepBtn.dataset.lbstep) || 0); return; }
+  if (t.closest && t.closest("[data-act=close]")) { closeLightbox(); return; }
+  if (t.closest && t.closest("#lightbox img")) return;   /* 点图片本身不关闭 */
+  if (t.id === "lightbox") closeLightbox();               /* 点空白（遮罩）关闭 */
+});
+
 /* ---------- 帮助面板（快捷键与说明，复用详情弹层容器） ---------- */
 function showHelp() {
   overlayHashClear();        /* 帮助不是视图栈的一层：清栈（连同已推的历史） */
@@ -416,13 +474,17 @@ function showHelp() {
 <b>快捷键</b>
 1 / 2 / 3　切换 卡面视图 / 列表视图 / 卡库浏览
 /　聚焦卡库检索框（不在卡库时先切换过去）
+?　打开本帮助（无弹层时）
 Esc　逐层回退：概念下钻（每次退一层）→ 上一视图 → 关闭弹层 → 牌组管理 → 历史面板
-← / →　详情页翻页（同级列表内相邻项）
+← / →　详情页翻页（同级列表内相邻项）；灯箱打开时切上一张 / 下一张
+↑ ↓ ← →　卡库网格内移动焦点（焦点落上才接管），Enter 打开详情
 Ctrl+P　打印当前列表视图
 
 <b>使用说明</b>
 · 顶部输入框只解析牌组分享码。卡牌检索在「卡库浏览」顶部：先按类别 / 元素 / 费用等筛选卡池，再在筛选结果内按关键词检索，两个阶段互不重置。
 · 卡文中的术语（如「感电」「幻戏倒计时」）可悬浮预览释义；点击进入概念页，一个名字有多条解释时并列展示。
+· <b>技能图鉴</b>（牌组工具 → 技能图鉴）收录全部角色技能与装备牌特技：按所属分组、类型筛选（特技 / 被动 / 隐藏…）、支持名字 / 拼音 / 所属检索；点行进技能页，点组头看所属卡。
+· 详情页<b>点击卡面看大图</b>：灯箱里 ← / → 沿同级列表翻页，Esc 或点空白关闭。
 · <b>角色技能</b>全部列出（含被动技能与准备技能），技能行右侧是它的费用：元素骰 + 充能。点技能行看完整效果；准备技能会标出「准备 n 轮」，并可跳到它的「准备中状态」。
 · <b>类型</b>以数据源为准：装备牌 / 支援牌（场地、伙伴、道具由标签额外标出）/ 事件牌 / 状态牌（挂在角色上）/ 队伍状态（挂在队伍上）/ 召唤物 / 附加状态。后四类是对局中生成的实体，不进入牌组；卡库里归入「对局实体与历史变体」折叠分组，并标为「不可构筑」。
 · 概念页可逐层下钻：释义里的其它术语继续点进去，会在弹层内叠一层（顶部返回钮显示来源名称，多概念层时右侧标出层数）；返回钮或 Esc 逐层退回，直到回到最初那张卡牌。
@@ -668,4 +730,4 @@ document.addEventListener("keydown", ev => {
   if (el) showDetail(Number(el.dataset.id));
 }));
 
-export { backlinkHtml, charTalentChips, draftHas, deckActionHtml, topView, overlayOpen, setOverlayOpen, pagerContextFor, detailView, renderedView, renderOverlay, showDetail, overlayBack, overlayClose, modalStep, viewLabel, navBar, pagerHtml, renderDetailView, showHelp, tip, canHover, tipTerm, hideTip, renderTermView, showTermModal, termRoute, openTermName, syncOverlayToHash };
+export { backlinkHtml, charTalentChips, draftHas, deckActionHtml, topView, overlayOpen, setOverlayOpen, pagerContextFor, detailView, renderedView, renderOverlay, showDetail, overlayBack, overlayClose, modalStep, viewLabel, navBar, pagerHtml, renderDetailView, showHelp, showLightbox, closeLightbox, lightboxOpen, lightboxStep, tip, canHover, tipTerm, hideTip, renderTermView, showTermModal, termRoute, openTermName, syncOverlayToHash };

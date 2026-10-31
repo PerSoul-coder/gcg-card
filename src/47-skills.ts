@@ -4,7 +4,8 @@ import { cardRecords } from "./data/records";
 import { $ } from "./core/dom";
 import { costHtml, costText } from "./30-deps";
 import { overlayBack, overlayOpen, renderOverlay, topView } from "./90-detail";
-import { overlayHashOf, overlayHashPush } from "./core/history";
+import { overlayHashOf, overlayHashPush, overlayHashClear } from "./core/history";
+import { pinyinOf } from "./70-search";
 import { state } from "./data/state";
 import type { SkillEntry } from "./types";
 import { tagZh } from "./core/resources";
@@ -159,4 +160,128 @@ function showSkill(key, fromHistory = false) {
   renderOverlay();
 }
 
-export { SKILL_TAG_ZH, SKILL_TAG_ORDER, SKILLS, skillByKey, skillByName, skillsOfOwner, buildSkillIndex, skillsOf, skillsOfCard, skillOf, skillsNamed, skillCostText, skillRowHtml, skillsHtml, skillsHtmlCard, equipSkillsHtml, renderSkillView, showSkill };
+/* ---------- 技能图鉴：全部技能（角色技能 + 装备牌特技）的检索式总览 ----------
+   整栈替换式弹层视图（与抽牌概率 / 牌组差异同模式，不进历史）。按所属分组，
+   类型 chips 数据驱动（出现什么类型就列什么），检索覆盖 名字 / 拼音 / 所属 / 英文。
+   数据只有一份（SKILLS），这里只做投影；行点击复用 data-skill 的既有委托。 */
+export const skillIdxState: { tag: string; q: string } = { tag: "", q: "" };
+
+export function skillIdxMatches(): SkillEntry[] {
+  const q = skillIdxState.q.trim();
+  const lq = q.toLowerCase().replace(/\s+/g, "");
+  const nq = nameKey(q);
+  const tag = skillIdxState.tag;
+  const latin = /^[a-z]+$/.test(lq);
+  const hitPy = (name: string): boolean => {
+    const py = pinyinOf(name);
+    return !!py && !!lq && latin && (py.full.includes(lq) || py.initials.includes(lq));
+  };
+  return SKILLS.filter(s => {
+    if (tag === "hidden" ? !s.hidden : !!tag && s.tag !== tag) return false;
+    if (!q) return true;
+    if (nameKey(s.name).includes(nq) || s.ownerName.includes(q)) return true;
+    if (String(s.englishName || "").toLowerCase().includes(lq)) return true;
+    return hitPy(s.name) || hitPy(s.ownerName);
+  });
+}
+/* 检索结果按所属分组（SKILLS 本就按 ownerKey 排序，分组保持数据序） */
+function skillIdxGroups(): Array<{ key: string; name: string; id: number; rows: SkillEntry[] }> {
+  const byOwner = new Map<string, SkillEntry[]>();
+  for (const s of skillIdxMatches()) {
+    const k = s.ownerKey || "";
+    if (!byOwner.has(k)) byOwner.set(k, []);
+    byOwner.get(k)!.push(s);
+  }
+  return [...byOwner.entries()].map(([key, rows]) => ({
+    key,
+    name: rows[0].ownerName || "未知",
+    id: (rows[0].ownerId != null ? rows[0].ownerId : rows[0].ownerCardId) as number,
+    rows,
+  }));
+}
+function skillIdxGroupHtml(g: { key: string; name: string; id: number; rows: SkillEntry[] }): string {
+  /* 组头用所属牌面做视觉锚点（与技能页同一语义），行复用 skillRowHtml */
+  const art = g.id != null ? cardArtHtml(g.id, { kind: "tile", alt: g.name }) : "";
+  return `<div class="skidx-group">
+    <div class="skidx-head"><span class="skidx-art">${art}</span>
+      <button class="blchip" data-goto="${g.id}" title="查看「${esc(g.name)}」详情">${esc(g.name)}</button>
+      <small>${g.rows.length} 项</small></div>
+    <div class="skills">${g.rows.map(skillRowHtml).join("")}</div></div>`;
+}
+/* 分块挂载：600+ 行不能一次进 DOM。每批 8 个分组，滚动接近底部再长。 */
+const SKIDX_CHUNK = 8;
+let skidxGroups: ReturnType<typeof skillIdxGroups> = [];
+let skidxMounted = 0;
+let skidxIO: { disconnect?: () => void } | null = null;
+function skidxGrow(): void {
+  const list = $("skillIdxList");
+  if (!list || !list.insertAdjacentHTML) return;
+  const to = Math.min(skidxMounted + SKIDX_CHUNK, skidxGroups.length);
+  let html = "";
+  for (let i = skidxMounted; i < to; i++) html += skillIdxGroupHtml(skidxGroups[i]);
+  skidxMounted = to;
+  if (html) list.insertAdjacentHTML("beforeend", html);
+}
+function skidxRefresh(): void {
+  /* 检索输入时只重挂结果区（不整视图重建——输入框焦点会丢） */
+  skidxGroups = skillIdxGroups();
+  skidxMounted = 0;
+  const list = $("skillIdxList");
+  if (list) list.innerHTML = "";
+  skidxGrow();
+  const cnt = $("skillIdxCount");
+  if (cnt) cnt.textContent = String(skidxGroups.reduce((s, g) => s + g.rows.length, 0));
+  if (skidxMounted >= skidxGroups.length) { skidxIO?.disconnect?.(); skidxIO = null; }
+}
+function renderSkillIdxView(): void {
+  const matches = skillIdxMatches();
+  /* 类型 chips 数据驱动：技能里出现什么类型就列什么（特技/被动/隐藏…） */
+  const tags: Array<{ tag: string; zh: string; n: number }> = [];
+  const seen = new Map<string, number>();
+  for (const s of SKILLS) {
+    seen.set(s.tag, (seen.get(s.tag) || 0) + 1);
+  }
+  for (const t of SKILL_TAG_ORDER) if (seen.has(t)) tags.push({ tag: t, zh: SKILL_TAG_ZH[t] || t, n: seen.get(t)! });
+  for (const [t, n] of seen) if (!SKILL_TAG_ORDER.includes(t)) tags.push({ tag: t, zh: SKILL_TAG_ZH[t] || t, n });
+  const chip = (tag: string, label: string, n: number) =>
+    `<button class="fchip${skillIdxState.tag === tag ? " on" : ""}" data-skidxtag="${tag}">${esc(label)} <b>${n}</b></button>`;
+  const chips = [chip("", "全部", SKILLS.length), ...tags.map(t => chip(t.tag, t.zh, t.n)),
+    chip("hidden", "隐藏", SKILLS.filter(s => s.hidden).length)];
+  $("detail").innerHTML = `${navBar()}<div class="skillidx-view cmp-view">
+    <h2 class="cmp-title">技能图鉴 <small id="skillIdxCount">${matches.length}</small></h2>
+    <div class="skillidx-bar"><input id="skillIdxQ" placeholder="检索：技能名 / 拼音全拼或首字母 / 所属角色 / 英文…" value="${esc(skillIdxState.q)}" spellcheck="false" autocomplete="off"></div>
+    <div class="skillidx-chips">${chips.join("")}</div>
+    <div class="skillidx-list" id="skillIdxList"></div>
+    <div id="skillIdxSentinel"></div></div>`;
+  skidxRefresh();
+  /* 弹层是滚动容器：接近底部时增长下一批分组 */
+  const sc = $("detail");
+  if (sc && typeof IntersectionObserver === "function") {
+    skidxIO?.disconnect?.();
+    const io = new IntersectionObserver(() => {
+      if (skidxMounted >= skidxGroups.length) { io.disconnect(); return; }
+      if (sc.scrollTop + sc.clientHeight > sc.scrollHeight - 600) skidxGrow();
+    }, { root: sc, rootMargin: "600px" });
+    io.observe($("skillIdxSentinel"));
+    skidxIO = io;
+  }
+}
+function showSkillIdx(): void {
+  overlayHashClear();   /* 整栈替换（与概率 / 差异同模式），先清已推的弹层历史 */
+  state.overlayStack = [{ kind: "skillidx" }];
+  renderOverlay();
+}
+/* 图鉴内的检索与 chips：输入即时过滤（只重挂结果区），chips 重渲染整视图 */
+$("detail").addEventListener("input", ev => {
+  if ((ev.target as HTMLElement).id !== "skillIdxQ") return;
+  skillIdxState.q = (ev.target as HTMLInputElement).value;
+  skidxRefresh();
+});
+$("detail").addEventListener("click", ev => {
+  const c = (ev.target as HTMLElement).closest("[data-skidxtag]") as HTMLElement | null;
+  if (!c) return;
+  skillIdxState.tag = c.dataset.skidxtag || "";
+  renderSkillIdxView();
+});
+
+export { SKILL_TAG_ZH, SKILL_TAG_ORDER, SKILLS, skillByKey, skillByName, skillsOfOwner, buildSkillIndex, skillsOf, skillsOfCard, skillOf, skillsNamed, skillCostText, skillRowHtml, skillsHtml, skillsHtmlCard, equipSkillsHtml, renderSkillView, showSkill, renderSkillIdxView, showSkillIdx };

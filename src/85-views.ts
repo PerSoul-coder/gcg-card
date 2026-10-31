@@ -503,7 +503,7 @@ function browseTile(x, inGroup) {
      只有角色变体（类型看不出不可构筑）保留一个短标记 */
   const warn = x.share == null && (!inGroup || x.kind === "char")
     ? `<span class="vwarn" title="对局实体或历史版本变体，不可加入构筑">${inGroup ? "变体" : "不可构筑"}</span>` : "";
-  return `<div class="tile stile btile" data-id="${x.id}" title="点击查看详情">
+  return `<div class="tile stile btile" data-id="${x.id}" tabindex="0" title="点击查看详情">
     <div class="imgbox"${elCol ? ` style="border-left-color:${elCol}"` : ""}>
       ${cardArtHtml(x.id, { kind: "tile", alt: x.name })}
       <div class="badges">${badges}</div>${add}<button class="favbtn${isFav(x.id) ? " on" : ""}" data-fav="${x.id}" aria-pressed="${isFav(x.id)}" title="${isFav(x.id) ? "取消收藏" : "收藏"}">${ICON_STAR}</button>${qtyBadge}${cmpBtnHtml(x.id)}</div>

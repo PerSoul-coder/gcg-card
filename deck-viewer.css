@@ -56,7 +56,7 @@
   --ring: 0 0 0 3px var(--gold-15);
   /* z 阶梯（局部叠放 0/1/2/3 不入阶梯） */
   --z-sticky: 30; --z-nav: 40; --z-sug: 42; --z-bar: 45; --z-panel: 46;
-  --z-overlay: 50; --z-tip: 60; --z-toast: 99;
+  --z-overlay: 50; --z-lightbox: 55; --z-tip: 60; --z-toast: 99;
   /* 卡壳（对局实体）：默认一套中性，四类各覆盖（主题随令牌走） */
   --shell-c: #8d97a6; --shell-cl: rgba(141,151,166,.28); --shell-cg: rgba(141,151,166,.12);
   --shell-b: #1f2836; --shell-b2: #141a23;
@@ -1147,3 +1147,26 @@ body.cmp-on .wrap { padding-bottom: 180px; }
   .nbhead small { white-space: normal; flex-basis: 100%; order: 4; line-height: 1.5; }
   .nbhead .nbact { order: 3; }
 }
+
+/* ===== 技能图鉴（牌组工具 → 技能图鉴）：整栈替换式弹层视图 ===== */
+.skillidx-view { flex: 1; min-width: 0; width: 100%; }
+.skillidx-bar { margin-top: 12px; }
+.skillidx-bar input { width: 100%; background: var(--bg2); border: 1px solid var(--line); color: var(--text); border-radius: var(--r-md); padding: 9px 13px; font-size: var(--fs-14); transition: border-color var(--t-fast), box-shadow var(--t-fast); }
+.skillidx-bar input:focus { outline: none; border-color: var(--gold-dim); box-shadow: var(--ring); }
+.skillidx-chips { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+.skillidx-list { margin-top: 2px; }
+.skidx-group { margin-top: 14px; }
+.skidx-head { display: flex; align-items: center; gap: 8px; }
+.skidx-head .skidx-art { width: 34px; border-radius: var(--r-sm); overflow: hidden; flex: none; box-shadow: var(--elev-1); }
+.skidx-head .skidx-art img { width: 100%; height: auto; display: block; }
+.skidx-head small { color: var(--dim); font-size: var(--fs-11); }
+.skidx-group .skill { cursor: pointer; }
+
+/* ===== 卡面灯箱：详情页点击卡面 → 全屏原尺寸（层序在弹层之上） ===== */
+#lightbox { display: none; position: fixed; inset: 0; z-index: var(--z-lightbox); background: color-mix(in srgb, var(--scrim) 92%, transparent); align-items: center; justify-content: center; }
+#lightbox.show { display: flex; animation: ovl-in .15s ease; }
+#lightbox img { max-height: 92dvh; max-width: 92vw; width: auto; height: auto; border-radius: var(--r-lg); border: 1px solid var(--gold-35); box-shadow: var(--elev-4), 0 0 44px -12px var(--gold-45); }
+#lightbox .lb-x { position: absolute; top: 18px; right: 18px; }
+#lightbox .lb-nav { position: absolute; top: 50%; transform: translateY(-50%); font-size: var(--fs-24); line-height: 1; padding: 12px 15px; }
+#lightbox .lb-prev { left: 18px; }
+#lightbox .lb-next { right: 18px; }

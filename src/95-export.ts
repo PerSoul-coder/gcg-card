@@ -2,7 +2,7 @@
 import { allReqs, costText } from "./30-deps";
 import { recordOfId, shareOfId } from "./data/records";
 import { $ } from "./core/dom";
-import { skillsOf } from "./47-skills";
+import { skillsOf, showSkillIdx } from "./47-skills";
 import { showDeckDiff } from "./88-compare";
 import { showOdds } from "./86-odds";
 import { showHelp } from "./90-detail";
@@ -173,8 +173,10 @@ $("btnDataInfo").addEventListener("click", () => {
   $("btnDataInfo").textContent = show ? "隐藏数据信息" : "数据信息";
   closeMenus();
 });
+$("btnSkillIdx").addEventListener("click", () => { closeMenus(); showSkillIdx(); });
 $("btnDeckDiff").addEventListener("click", () => { closeMenus(); showDeckDiff(); });
 $("btnOdds").addEventListener("click", () => { closeMenus(); showOdds(); });
+$("btnPrint").addEventListener("click", () => { closeMenus(); window.print(); });
 $("btnHelp").addEventListener("click", () => { closeMenus(); showHelp(); });
 $("exportMenu").addEventListener("click", ev => {
   const b = (ev.target as HTMLElement).closest("[data-exp]");

@@ -11,7 +11,7 @@ import { dsStats } from "./07-dataset";
 import { resetBacklinks } from "./50-backlinks";
 import { SKILLS, resetSkillIndex, skillOf, showSkill } from "./47-skills";
 import { beginRenameDeck, closeDraftPanel, deleteDeckById, draftClear, draftEncode, draftLoadCurrent, draftRemoveCard, draftRemoveChar, draftSetCount, duplicateDeck, loadDraft, newDeck, pruneDraft, renderDraft, renderDraftPanel, syncFromActive, toggleDraftPanel } from "./80-deck";
-import { overlayOpen, showDetail, showTermModal, syncOverlayToHash } from "./90-detail";
+import { overlayOpen, showDetail, showHelp, showTermModal, syncOverlayToHash, lightboxOpen, lightboxStep } from "./90-detail";
 import { resetViewState, state } from "./data/state";
 import { recordOfId, charRecords, resetRecordIndex } from "./data/records";
 import { SAMPLE, STORAGE_KEYS } from "./core/resources";
@@ -248,15 +248,69 @@ document.addEventListener("keydown", ev => {
     closeTopLayer();
     return;
   }
+  /* 灯箱打开时 ←/→ 翻页（与详情翻页同键位，且优先于网格导航） */
+  if (lightboxOpen() && (ev.key === "ArrowLeft" || ev.key === "ArrowRight")) {
+    ev.preventDefault();
+    lightboxStep(ev.key === "ArrowRight" ? 1 : -1);
+    return;
+  }
   if (overlayOpen()) return;
   const tag = ((ev.target as HTMLElement).tagName || "").toLowerCase();
-  if (tag === "input" || tag === "textarea") return;
+  if (tag === "input" || tag === "textarea" || tag === "select") return;
+  /* ？打开帮助：只在无弹层时生效，避免误按把正在看的详情清掉 */
+  if (ev.key === "?") { showHelp(); return; }
   /* 数字键与标签栏顺序一致：1 卡库 / 2 牌组卡面 / 3 牌组列表 */
   if (ev.key === "1") switchView("browse");
   if (ev.key === "2") switchView("grid");
   if (ev.key === "3") switchView("list");
   if (ev.key === "/") { ev.preventDefault(); focusBrowseSearch(); }
+  /* 卡库网格方向键：焦点已在瓦片上时接管（否则方向键保持页面滚动） */
+  if (ev.key.startsWith("Arrow")) {
+    const active = document.activeElement as HTMLElement | null;
+    const onTile = active && active.classList && active.classList.contains("tile");
+    if (onTile) {
+      const moved = tileStep(active, ev.key);
+      if (moved) ev.preventDefault();
+      return;
+    }
+  }
+  if (ev.key === "Enter") {
+    const active = document.activeElement as HTMLElement | null;
+    if (active && active.classList && active.classList.contains("tile")) {
+      ev.preventDefault();
+      active.click();   /* 复用瓦片的点击链路（data-id → 详情） */
+    }
+  }
 });
+/* 卡库网格焦点导航：←→ 在同行内移动，↑↓ 找相邻行里水平位置最近的瓦片 */
+function tileStep(cur: HTMLElement, key: string): boolean {
+  const tiles = [...document.querySelectorAll("#bgrid .tile")] as HTMLElement[];
+  const i = tiles.indexOf(cur);
+  if (i < 0) return false;
+  const col = (t: HTMLElement) => Math.round(t.offsetLeft);
+  const row = (t: HTMLElement) => Math.round(t.offsetTop);
+  const r = row(cur), c = col(cur);
+  if (key === "ArrowRight" || key === "ArrowLeft") {
+    /* DOM 序即行内序：相邻一个不同行就说明已到行首/行尾 */
+    const j = i + (key === "ArrowRight" ? 1 : -1);
+    if (j >= 0 && j < tiles.length && row(tiles[j]) === r) { tiles[j].focus(); return true; }
+    return false;
+  }
+  const dir = key === "ArrowDown" ? 1 : -1;
+  let targetRow: number | null = null;
+  for (let j = i + dir; j >= 0 && j < tiles.length; j += dir) {
+    if (row(tiles[j]) !== r) { targetRow = row(tiles[j]); break; }
+  }
+  if (targetRow == null) return false;
+  let best: HTMLElement | null = null, bd = Infinity;
+  for (const t of tiles) {
+    if (row(t) !== targetRow) continue;
+    const d = Math.abs(col(t) - c);
+    if (d < bd) { bd = d; best = t; }
+  }
+  if (best) { best.focus(); return true; }
+  return false;
+}
 
 /* ---------- 启动：hash 路由（#分享码 / #card=id / #q=关键词 / #b=卡库筛选） ---------- */
 /* 数据装载完成后刷新依赖数据的界面块。回调在本模块初始化时注册，

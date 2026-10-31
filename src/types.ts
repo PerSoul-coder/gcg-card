@@ -257,6 +257,7 @@ export type OverlayEntry =
   | (OverlayBase & { kind: "detail"; id: number; ids: number[]; idx: number })
   | (OverlayBase & { kind: "term"; name: string })
   | (OverlayBase & { kind: "skill"; key: string })
+  | (OverlayBase & { kind: "skillidx" })
   | (OverlayBase & { kind: "compare"; ids: number[]; onlyDiff: boolean; showSim: boolean })
   | (OverlayBase & { kind: "odds"; pick?: unknown })
   | (OverlayBase & DeckDiffEntry);

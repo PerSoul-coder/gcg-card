@@ -61,6 +61,8 @@ function makeEl(id) {
         };
       if (k === "style") return t._style || (t._style = {});
       if (k === "dataset") return t._dataset || (t._dataset = {});
+      /* insertAdjacentHTML 有真实语义：内容拼进 innerHTML（分块挂载的列表靠它进 DOM） */
+      if (k === "insertAdjacentHTML") return (_pos, html) => { t.innerHTML = String(t.innerHTML || "") + html; };
       if (k in t) return t[k];
       if (k === "closest" || k === "querySelector") return () => null;
       if (k === "querySelectorAll") return () => [];

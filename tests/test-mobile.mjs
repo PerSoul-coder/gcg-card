@@ -79,7 +79,7 @@ assert(/\.detail \{[^}]*overscroll-behavior:\s*contain/.test(css), ".detail 阻�
 assert(!/html:has\(#histPanel\.show\)/.test(css), "历史面板不参与文档滚动锁（文档流内）");
 assert(!/html:has\(body\.cmp-on\)/.test(css), "对比栏不参与文档滚动锁（常驻浮条）");
 
-/* 登记表里声明 modal 的层，必须正好是「会盖住整页的两层」 */
+/* 登记表里声明 modal 的层，必须正好是「会盖住整页的三层」（灯箱与弹层同责） */
 const srcText = (dir) => fs.readdirSync(dir, { withFileTypes: true })
   .map(d => d.isDirectory() ? srcText(path.join(dir, d.name))
     : /\.ts$/.test(d.name) ? fs.readFileSync(path.join(dir, d.name), "utf8") : "")
@@ -87,8 +87,8 @@ const srcText = (dir) => fs.readdirSync(dir, { withFileTypes: true })
 const layerCalls = [...srcText(path.join(here, "src")).matchAll(/registerLayer\(\{[^}]*\}\)/g)].map(m => m[0]);
 const modalIds = layerCalls.filter(s => /modal:\s*true/.test(s))
   .map(s => (s.match(/id:\s*"([^"]+)"/) || [])[1]).sort();
-assert(modalIds.join() === "draftPanel,overlay",
-  `只有详情弹层与牌组面板是模态层（实际：${modalIds.join() || "无"}）`);
+assert(modalIds.join() === "draftPanel,lightbox,overlay",
+  `只有详情弹层 / 牌组面板 / 灯箱是模态层（实际：${modalIds.join() || "无"}）`);
 assert(!'overlay").classList.add("show")'.includes("x") && !/\$\("overlay"\)\.classList\.add\("show"\)/.test(js),
   "弹层显示只有 setOverlayOpen 一条路径（避免漏掉滚动锁）");
 assert(!/\$\("overlay"\)\.classList\.remove\("show"\)/.test(js),
