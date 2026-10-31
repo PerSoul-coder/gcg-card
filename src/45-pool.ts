@@ -134,6 +134,16 @@ export function toggleFav(id: number): boolean {
   saveFavs();
   return favs.has(id);
 }
+/** 批量加入收藏（恢复备份用）：只收池内 id，返回实际新增数，一次性落盘。 */
+export function addFavs(ids: unknown[]): number {
+  let n = 0;
+  for (const id of ids) {
+    const num = Number(id);
+    if (Number.isFinite(num) && num > 0 && recordOfId(num) && !favs.has(num)) { favs.add(num); n++; }
+  }
+  if (n) saveFavs();
+  return n;
+}
 /** 数据就绪后清掉失效 id（池里已不存在的卡）。 */
 export function pruneFavs(): void {
   let dirty = false;

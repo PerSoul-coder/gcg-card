@@ -4,7 +4,7 @@ import { recordOfId, shareOfId, nameOfId, isCharId } from "./data/records";
 import { $ } from "./core/dom";
 import { decodeRaw, encodeRaw } from "./10-codec";
 import { syncTileQty } from "./85-views";
-import { pool } from "./45-pool";
+import { pool, addFavs, favs } from "./45-pool";
 import { state } from "./data/state";
 import type { Deck, Draft } from "./types";
 import { STORAGE_KEYS, imgFull, eleIcon, ICON_X, ICON_PLUS } from "./core/resources";
@@ -422,4 +422,35 @@ export function toggleDraftPanel(): void {
    open/close 里的 setModalLayer 以同一 spec 幂等覆盖，二者不冲突。 */
 registerLayer({ id: "draftPanel", isOpen: draftPanelOpen, close: closeDraftPanel, order: 46, modal: true });
 
-export { draft, decks, activeDeckId, deckRenameId, deckNoteId, loadDecks, saveDecks, activeDeck, deckSeq, newDeck, normalizeDeck, syncFromActive, saveDraft, loadDraft, pruneDraft, draftTotal, COPY_LIMIT, LEGEND_COPY_LIMIT, copyLimit, draftAdd, draftRemoveChar, draftRemoveCard, draftSetCount, draftClear, draftLoadCurrent, deckProblems, draftEncode, renderDraft, renderDraftPanel, commitDeckRename };
+/* ---------- 备份与恢复 ----------
+   localStorage 按 origin 隔离：从本地文件迁到托管站点（或换设备）时牌组不会跟
+   过去——备份/恢复就是迁移路径。备份是自描述 JSON（牌组 + 收藏）；恢复逐条
+   走 normalizeDeck 同一单点消毒，id 相同视为同一套牌、updatedAt 新者胜，
+   只增改不删除（非破坏性合并，无需预确认）。 */
+const BACKUP_FORMAT = "gi-decks-backup";
+interface DecksBackup { format: string; version: 1; exportedAt: string; decks: Deck[]; favs: number[] }
+function exportDecksBackup(): DecksBackup {
+  return {
+    format: BACKUP_FORMAT, version: 1, exportedAt: new Date().toISOString(),
+    decks: decks.map(d => ({ ...d, chars: [...d.chars], cards: d.cards.map(p => [p[0], p[1]] as [number, number]), ...(d.core ? { core: [...d.core] } : {}) })),
+    favs: [...favs],
+  };
+}
+function mergeDecksBackup(raw: unknown): { added: number; updated: number; kept: number; favsAdded: number; invalid: number } {
+  const stat = { added: 0, updated: 0, kept: 0, favsAdded: 0, invalid: 0 };
+  if (!raw || typeof raw !== "object") throw new Error("备份文件格式不对");
+  const b = raw as Partial<DecksBackup>;
+  if (b.format !== BACKUP_FORMAT || !Array.isArray(b.decks)) throw new Error("备份文件格式不对（期望 gi-decks-backup）");
+  for (const x of b.decks) {
+    const nd = normalizeDeck(x);
+    if (!nd) { stat.invalid++; continue; }
+    const cur = decks.find(d => d.id === nd.id);
+    if (!cur) { decks.unshift(nd); stat.added++; }
+    else if ((nd.updatedAt || 0) > (cur.updatedAt || 0)) { Object.assign(cur, nd); stat.updated++; }
+    else stat.kept++;
+  }
+  if (Array.isArray(b.favs)) stat.favsAdded = addFavs(b.favs);
+  saveDecks(); syncFromActive(); renderDraft();
+  return stat;
+}
+export { draft, decks, activeDeckId, deckRenameId, deckNoteId, loadDecks, saveDecks, activeDeck, deckSeq, newDeck, normalizeDeck, syncFromActive, saveDraft, loadDraft, pruneDraft, draftTotal, COPY_LIMIT, LEGEND_COPY_LIMIT, copyLimit, draftAdd, draftRemoveChar, draftRemoveCard, draftSetCount, draftClear, draftLoadCurrent, deckProblems, draftEncode, renderDraft, renderDraftPanel, commitDeckRename, exportDecksBackup, mergeDecksBackup };

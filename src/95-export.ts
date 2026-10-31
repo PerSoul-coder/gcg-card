@@ -6,7 +6,8 @@ import { skillsOf } from "./47-skills";
 import { showDeckDiff } from "./88-compare";
 import { renderShareCanvas } from "./96-share";
 import { showQr, qrContent } from "./97-qr";
-import { activeDeck, draft } from "./80-deck";
+import { activeDeck, draft, exportDecksBackup, mergeDecksBackup, renderDraftPanel } from "./80-deck";
+import { pruneFavs } from "./45-pool";
 import { showHelp } from "./90-detail";
 import { decodeRaw, encodeRaw } from "./10-codec";
 import { state } from "./data/state";
@@ -186,6 +187,32 @@ document.addEventListener("click", ev => {
   if (!(ev.target as HTMLElement).closest(".expwrap")) closeMenus();
 });
 $("btnDeckDiff").addEventListener("click", () => { closeMenus(); showDeckDiff(); });
+/* 备份/恢复：localStorage 按 origin 隔离，跨设备/跨站点迁移的路径（80-deck 合并） */
+$("btnDeckBackup").addEventListener("click", () => {
+  closeMenus();
+  download(`gi-decks-backup-${fileStamp().replace("gi-deck-", "")}.json`, JSON.stringify(exportDecksBackup(), null, 2), "application/json");
+  toast("备份已下载（含全部牌组与收藏）");
+});
+$("btnDeckRestore").addEventListener("click", () => {
+  closeMenus();
+  const inp = document.createElement("input");
+  inp.type = "file";
+  inp.accept = "application/json,.json";
+  inp.onchange = () => {
+    const f = inp.files && inp.files[0];
+    if (!f) return;
+    void f.text().then(txt => {
+      try {
+        const st = mergeDecksBackup(JSON.parse(txt));
+        renderDraftPanel(); pruneFavs();
+        toast(`已恢复：新增 ${st.added} · 更新 ${st.updated} · 保留 ${st.kept}` +
+          (st.favsAdded ? ` · 收藏 +${st.favsAdded}` : "") +
+          (st.invalid ? ` · 无效跳过 ${st.invalid}` : ""));
+      } catch (e) { toast("恢复失败：" + (e as Error).message, true); }
+    }, () => toast("读取备份文件失败", true));
+  };
+  inp.click();
+});
 $("btnPrint").addEventListener("click", () => { closeMenus(); window.print(); });
 $("btnHelp").addEventListener("click", () => { closeMenus(); showHelp(); });
 

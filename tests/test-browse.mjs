@@ -505,6 +505,25 @@ return (async () => {
   const snip2 = descSnippet(long, "关键词", 10);
   assert(snip2.startsWith("…") && snip2.endsWith("…") && snip2.includes("<mark>关键词</mark>"), "描述片段：长文本两侧省略号");
 
+  /* ===== 20. 牌组备份与恢复（自描述格式 + 非破坏性合并） ===== */
+  const bak = exportDecksBackup();
+  assert(bak.format === "gi-decks-backup" && bak.version === 1 && Array.isArray(bak.decks) && Array.isArray(bak.favs),
+    "备份：自描述格式（format/version/decks/favs）");
+  const modified = JSON.parse(JSON.stringify(bak));
+  modified.decks[0].note = "恢复过来的备注";
+  modified.decks[0].updatedAt = (modified.decks[0].updatedAt || 0) + 9999;
+  modified.decks.push({ id: 987654321, name: "恢复新增", chars: [1101, 1102, 1103], cards: [[1104, 2]] }, "junk");
+  modified.favs = [1101];
+  const stat = mergeDecksBackup(modified);
+  assert(stat.updated === 1 && stat.added === 1 && stat.invalid === 1, "恢复：新者胜更新 + 新增 + 无效跳过");
+  assert(decks.some(d => d.id === 987654321) && activeDeck()?.note === "恢复过来的备注", "恢复：新牌组入库、活动牌组按 updatedAt 更新");
+  assert(isFav(1101), "恢复：收藏并入（只收池内 id）");
+  assert(mergeDecksBackup(bak).kept >= 1, "恢复：旧备份回放时保留现状（不回滚新数据）");
+  let threw = false;
+  try { mergeDecksBackup({}); } catch { threw = true; }
+  assert(threw, "恢复：格式不对时抛错（toast 回音）");
+  deleteDeckById(987654321);
+
 })();
 `;
 
