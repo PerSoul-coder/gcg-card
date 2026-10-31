@@ -440,6 +440,11 @@ return (async () => {
   assert(L2.height === L.height && L2.note === "起手要素：先找 X", "分享图布局：备注并入页头行，画布不再抬高");
   /* 费用分布块与角色行同带：右缘不越界 */
   assert(L.curveBox.w > 0 && L.curveBox.x + L.curveBox.w <= L.width, "分享图布局：费用分布块右缘不越界");
+  /* 核心牌标记：落在对应格上，其余格不带 */
+  const cid = state.current.cardIds[0];
+  const L3 = shareImageLayout(state.current, { core: [cid] });
+  assert(L3.cardCells.some(c => c.core) && L3.cardCells.filter(c => c.core).every(c => c.id === cid),
+    "分享图布局：核心牌描边标记落在对应格");
 
   /* ===== 16. 牌组备注与核心牌（Deck v2 字段 + 活动牌组匹配导出） ===== */
   /* normalizeDeck：note/core 透传、损坏字段清洗 */

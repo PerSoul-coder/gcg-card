@@ -15,7 +15,7 @@ const C = {
   text: "#e8e2d0", dim: "#8b95a5", shell: "#1a2029",
 };
 
-export interface ShareCell { id: number; count: number; x: number; y: number; w: number; h: number }
+export interface ShareCell { id: number; count: number; x: number; y: number; w: number; h: number; core?: boolean }
 export interface ShareBox { x: number; y: number; w: number; h: number }
 export interface ShareLayout {
   width: number;
@@ -36,11 +36,12 @@ export interface ShareLayout {
 /* ---------- 布局（纯函数）：全部坐标在这里算好，canvas 层只管画 ---------- */
 export function shareImageLayout(
   cur: ParsedDeck,
-  opts: { name?: string | null; note?: string | null } = {},
+  opts: { name?: string | null; note?: string | null; core?: number[] } = {},
 ): ShareLayout {
   const W = 1080, M = 48, GAP = 16;
   const cards = cur.order.flatMap(t => cur.groups[t]);
   const chars = cur.chars.slice(0, 3);
+  const coreSet = new Set(opts.core || []);
   const charH = 240, charW = charH * 420 / 720;         /* 竖版卡 420:720 */
   const headLineY = 88;
   const bandY = 104;
@@ -62,7 +63,7 @@ export function shareImageLayout(
   }));
   const cardCells: ShareCell[] = cards.map((x, i) => {
     const r = Math.floor(i / perRow), col = i % perRow;
-    return { id: x.id, count: x.count, w: tw, h: th, x: Math.round(M + col * (tw + GAP)), y: Math.round(gridTop + r * (th + GAP)) };
+    return { id: x.id, count: x.count, w: tw, h: th, x: Math.round(M + col * (tw + GAP)), y: Math.round(gridTop + r * (th + GAP)), core: coreSet.has(x.id) || undefined };
   });
   return {
     width: W, height: H,
@@ -108,9 +109,12 @@ function drawCellImage(ctx: CanvasRenderingContext2D, img: HTMLImageElement | nu
   ctx.clip();
   ctx.drawImage(img, c.x, c.y, c.w, c.h);
   ctx.restore();
-  ctx.strokeStyle = C.line;
+  /* 核心牌描金（B3 的分享图收尾）：边框加粗换金色，×n 徽标之外的第二层信息 */
+  ctx.strokeStyle = c.core ? C.gold : C.line;
+  ctx.lineWidth = c.core ? 2.5 : 1;
   roundRect(ctx, c.x, c.y, c.w, c.h, 8);
   ctx.stroke();
+  ctx.lineWidth = 1;
 }
 function drawBadge(ctx: CanvasRenderingContext2D, c: ShareCell) {
   if (c.count <= 1) return;
@@ -152,7 +156,7 @@ function drawCurve(ctx: CanvasRenderingContext2D, buckets: number[], box: ShareB
     ctx.fillText(i === 5 ? "5+" : String(i), cx, box.y + box.h - 6);
   }
 }
-export async function renderShareCanvas(cur: ParsedDeck, opts: { name?: string | null; note?: string | null } = {}): Promise<HTMLCanvasElement> {
+export async function renderShareCanvas(cur: ParsedDeck, opts: { name?: string | null; note?: string | null; core?: number[] } = {}): Promise<HTMLCanvasElement> {
   const L = shareImageLayout(cur, opts);
   const SCALE = 2;
   const canvas = document.createElement("canvas");

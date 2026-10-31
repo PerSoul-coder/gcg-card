@@ -220,7 +220,7 @@ const EXPORT_ACTIONS: Array<{ id: string; label: string; hint?: string; run: () 
       toast("正在生成分享图…");
       void (async () => {
         const meta = activeDeckMeta();
-        const canvas = await renderShareCanvas(state.current!, { name: meta.name, note: meta.note });
+        const canvas = await renderShareCanvas(state.current!, { name: meta.name, note: meta.note, core: meta.core });
         const blob = await new Promise<Blob | null>(r => canvas.toBlob(r, "image/png"));
         if (!blob) throw new Error("canvas 导出失败");
         download(`${fileStamp()}.png`, blob, "image/png");
