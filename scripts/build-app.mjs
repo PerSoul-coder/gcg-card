@@ -27,7 +27,7 @@ fs.mkdirSync(CACHE_DIR, { recursive: true });
 
 const readIfExists = (p) => (fs.existsSync(p) ? fs.readFileSync(p, "utf8") : "");
 
-/** 收集参与打包的所有文件（src 与 gi-data 下的 TS/JS 资产），用于判断缓存是否失效。 */
+/** 收集参与打包的所有文件（src / gi-data / vendor 下的 TS/JS 资产），用于判断缓存是否失效。 */
 function collect(dir, exts = [".ts", ".js"]) {
   const out = [];
   if (!fs.existsSync(dir)) return out;
@@ -39,7 +39,11 @@ function collect(dir, exts = [".ts", ".js"]) {
   return out;
 }
 
-const inputs = [...collect(path.join(ROOT, "src")), ...collect(path.join(ROOT, "gi-data"), [".js"])].sort();
+const inputs = [
+  ...collect(path.join(ROOT, "src")),
+  ...collect(path.join(ROOT, "gi-data"), [".js"]),
+  ...collect(path.join(ROOT, "vendor"), [".js"]),
+].sort();
 const fingerprint = crypto
   .createHash("md5")
   .update(inputs.map((p) => p + ":" + fs.statSync(p).mtimeMs).join("|"))

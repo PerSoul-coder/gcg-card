@@ -554,53 +554,8 @@ var qrcode = function() {
       return qrSvg;
     };
 
-    _this.createDataURL = function(cellSize, margin) {
-
-      cellSize = cellSize || 2;
-      margin = (typeof margin == 'undefined')? cellSize * 4 : margin;
-
-      var size = _this.getModuleCount() * cellSize + margin * 2;
-      var min = margin;
-      var max = size - margin;
-
-      return createDataURL(size, size, function(x, y) {
-        if (min <= x && x < max && min <= y && y < max) {
-          var c = Math.floor( (x - min) / cellSize);
-          var r = Math.floor( (y - min) / cellSize);
-          return _this.isDark(r, c)? 0 : 1;
-        } else {
-          return 1;
-        }
-      } );
-    };
-
-    _this.createImgTag = function(cellSize, margin, alt) {
-
-      cellSize = cellSize || 2;
-      margin = (typeof margin == 'undefined')? cellSize * 4 : margin;
-
-      var size = _this.getModuleCount() * cellSize + margin * 2;
-
-      var img = '';
-      img += '<img';
-      img += '\u0020src="';
-      img += _this.createDataURL(cellSize, margin);
-      img += '"';
-      img += '\u0020width="';
-      img += size;
-      img += '"';
-      img += '\u0020height="';
-      img += size;
-      img += '"';
-      if (alt) {
-        img += '\u0020alt="';
-        img += escapeXml(alt);
-        img += '"';
-      }
-      img += '/>';
-
-      return img;
-    };
+    /* createDataURL / createImgTag 已摘除：本应用只用 qrSvg 的 SVG 通道，
+       且其 <img src=" 模板会误触产物完整性检查（无本地图片引用） */
 
     var escapeXml = function(s) {
       var escaped = '';
@@ -2296,5 +2251,6 @@ var qrcode = function() {
     return qrcode;
 }));
 
-/* vendored for gcg-card: 追加一行 ESM 默认导出，便于 esbuild 打包（原文件其余未改动） */
+/* vendored for gcg-card：追加一行 ESM 默认导出、摘除未使用的 createDataURL/createImgTag
+   （原文件其余未改动；MIT 头保留） */
 export default qrcode;
