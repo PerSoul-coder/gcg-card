@@ -169,6 +169,9 @@ html[data-boot-error]::before { content: "页面加载失败：" attr(data-boot-
 .toast { max-width: calc(100vw - 28px); text-align: center; word-break: break-word; background: var(--panel2); border: 1px solid var(--gold-dim); color: var(--text); padding: 9px 20px; border-radius: 20px; font-size: var(--fs-13); box-shadow: 0 6px 24px rgba(0,0,0,.5); animation: tin var(--t-med) ease, tout var(--t-fast) ease var(--toast-life, 2.4s) forwards; }
 @keyframes tout { to { opacity: 0; transform: translateY(-8px); } }
 .toast.err { --toast-life: 5s; border-color: var(--err-deep); }
+.toast.act { display: flex; gap: 12px; align-items: center; --toast-life: 6s; }
+.toast.act button { flex: none; background: var(--gold); color: var(--on-accent); border: 0; border-radius: 14px; padding: 3px 14px; font-size: var(--fs-13); cursor: pointer; }
+.toast.act button:hover { filter: brightness(1.1); }
 @keyframes tin { from { opacity: 0; transform: translateY(-8px); } }
 
 /* 历史面板 */
@@ -780,14 +783,32 @@ body.cmp-on #draftPanel { bottom: 136px; }
 }
 
 /* 打印：仅列表视图 */
+/* 打印 = 牌表输出：整站变量在打印时整体翻亮色（对比度/省墨），控件全藏，
+   只留列表视图的表头与表格；行不跨页截断。暗色主题下打印不再是一张黑纸。 */
 @media print {
+  :root, html[data-theme="dark"], html[data-theme="light"] {
+    --bg: #fff; --bg2: #f7f7f3; --panel: #fff; --panel2: #f7f7f3; --panel3: #fff; --panel-deep: #f2f2ee;
+    --line: #ccc; --line-soft: #ddd; --line-strong: #bbb; --scrim: transparent;
+    --text: #111; --text-2: #333; --text-3: #444; --dim: #666; --faint: #999;
+    --gold: #7a611c; --gold-dim: #7a611c; --gold-2: #7a611c; --gold-deep: #7a611c;
+    --err: #b3261e; --ok: #1b6e3d; --disabled: #bbb; --on-accent: #fff;
+  }
   body { background: #fff; color: #111; }
   .controls, #status, .tabs, .summary, #view-grid, #view-browse, #view-skills, footer, #toasts, .list-tools, #histPanel, #draftBar, #draftPanel { display: none !important; }
-  .browse-bar, .bsentinel { display: none !important; }
+  .browse-bar, .bsentinel, .hd-actions, .expwrap, .navbtns, .corebtn, .addbtn, .favbtn, .cmpbtn { display: none !important; }
   .view { display: block !important; }
-  table { font-size: var(--fs-11); }
-  th { color: #333; } td { border-color: #ccc; } td.desc { color: #444; }
+  .print-head { display: block !important; margin: 0 0 12px; font-size: 15px; color: #111; }
+  .print-head small { color: #666; }
+  table { font-size: 11px; }
+  th { color: #333; border-bottom: 1.5px solid #999; }
+  td { border-color: #ddd; } td.desc { color: #444; }
+  tr { break-inside: avoid; }
+  .sec-title { break-after: avoid; color: #111; }
+  .rpill, .tagpill { border-color: #bbb; }
 }
+
+/* 打印页眉：屏上不显示，@media print 里展开（牌组名 + 角色构成） */
+.print-head { display: none; }
 
 /* ===== 图标系统：尺寸随字号缩放，颜色随上下文（元素色 / 金色） ===== */
 .ico { width: 1em; height: 1em; display: inline-block; vertical-align: -.13em; flex: none; }

@@ -565,17 +565,19 @@ return (async () => {
 
   /* ===== 23. 单卡分享图（cardShareLayout：伪测量 / 换行不越界 / 角色技能分节） ===== */
   const fakeMeasure = (t, f) => t.length * 10;   /* 伪等宽：1 字符 = 10px */
-  const bodyW23 = 720 - 36 * 2;
+  const colW23 = 720 - 36 - (36 + 260 + 20);   /* 右栏宽 */
   const cardRec23 = cardRecords().find(r => r.kind === "card" && r.desc.effect.length > 60 && r.share != null);
   assert(cardRec23, "单卡图：找到长效果卡样例");
   const LC = cardShareLayout(cardRec23, { measure: fakeMeasure, link: "https://x.test/p.html#card=1" });
   assert(LC.width === 720 && LC.art.w === 260 && LC.art.h === Math.round(260 * 720 / 420), "单卡图：画幅与卡面区几何");
-  assert(LC.effectBlocks.filter(b => !b.dim).length === 1 && LC.effectBlocks[0].lines.every(l => fakeMeasure(l, "14px sans-serif") <= bodyW23), "单卡图：效果文本逐行不越界（story 另计暗色块）");
+  assert(LC.effectBlocks.filter(b => !b.dim).length === 1 && LC.effectBlocks[0].lines.every(l => fakeMeasure(l, "14px sans-serif") <= colW23), "单卡图：效果文本入右栏，逐行不越界（story 另计暗色块）");
+  assert(LC.sideBlocks.every(b => b.lines.every(l => fakeMeasure(l, "14px sans-serif") <= colW23)), "单卡图：右栏信息块逐行不越界");
   assert(LC.effectBlocks[0].lines.length >= 2 && LC.link === "https://x.test/p.html#card=1", "单卡图：长文本换行 + 深链透传");
   const charRec23 = charRecords()[0];
   const LT = cardShareLayout(charRec23, { measure: fakeMeasure, link: null });
   assert(LT.effectBlocks.filter(b => !b.dim).length >= 1 && LT.effectBlocks.every(b => b.head || b.dim), "单卡图：角色按技能分节（节头为技能名，story 暗色块除外）");
   assert(LT.sideBlocks.some(b => b.label === "属性" && b.lines[0].includes("生命")), "单卡图：角色右栏含属性行");
+  assert(LC.qr && LC.qr.w === 120 && LT.qr === null, "单卡图：有深链才有二维码");
   /* 文本越换越多 → 画布高度单调不减（防溢出断言的对偶） */
   const LT2 = cardShareLayout(charRec23, { measure: (t, f) => t.length * 30, link: null });
   assert(LT2.height >= LT.height, "单卡图：测量越宽画布越高");

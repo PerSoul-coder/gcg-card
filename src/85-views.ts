@@ -201,6 +201,7 @@ function renderList() {
       ${rows(t)}</table></div>`;
   }).join("");
   $("view-list").innerHTML = `
+    <div class="print-head">七圣召唤 · 牌组牌表<small>　${state.current!.chars.map(c => esc(c.name)).join(" / ")}${activeDeck()?.name ? ` · ${esc(activeDeck()!.name)}` : ""}</small></div>
     <div class="list-tools"><input id="listSearch" placeholder="筛选：名称 / 限制 / 标签 / 效果关键词…" value="${esc(listFilter)}">
       <span class="hint">点击行看详情 · 点表头排序 · 快捷键 1/2 切视图 · / 聚焦筛选 · Ctrl+P 打印</span></div>` +
     (sections || `<div class="empty-hint slim">无匹配卡牌</div>`);

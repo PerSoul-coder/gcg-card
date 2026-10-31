@@ -6,7 +6,7 @@ import { idOfShare, recordOfId, nameOfId } from "./data/records";
 import { renderGrid, renderList, renderSummary } from "./85-views";
 import { state } from "./data/state";
 import { STORAGE_KEYS, tagZh, eleIcon } from "./core/resources";
-import { esc, setStatus } from "./core/dom";
+import { esc, setStatus, actionToast } from "./core/dom";
 import { registerLayer } from "./core/layers";
 import { safeReplaceState } from "./core/history";
 import { pool } from "./45-pool";
@@ -144,3 +144,38 @@ async function resolveInput(text) {
 }
 
 export { loadHistory, pushHistory, renderHistory, parseShareIds, decodeAndRender, CODE_RE, looksLikeCode, resolveInput };
+
+/* ---------- 全局粘贴分享码（非侵入）----------
+   在任何非输入位置按下 Ctrl+V 且剪贴板文本「像分享码」（整体或含 50+ 位 base64 段）
+   → 弹可点击 toast，点击才解析并跳到牌组卡面视图。输入框内粘贴不拦（各有各的
+   自动解析）；不读剪贴板 API、不自动跳转、同码 10s 去重——纯增益，零权限。 */
+let lastPasteCode = "";
+let lastPasteAt = 0;
+document.addEventListener("paste", ev => {
+  const t = ev.target as HTMLElement | null;
+  const tag = ((t && t.tagName) || "").toLowerCase();
+  if (tag === "input" || tag === "textarea" || !!(t && t.isContentEditable)) return;
+  const cd = (ev as ClipboardEvent).clipboardData;
+  const text = cd && typeof cd.getData === "function" ? String(cd.getData("text") || "").trim() : "";
+  if (!text) return;
+  /* 整段像码就用整段；否则从文本里提一段 50+ 位 base64（IM 里常带「分享码 XXX」前后缀） */
+  let code = text.replace(/\s+/g, "");
+  if (!looksLikeCode(code)) {
+    const m = text.match(/[A-Za-z0-9+/]{50,}={0,2}/);
+    code = m ? m[0] : "";
+  }
+  if (!looksLikeCode(code)) return;
+  const now = Date.now();
+  if (code === lastPasteCode && now - lastPasteAt < 10000) return;
+  lastPasteCode = code;
+  lastPasteAt = now;
+  actionToast("检测到牌组分享码", "点击解析", () => {
+    const prev = state.current;
+    void decodeAndRender(code).then(() => {
+      if (state.current && state.current !== prev) {
+        const tab = document.querySelector('.tab[data-view="grid"]');
+        if (tab) (tab as HTMLElement).click();
+      }
+    });
+  });
+});

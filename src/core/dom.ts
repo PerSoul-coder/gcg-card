@@ -36,6 +36,32 @@ export function toast(msg: string, err = false): void {
   setTimeout(() => t.remove(), animationTotalMs(t, 2800) + 80);
 }
 
+/** 带动作的 toast（全局粘贴分享码用）：点击按钮执行动作并收起，存活期更长。
+    与 toast 同一条通道（同一容器 / 同一上限），不新增浮层体系。 */
+export function actionToast(msg: string, actionLabel: string, onAction: () => void): void {
+  const box = $("toasts");
+  const t = document.createElement("div");
+  t.className = "toast act";
+  const span = document.createElement("span");
+  span.textContent = msg;
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.textContent = actionLabel;
+  btn.addEventListener("click", () => { if (typeof t.remove === "function") t.remove(); onAction(); });
+  t.appendChild(span);
+  t.appendChild(btn);
+  if (box && box.appendChild) box.appendChild(t);
+  const kids = box && box.children;
+  if (kids && typeof kids.length === "number") {
+    for (let guard = 0; kids.length > TOAST_MAX && guard < 50; guard++) {
+      const first = kids[0] as HTMLElement | undefined;
+      if (!first || first === t || typeof first.remove !== "function") break;
+      first.remove();
+    }
+  }
+  setTimeout(() => t.remove(), animationTotalMs(t, 6000) + 80);
+}
+
 /* 剪贴板：优先 async Clipboard API；file:// 等场景可能拒权或缺失，
    退回 textarea + execCommand 兜底（两路都失败才拒绝，调用方各自决定提示）。 */
 export function copyText(t: string): Promise<void> {

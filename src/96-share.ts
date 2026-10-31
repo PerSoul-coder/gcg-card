@@ -15,6 +15,7 @@ import { loadImages } from "./core/image";
 import { keyIdOf } from "./data/records";
 import { costText } from "./30-deps";
 import { skillsOf } from "./47-skills";
+import qrcode from "../vendor/qrcode/qrcode.js";
 import type { GcgRecord, ParsedDeck } from "./types";
 
 /* ---------- 画布配色（独立成图，不读 CSS 变量） ---------- */
@@ -224,7 +225,12 @@ export async function renderShareCanvas(cur: ParsedDeck, opts: { name?: string |
   return canvas;
 }
 
-/* ---------- 单卡分享图 ---------- */
+/* ---------- 单卡分享图 ----------
+   「这张牌什么效果？」的 IM 直接载体。排版 v2：整幅就是「卡面（左）+ 右栏」
+   两栏——费用/属性/依赖、英文卡名、效果全文（角色按技能分节，story 暗色收尾）
+   全部流进右栏，右栏内容短时深链二维码对齐卡面底边补位，不再出现大面积空白。
+   高度取决于文本量：测量函数作为参数注入布局纯函数（生产 ctx.measureText，
+   测试伪等宽），换行在布局层算好、绘制层只画。 */
 export type Measure = (text: string, font: string) => number;
 
 /** 逐字换行（CJK 主导；拉丁词被截断可接受）。空段保留为空行。 */
@@ -241,7 +247,7 @@ export function wrapText(text: string, font: string, maxWidth: number, measure: 
   }
   return out;
 }
-export interface CardSideBlock { label: string; lines: string[]; y: number }
+export interface CardSideBlock { label: string; lines: string[]; y: number; dim?: boolean }
 export interface CardEffectBlock { head: string | null; lines: string[]; y: number; dim?: boolean }
 export interface CardShareLayout {
   width: number;
@@ -250,8 +256,9 @@ export interface CardShareLayout {
   meta: string;                       /* typeZh · version */
   art: ShareBox;
   sideX: number;
-  sideBlocks: CardSideBlock[];        /* 右栏：费用 / 属性 / 依赖 / 打出 */
-  effectBlocks: CardEffectBlock[];    /* 通栏：卡=效果；角色=每技能一块 */
+  sideBlocks: CardSideBlock[];        /* 右栏信息块（英文卡名 = dim 无标签块） */
+  effectBlocks: CardEffectBlock[];    /* 右栏续：卡=效果；角色=技能分节；story 暗色 */
+  qr: ShareBox | null;                /* 卡面深链二维码（右栏底部补位） */
   link: string | null;
   headLineY: number;
   footLineY: number;
@@ -262,58 +269,83 @@ export function cardShareLayout(
 ): CardShareLayout {
   const measure = opts.measure;
   const W = 720, M = 36, GAP = 20;
-  const F = { name: "bold 24px sans-serif", label: "bold 12px sans-serif", body: "14px sans-serif", small: "13px sans-serif" };
+  const F = { body: "14px sans-serif", small: "13px sans-serif" };
   const headLineY = 64;
   const artW = 260, artH = Math.round(artW * 720 / 420);
   const art: ShareBox = { x: M, y: 82, w: artW, h: artH };
   const sideX = M + artW + GAP;
   const sideW = W - M - sideX;
-  /* 右栏：费用 → 属性（角色）→ 依赖 → 打出 */
-  const side: Array<{ label: string; text: string }> = [];
-  const costStr = costText(rec.stats.cost);
-  if (costStr) side.push({ label: "费用", text: costStr });
-  if (rec.stats.hp != null) side.push({ label: "属性", text: `生命 ${rec.stats.hp} · 充能 ${rec.stats.maxEnergy ?? 0}` });
-  if (rec.reqs.deck.length) side.push({ label: "牌组限制", text: rec.reqs.deck.map(r => r.short || r.label).join(" / ") });
-  if (rec.reqs.play.length) side.push({ label: "打出限制", text: rec.reqs.play.map(r => r.short || r.label).join(" / ") });
+  /* 右栏统一流：费用 → 属性（角色）→ 依赖 → 打出 → 英文名（dim）→ 效果/story → 二维码 */
   let sy = art.y + 2;
-  const sideBlocks: CardSideBlock[] = side.map(b => {
-    const lines = wrapText(b.text, F.body, sideW, measure);
-    const blk = { label: b.label, lines, y: sy };
-    sy += 36 + lines.length * 22 + 6;
-    return blk;
-  });
-  /* 通栏效果区：角色按技能分节（名+费用做节头），卡就是效果本体 */
-  const bodyW = W - M * 2;
-  let ey = art.y + artH + 26;
+  const sideBlocks: CardSideBlock[] = [];
+  const pushSide = (label: string, text: string, font: string, dim = false) => {
+    const lines = wrapText(text, font, sideW, measure);
+    if (!lines.length) return;
+    sideBlocks.push({ label, lines, y: sy, dim });
+    sy += (label ? 36 : 20) + lines.length * (dim ? 18 : 22) + 6;
+  };
+  const costStr = costText(rec.stats.cost);
+  if (costStr) pushSide("费用", costStr, F.body);
+  if (rec.stats.hp != null) pushSide("属性", `生命 ${rec.stats.hp} · 充能 ${rec.stats.maxEnergy ?? 0}`, F.body);
+  if (rec.reqs.deck.length) pushSide("牌组限制", rec.reqs.deck.map(r => r.short || r.label).join(" / "), F.body);
+  if (rec.reqs.play.length) pushSide("打出限制", rec.reqs.play.map(r => r.short || r.label).join(" / "), F.body);
+  if (rec.englishName && rec.englishName !== rec.name) pushSide("", rec.englishName, F.small, true);
   const effectBlocks: CardEffectBlock[] = [];
+  sy += 4;
   if (rec.kind === "char") {
     for (const sk of skillsOf(keyIdOf(rec.key))) {
       const head = sk.name + (costText(sk.cost) ? `　${costText(sk.cost)}` : "");
-      const lines = wrapText(sk.effect || "", F.body, bodyW, measure);
-      effectBlocks.push({ head, lines, y: ey });
-      ey += 36 + lines.length * 22 + 8;
+      const lines = wrapText(sk.effect || "", F.body, sideW, measure);
+      effectBlocks.push({ head, lines, y: sy });
+      sy += (head ? 36 : 22) + lines.length * 22 + 8;
     }
   } else if (rec.desc.effect.trim()) {
-    const lines = wrapText(rec.desc.effect, F.body, bodyW, measure);
-    effectBlocks.push({ head: null, lines, y: ey });
-    ey += 22 + lines.length * 22 + 8;
+    const lines = wrapText(rec.desc.effect, F.body, sideW, measure);
+    effectBlocks.push({ head: null, lines, y: sy });
+    sy += 22 + lines.length * 22 + 8;
   }
   if (rec.desc.story.trim()) {
-    const lines = wrapText(`「${rec.desc.story.trim()}」`, F.small, bodyW, measure);
-    effectBlocks.push({ head: null, lines, y: ey, dim: true });
-    ey += 22 + lines.length * 20 + 4;
+    const lines = wrapText(`「${rec.desc.story.trim()}」`, F.small, sideW, measure);
+    effectBlocks.push({ head: null, lines, y: sy, dim: true });
+    sy += 20 + lines.length * 20 + 4;
   }
-  const bottom = Math.max(sy - 6, ey - 8, art.y + artH);
+  /* 深链二维码：右栏短时对齐卡面底边（设计感），长则顺排 */
+  let qr: ShareBox | null = null;
+  if (opts.link) {
+    const size = 120;
+    const pinned = art.y + artH - size - 8;
+    const qy = sy + 10 > pinned ? sy + 10 : pinned;
+    qr = { x: sideX, y: qy, w: size, h: size };
+    sy = qy + size + 22;
+  }
+  const bottom = Math.max(art.y + artH, sy);
   const footLineY = Math.round(bottom + 24);
   const H = Math.round(footLineY + 44);
   return {
     width: W, height: H,
     name: rec.name,
     meta: `${rec.typeZh} · ${rec.version}`,
-    art, sideX, sideBlocks, effectBlocks,
+    art, sideX, sideBlocks, effectBlocks, qr,
     link: opts.link || null,
     headLineY, footLineY,
   };
+}
+
+/* 深链二维码直接用 vendor 生成器画矩阵（不走 SVG 栅格化，确定性 + 无污染） */
+function drawQr(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, size: number): void {
+  const qr = qrcode(0, "M");
+  qr.addData(text);
+  qr.make();
+  const n = qr.getModuleCount(), quiet = 2, cell = size / (n + quiet * 2);
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(x, y, size, size);
+  ctx.fillStyle = "#12161d";
+  for (let r = 0; r < n; r++) {
+    for (let c = 0; c < n; c++) {
+      if (!qr.isDark(r, c)) continue;
+      ctx.fillRect(x + (c + quiet) * cell, y + (r + quiet) * cell, cell + 0.35, cell + 0.35);
+    }
+  }
 }
 
 /** 单卡分享图绘制（薄层）：测量用离屏 ctx，卡面失败画卡壳。 */
@@ -346,9 +378,15 @@ export async function renderCardShareCanvas(rec: GcgRecord, opts: { href?: strin
   /* 卡面（失败画卡壳） */
   const [img] = await loadImages([imgFull(id)]);
   drawCellImage(ctx, img, { id, count: 1, x: L.art.x, y: L.art.y, w: L.art.w, h: L.art.h });
-  /* 右栏块 */
+  /* 右栏：信息块 → 效果/技能分节 → story → 二维码 */
   ctx.textAlign = "left";
   for (const b of L.sideBlocks) {
+    if (b.dim) {
+      ctx.fillStyle = C.dim;
+      ctx.font = "13px sans-serif";
+      b.lines.forEach((ln, i) => ctx.fillText(ln, L.sideX, b.y + 16 + i * 18));
+      continue;
+    }
     ctx.fillStyle = C.gold;
     ctx.font = "bold 12px sans-serif";
     ctx.fillText(b.label, L.sideX, b.y + 14);
@@ -356,17 +394,22 @@ export async function renderCardShareCanvas(rec: GcgRecord, opts: { href?: strin
     ctx.font = "14px sans-serif";
     b.lines.forEach((ln, i) => ctx.fillText(ln, L.sideX, b.y + 36 + i * 22));
   }
-  /* 效果块（角色按技能分节；story 暗色） */
   for (const b of L.effectBlocks) {
     if (b.head) {
       ctx.fillStyle = C.gold;
       ctx.font = "bold 14px sans-serif";
-      ctx.fillText(b.head, 36, b.y + 14);
+      ctx.fillText(b.head, L.sideX, b.y + 14);
     }
     ctx.fillStyle = b.dim ? C.dim : C.text;
     ctx.font = (b.dim ? "13px" : "14px") + " sans-serif";
     const first = b.y + (b.head ? 36 : 22);
-    b.lines.forEach((ln, i) => ctx.fillText(ln, 36, first + i * (b.dim ? 20 : 22)));
+    b.lines.forEach((ln, i) => ctx.fillText(ln, L.sideX, first + i * (b.dim ? 20 : 22)));
+  }
+  if (L.qr) {
+    drawQr(ctx, L.link!, L.qr.x, L.qr.y, L.qr.w);
+    ctx.fillStyle = C.dim;
+    ctx.font = "12px sans-serif";
+    ctx.fillText("扫码打开这张卡", L.qr.x, L.qr.y + L.qr.h + 16);
   }
   /* 页脚：深链（左，解码显示 + 按宽省略——percent 编码又长又不可读）+ 水印（右） */
   ctx.fillStyle = C.line;
