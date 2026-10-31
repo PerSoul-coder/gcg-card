@@ -537,6 +537,10 @@ TermEntry desc/story 下沉后，同构哑弹与散落约定的清除：
   可靠优先于文本匹配）。
 - **资源缓存（49-cache）**：Cache Storage 仅 https/localhost；命中优先 + 被动
   回填都在 core/image.ts 一个收口；全量预缓存 6 并发可中止、已缓存秒过。
+- **单卡分享图（cardShareLayout）**：布局高度取决于文本量 → 测量函数作为参数
+  注入纯函数（生产 ctx.measureText / 测试伪等宽），换行在布局层算好。双入口
+  （导出注册表 cardpng + 详情导航钮）同走一个分发；页脚深链要解码显示并按宽
+  省略——percent 编码又长又不可读，直接画会压过水印。
 
 ### 16.3 坑
 

@@ -368,14 +368,22 @@ export async function renderCardShareCanvas(rec: GcgRecord, opts: { href?: strin
     const first = b.y + (b.head ? 36 : 22);
     b.lines.forEach((ln, i) => ctx.fillText(ln, 36, first + i * (b.dim ? 20 : 22)));
   }
-  /* 页脚：深链（左）+ 水印（右） */
+  /* 页脚：深链（左，解码显示 + 按宽省略——percent 编码又长又不可读）+ 水印（右） */
   ctx.fillStyle = C.line;
   ctx.fillRect(36, L.footLineY, L.width - 72, 1);
   ctx.fillStyle = C.dim;
   ctx.font = "12px sans-serif";
+  const wm = "七圣召唤 · 卡牌与牌组浏览器";
+  let linkText = L.link || rec.name;
+  if (L.link) { try { linkText = decodeURIComponent(L.link); } catch (e) { /* 保留原样 */ } }
+  const maxW = L.width - 72 - ctx.measureText(wm).width - 24;
+  if (ctx.measureText(linkText).width > maxW) {
+    while (linkText.length > 1 && ctx.measureText(linkText + "…").width > maxW) linkText = linkText.slice(0, -1);
+    linkText += "…";
+  }
   ctx.textAlign = "left";
-  ctx.fillText(L.link || rec.name, 36, L.footLineY + 26);
+  ctx.fillText(linkText, 36, L.footLineY + 26);
   ctx.textAlign = "right";
-  ctx.fillText("七圣召唤 · 卡牌与牌组浏览器", L.width - 36, L.footLineY + 26);
+  ctx.fillText(wm, L.width - 36, L.footLineY + 26);
   return canvas;
 }
