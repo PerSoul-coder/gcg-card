@@ -547,6 +547,19 @@ TermEntry desc/story 下沉后，同构哑弹与散落约定的清除：
   行不跨页，列表视图注入 print-head（CSS content 放不了动态牌组名）。全局粘贴
   （提案 3）：非输入位 paste + looksLikeCode 门（整段或提取 50+ 位 base64 段）
   → actionToast 点击才解析，解析成功自动切卡面视图；不读剪贴板 API。
+- **PWA 壳（提案 2 落地）**：`pwa/`（manifest.json / sw.js / make-icons 生成的
+  两张 maskable 图标）由 build-single 复制到输出目录旁——deploy-pages 上传
+  `site/` 全部产物即获得安装与离线能力。sw.js 只拦**文档导航**且 network-first：
+  在线永远最新（数据快照内联在 HTML，cache-first 会把数据冻结在首次访问的那次
+  部署），离线回落最近成功的 HTML。注册在 51-pwa：isSecureContext 门
+  （file:// / 不支持环境零动作，注册失败静默）+ 版本提示（skipWaiting 会让新版本
+  抢在页面挂上 updatefound 监听之前完成接管，故以 controllerchange 为准：求值时
+  有旧控制器、随后易主 → actionToast「刷新更新」；首装 claim 不误报）+
+  visibilitychange 时 update()（长开页签也能发现新部署）。**与导入导出的兼容**：备份/分享图下载、文件恢复、剪贴板、
+  粘贴解析全是页面内行为或非导航请求，SW 不参与；localStorage 按 origin 存，
+  安装前后数据连续；49-cache（gi-card-art-v1）与壳缓存（gi-shell-v1）是两个
+  独立的 Cache Storage；断网打开的是最近一次部署的快照，导出基于它属预期；
+  file:// 单文件版与线上 PWA 存储隔离，迁移走备份/恢复（既有能力）。
 
 ### 16.3 坑
 
@@ -555,6 +568,10 @@ TermEntry desc/story 下沉后，同构哑弹与散落约定的清除：
 - qrcode-generator 自带 createImgTag 的 `<img src="` 模板会误触产物完整性检查
   「无本地图片引用」；摘除未使用的两个方法。
 - 多行 CSS 规则按行删会撕裂规则体（大括号失衡暴露）；删 CSS 按块删。
+- SW activate 清理旧缓存若不过滤，**会把 49-cache 的卡面缓存一起删掉**——
+  必须按 `gi-shell-` 前缀过滤（PWA 缓存与应用缓存的边界，test-single 有断言）。
+- build-single 的「残留外部引用」自检会把 manifest/图标链接当漏内联拦下
+  （exitCode 1）——PWA 伴生文件是刻意不内联的同目录引用，自检白名单放行。
 
 ## 15. 信息架构重排 · 主题三态 · 回合模拟（P9）
 

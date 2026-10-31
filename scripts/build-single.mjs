@@ -15,7 +15,7 @@
  *   · 数据以 <script type="text/plain"> 承载 base64，不存在转义与标签闭合问题；
  *   · 脚本/样式内联前断言不含 </script、</style，避免静默产出坏文件；
  *   · 替换一律用函数形式，防止数据里的 $& / $' 被 String.replace 当成替换模式。 */
-import { readFileSync, writeFileSync, mkdirSync, statSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync, statSync, copyFileSync, existsSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { gzipSync } from "node:zlib";
@@ -96,12 +96,19 @@ html = html.replace(/<!--\s*\?v=\s*版本戳[^]*?-->/, () => buildNote);
    注意排除 JS 模板字符串里的动态地址（src="${...}"），它们运行时才求值，不算静态依赖。 */
 const leftovers = [];
 const notStatic = String.raw`(?!https?:|data:|\$\{)`;
+/* PWA 伴生文件（第 5 步复制到输出目录旁）是刻意保留的同目录相对引用：
+   不内联进单文件——下载的单个 HTML 缺失它们时浏览器静默忽略，应用不受影响 */
+const PWA_SIBLINGS = new Set(["manifest.json", "icon-192.png", "icon-512.png"]);
 for (const re of [
   new RegExp(`<link[^>]+href="${notStatic}[^"]*"`, "g"),
   new RegExp(`<script[^>]+src="${notStatic}[^"]*"`, "g"),
   new RegExp(`<img[^>]+src="${notStatic}[^"]*"`, "g"),
 ]) {
-  for (const m of html.matchAll(re)) leftovers.push(m[0].slice(0, 60));
+  for (const m of html.matchAll(re)) {
+    const href = (m[0].match(/href="([^"]*)"/) || [])[1];
+    if (href && PWA_SIBLINGS.has(href)) continue;
+    leftovers.push(m[0].slice(0, 60));
+  }
 }
 
 mkdirSync(resolve(ROOT, dirname(OUT)), { recursive: true });
@@ -109,9 +116,20 @@ writeFileSync(resolve(ROOT, OUT), html, "utf8");
 const bytes = Buffer.byteLength(html);
 const gz = gzipSync(Buffer.from(html)).length;
 
+/* ---------- 5. PWA 壳伴生文件 ----------
+   与输出文件同目录产出：托管部署（deploy-pages.yml 上传 site/ 全部产物）因此获得
+   安装与离线能力；只发单个 HTML 时没有它们，registerPwa 探测不到 sw.js 会静默跳过。 */
+const PWA_FILES = ["manifest.json", "sw.js", "icon-192.png", "icon-512.png"];
+for (const f of PWA_FILES) {
+  const src = resolve(ROOT, "pwa", f);
+  if (!existsSync(src)) throw new Error(`缺少 pwa/${f}（图标缺失时运行 node scripts/make-icons.mjs 生成）`);
+  copyFileSync(src, resolve(ROOT, dirname(OUT), f));
+}
+
 console.log(`输出：${OUT}`);
 console.log(`  原始体积 ${mb(bytes)}　gzip 后 ${kb(gz)}`);
 console.log(`  模式：内置数据包（离线可用）`);
+console.log(`  PWA 壳：${PWA_FILES.join(" / ")}（同目录伴生）`);
 if (dsBytes) console.log(`  内置数据集：${kb(dsBytes)}（gzip，base64 内联）`);
 if (leftovers.length) {
   console.log(`\n⚠ 仍有 ${leftovers.length} 处外部本地引用，单文件可能不完整：`);

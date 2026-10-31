@@ -76,5 +76,41 @@ assert(!/deck-viewer\.(?:css|js|html)\?v=/.test(html), "无残留的资源版本
    没有存在意义；这里守住它不再被加回来。 */
 assert(!fs.existsSync(path.join(here, "dist", "七圣召唤-卡牌与牌组浏览器-轻量.html")), "轻量版产物已删除");
 
+/* ===== 6. PWA 壳（同目录伴生文件） =====
+   托管部署（deploy-pages.yml 上传 site/ 全部产物）靠它们获得安装与离线能力。
+   断言守住三件事：build-single 忘了复制伴生文件、manifest 写坏、SW 清缓存误伤
+   应用自己的卡面缓存（49-cache 的 gi-card-art-v1）。 */
+assert(/<link rel="manifest" href="manifest\.json">/.test(html), "HTML 含 manifest 链接");
+assert(/<link rel="apple-touch-icon" href="icon-192\.png">/.test(html), "HTML 含 apple-touch-icon（iOS 主屏图标）");
+for (const f of ["manifest.json", "sw.js", "icon-192.png", "icon-512.png"]) {
+  assert(fs.existsSync(path.join(here, "dist", f)), `PWA 伴生文件已产出：${f}`);
+}
+try {
+  const mf = JSON.parse(fs.readFileSync(path.join(here, "dist", "manifest.json"), "utf8"));
+  assert(mf.start_url === "./" && mf.scope === "./" && mf.display === "standalone",
+    "manifest 相对路径 + standalone（仓库子路径 / 单文件目录均可用）");
+  assert(Array.isArray(mf.icons) && mf.icons.some(i => i.sizes === "192x192") && mf.icons.some(i => i.sizes === "512x512"),
+    "manifest 图标 192/512 齐备");
+  assert(fs.readFileSync(path.join(here, "pwa", "manifest.json")).equals(fs.readFileSync(path.join(here, "dist", "manifest.json"))),
+    "dist/manifest.json 与仓库源件逐字节一致");
+} catch (e) {
+  assert(false, "manifest.json 可解析：" + e);
+}
+try {
+  const sw = fs.readFileSync(path.join(here, "dist", "sw.js"), "utf8");
+  new Function(sw); /* 只编译不执行：语法兜底 */
+  assert(true, "sw.js 语法可编译");
+  assert(sw.includes("gi-shell-v1"), "sw.js 壳缓存名（gi-shell-v1）");
+  assert(sw.includes('startsWith("gi-shell-")'), "激活清理按 gi-shell- 前缀过滤（不误伤 49-cache 的卡面缓存）");
+  assert(sw.includes('"navigate"'), "SW 只拦文档导航请求（图片等其余请求不接管）");
+} catch (e) {
+  assert(false, "sw.js 可读可编译：" + e);
+}
+for (const f of ["icon-192.png", "icon-512.png"]) {
+  const p = path.join(here, "dist", f);
+  const ok = fs.existsSync(p) && fs.readFileSync(p).subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+  assert(ok, `${f} 是有效 PNG（签名核对）`);
+}
+
 console.log(fails ? `\n${fails} 条断言失败` : "\n全部通过");
 process.exit(fails ? 1 : 0);

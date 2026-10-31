@@ -11,6 +11,11 @@
 <!-- 门面（托管场景）：IM/社交里发链接时给出标题与摘要预览。og:image/og:url 依赖
      未知的部署域名，先不写；favicon 用内联 SVG（金菱 + 深底），不引入额外资源文件 -->
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='14' fill='%2312161d'/><path d='M32 11 51 32 32 53 13 32Z' fill='%23d3bc8e'/><circle cx='32' cy='32' r='7' fill='%2312161d'/></svg>">
+<!-- PWA 壳：manifest 与图标是同目录伴生文件（build-single 一并产出，托管部署即获得
+     安装/离线能力）。单文件下载版缺失它们时浏览器静默忽略，应用不受影响；
+     iOS 主屏图标走 apple-touch-icon（Safari 不认 manifest 图标） -->
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
 <title>七圣召唤 · 卡牌与牌组浏览器</title>
 <!-- 主题在样式表之前落定：auto/light/dark 三态（默认跟随系统）。内联执行避免浅色用户先看到深色闪一下（FOUC） -->
 <script>

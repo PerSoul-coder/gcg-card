@@ -1,0 +1,15 @@
+{
+  "name": "七圣召唤 · 卡牌与牌组浏览器",
+  "short_name": "七圣召唤",
+  "description": "牌组分享码解析与生成、卡库浏览与检索、构筑校验、牌组分享图与二维码。纯前端，离线可用。",
+  "lang": "zh-CN",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#12161d",
+  "theme_color": "#12161d",
+  "icons": [
+    { "src": "./icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "./icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
