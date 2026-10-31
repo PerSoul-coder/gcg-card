@@ -11,3 +11,5 @@ Thumbs.db
 .build-tools/*.err
 .zcode/
 publish/
+.workbuddy/
+.wbapp_*.genie
