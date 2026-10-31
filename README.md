@@ -8,6 +8,7 @@
 
 | 方式 | 入口 | 说明 |
 | --- | --- | --- |
+| 在线版（GitHub Pages） | <https://persoul-coder.github.io/gcg-card/> | 推送到 `master` 自动构建发布，与离线单文件版同一份产物 |
 | 离线单文件（推荐分享） | `dist/七圣召唤-卡牌与牌组浏览器.html` | 约 0.94 MB，样式 / 脚本 / 统一数据包（`dataset.gz`）全部内联，双击即开、断网可用 |
 | 多文件开发版 | 根目录 `deck-viewer.html` | 加载构建产物 `dist/app.js`（TypeScript 源码经 esbuild 打包），便于调试 |
 
@@ -78,6 +79,7 @@ python -m http.server 8080
 
 ```
 .
+├─ .github/workflows/        GitHub Pages 构建部署（deploy-pages.yml）
 ├─ deck-viewer.html          多文件开发入口
 ├─ deck-viewer.css           全局样式
 ├─ src/                      应用源码（TypeScript，标准 ESM 依赖图）
@@ -153,16 +155,11 @@ node scripts/build-dataset.mjs
 
 依赖顺序：`build-concepts` → `build-icons` → `build-dataset` → `build-single`。
 
-## 发布为在线链接
+## 发布为在线链接（GitHub Pages）
 
-发布目录固定为 `site/`，入口固定是 `site/index.html`——这样链接不会因为产物名带中文而变长，重发也永远落在同一个应用上（链接不变，内容替换）。
+线上地址：<https://persoul-coder.github.io/gcg-card/>（入口固定是单文件版，链接不因产物名带中文而变长，重发永远落在同一个 URL 上）。
 
-```powershell
-# 生成发布用的目录（内置数据包版，断网也能用）
-node scripts/build-single.mjs --out=site/index.html
-```
-
-改动后要同步线上：重跑上面这条命令，再对 `D:/Administrator/桌面/data/site` 重新发布即可，不需要改任何发布参数。
+发布由 GitHub Actions 自动完成（`.github/workflows/deploy-pages.yml`）：推送到 `master` 即触发——`npm ci` → 打包脚本 → `node scripts/build-single.mjs --out=site/index.html` → 上传 artifact → 部署，全程无需本地操作；也可以在仓库 Actions 页面手动触发（`workflow_dispatch`）。产物用 `actions/deploy-pages` 发布，不走 Jekyll。
 
 为什么发布的是内置数据包版：单文件版把构建期归一化的 `dataset.gz` 内嵌进 HTML，打开即用、不依赖任何接口；线上只多一个卡面图的 HTTPS 依赖（`static-data.piovium.org`），没有后端、没有数据库，静态托管就够。曾有「不内嵌数据、联网取包」的轻量版——数据归一化后单文件已降到 1MB 以内，它没有存在意义，已移除。
 
@@ -266,6 +263,7 @@ node tests/test-search.mjs
 
 ## 致谢与许可
 
+- 代码许可：AGPL-3.0（全文见 `LICENSE`），随分享码编解码上游 [genius-invokation](https://github.com/piovium/genius-invokation) 的许可。
 - 分享码编解码逻辑移植自 [genius-invokation](https://github.com/piovium/genius-invokation) `@gi-tcg/assets-manager`（AGPL-3.0）。
 - 卡牌数据来自 piovium；规则术语来自 genshin-db。
 - 原神及七圣召唤相关素材版权归米哈游 / HoYoverse 所有，本项目仅用于非商业的资料查阅与牌组整理。
