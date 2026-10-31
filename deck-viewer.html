@@ -4,6 +4,13 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="theme-color" content="#12161d">
+<meta name="description" content="七圣召唤卡牌与牌组浏览器：牌组分享码解析与生成、卡库多维筛选与机制检索、概念词典、构筑校验、多牌组管理、牌组分享图与二维码。纯前端，单文件离线可用。">
+<meta property="og:title" content="七圣召唤 · 卡牌与牌组浏览器">
+<meta property="og:description" content="牌组分享码解析与生成、卡库浏览与检索、构筑校验、牌组分享图与二维码。纯前端，单文件离线可用。">
+<meta property="og:type" content="website">
+<!-- 门面（托管场景）：IM/社交里发链接时给出标题与摘要预览。og:image/og:url 依赖
+     未知的部署域名，先不写；favicon 用内联 SVG（金菱 + 深底），不引入额外资源文件 -->
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='14' fill='%2312161d'/><path d='M32 11 51 32 32 53 13 32Z' fill='%23d3bc8e'/><circle cx='32' cy='32' r='7' fill='%2312161d'/></svg>">
 <title>七圣召唤 · 卡牌与牌组浏览器</title>
 <!-- 主题在样式表之前落定：auto/light/dark 三态（默认跟随系统）。内联执行避免浅色用户先看到深色闪一下（FOUC） -->
 <script>
@@ -63,6 +70,7 @@ window.addEventListener("error", function (ev) {
     </div>
     <button class="primary" id="btnDecode">解析牌组</button>
     <button id="btnCopyCode" disabled>复制分享码</button>
+    <button id="btnCopyLink" disabled title="复制「本页地址 + 分享码」链接，对方打开即解析这套牌组">复制链接</button>
     <div class="expwrap">
       <button id="btnExport" disabled>导出 ▾</button>
       <!-- 导出动作由 95-export 的注册表在启动时注入 -->

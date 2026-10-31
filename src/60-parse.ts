@@ -115,7 +115,7 @@ async function decodeAndRender(code: string, opts: { noHash?: boolean; noHistory
     renderSummary(); renderGrid(); renderList();
     /* 摘要只属于「卡面视图」：在卡库/列表里解析牌组不应把整块摘要顶到标签栏上方 */
     $("summary").style.display = state.currentView === "grid" ? "block" : "none";
-    (["btnCopyCode", "btnExport"] as const).forEach(b => $<HTMLButtonElement>(b).disabled = false);
+    (["btnCopyCode", "btnCopyLink", "btnExport"] as const).forEach(b => $<HTMLButtonElement>(b).disabled = false);
     setStatus(`解析成功：3 名角色 + ${cardIds.length} 张行动牌（去重 ${countMap.size} 种）`, "ok");
     if (!opts.noHash) safeReplaceState(null, "#" + code);   /* Safari 限速超限时丢地址栏同步，不中断解析 */
     if (!opts.noHistory) pushHistory({ code, chars: state.current!.chars.map(c => ({ name: c.name, el: c.element })) });

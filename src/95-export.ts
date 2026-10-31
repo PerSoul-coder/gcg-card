@@ -5,7 +5,7 @@ import { $, copyText } from "./core/dom";
 import { skillsOf } from "./47-skills";
 import { showDeckDiff } from "./88-compare";
 import { renderShareCanvas } from "./96-share";
-import { showQr } from "./97-qr";
+import { showQr, qrContent } from "./97-qr";
 import { activeDeck, draft } from "./80-deck";
 import { showHelp } from "./90-detail";
 import { decodeRaw, encodeRaw } from "./10-codec";
@@ -267,6 +267,14 @@ $("btnCopyCode").addEventListener("click", async () => {
        直接访问是 undefined → TypeError，报一个误导性的失败（兜底本可成功） */
     await copyText(code);
     toast("分享码已复制（已通过解码自校验）");
+  } catch (e) { toast("生成失败：" + (e as Error).message, true); }
+});
+/* 复制牌组链接：本页地址 + #分享码（与二维码 / 单卡链接同原理）。
+   托管后是 IM 里最自然的分享形态；file:// 下链到本机路径，语义一致不做降级。 */
+$("btnCopyLink").addEventListener("click", async () => {
+  try {
+    await copyText(qrContent(location.href, encodeCurrent()));
+    toast("牌组链接已复制（打开即解析这套牌组）");
   } catch (e) { toast("生成失败：" + (e as Error).message, true); }
 });
 
