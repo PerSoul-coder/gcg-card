@@ -8,9 +8,9 @@
  *   gi-data/entities.json          piovium 卡牌 / 状态 / 召唤物 / 附加状态（部分装备牌含 skills）
  *   gi-data/keywords.json          piovium 规则术语
  *   gi-data/concepts-extra.json    genshin-db 补充概念
- *   gi-data/pinyin.js              构建期拼音索引（复用，不重复生成）
  *   src/core/resources.ts          译名表与标签翻译（TS，用 esbuild 打包后注入 vm）
  *   src/12-model.js                类型语义与身份判定（用 vm 取常量，避免第二份真源）
+ *   pinyin-pro（devDependencies）  拼音在构建期写进每条记录的别名，无独立索引文件
  *
  * 输出：
  *   gi-data/dataset.json           归一化记录（调试 / 单文件内联 / Node 测试兜底）
@@ -24,6 +24,7 @@ import path from "node:path";
 import vm from "node:vm";
 import zlib from "node:zlib";
 import * as esbuild from "esbuild";
+import { pinyin as pyLib } from "pinyin-pro";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -55,6 +56,7 @@ function loadTaxonomy() {
   const expr = `;({
     TYPE_SPEC: __MODEL.TYPE_SPEC, TYPE_ZH: __MODEL.TYPE_ZH, TYPE_ORDER: __MODEL.TYPE_ORDER,
     DOMAIN_ZH: __MODEL.DOMAIN_ZH, NO_ART_KIND: __MODEL.NO_ART_KIND,
+    SKILL_TAG_ZH: __MODEL.SKILL_TAG_ZH, SKILL_TAG_ORDER: __MODEL.SKILL_TAG_ORDER,
     typeZhOf: __MODEL.typeZhOf, typeSpecOf: __MODEL.typeSpecOf,
     nameKey: __MODEL.nameKey, cosmeticKey: __MODEL.cosmeticKey,
     PREPARED_STATE_RE: __MODEL.PREPARED_STATE_RE,
@@ -64,35 +66,26 @@ function loadTaxonomy() {
   return vm.runInContext(code + expr, ctx);
 }
 const T = loadTaxonomy();
-
-const SKILL_TAG_ZH = {
-  GCG_SKILL_TAG_A: "普通攻击",
-  GCG_SKILL_TAG_E: "元素战技",
-  GCG_SKILL_TAG_Q: "元素爆发",
-  GCG_SKILL_TAG_PASSIVE: "被动技能",
-  GCG_SKILL_TAG_NONE: "特殊技能",
-};
+/* 技能类型表的唯一来源是 src/data/model.ts（含 GCG_SKILL_TAG_VEHICLE → 「特技」），
+   与运行时 47-skills 共用，不再各抄一份 */
+const SKILL_TAG_ZH = T.SKILL_TAG_ZH;
 const POOL_TYPES = new Set(T.TYPE_ORDER);
 
-/* ---------- 2. 拼音（复用 gi-data/pinyin.js） ---------- */
-function loadPinyin() {
-  const txt = read("gi-data/pinyin.js");
-  const eq = txt.indexOf("=");
-  const body = txt.slice(eq + 1).trim().replace(/;\s*$/, "");
-  return JSON.parse(body);
-}
-const PY = loadPinyin();
+/* ---------- 2. 拼音（pinyin-pro 构建期直算，只有一份：长在记录的别名上） ----------
+ * 曾经由 build-pinyin.mjs 生成独立的 pinyin.js（names + 逐字兜底表，126KB）打进
+ * 每个产物；现在拼音在数据集构建时直接算好写进 aliases.pinyin（空格分隔音节、
+ * 无声调），全拼与首字母在运行时从音节派生。数据集本体已经 gzip/br 压缩存储，
+ * 拼音随之压缩；来源覆盖也天然完整——包括构建期派生的反应术语这类
+ * 「不在任何源数据名字清单里」的记录。 */
+const PY_OVERRIDES = { 重云: ["zhong", "yun"] };   /* 专名按常用义读音人工校订 */
+const cleanPyName = s => String(s || "").normalize("NFKC").replace(/[^\p{Script=Han}A-Za-z0-9]/gu, "");
 function pinyinOf(name) {
-  const hit = PY.names && PY.names[name];
-  if (hit) {
-    const [full, initials] = hit.split("|");
-    return { full, initials };
-  }
-  const chars = [...String(name || "")];
-  if (!chars.length) return null;
-  const syl = chars.map(ch => (PY.chars || {})[ch]);
-  if (syl.some(x => !x)) return null;
-  return { full: syl.join(""), initials: syl.map(s => s[0]).join("") };
+  const n = cleanPyName(name);
+  if (!n) return "";
+  const syl = (PY_OVERRIDES[name] || pyLib(n, { toneType: "none", type: "array", v: true, nonZh: "consecutive" })
+    .map(s => String(s).toLowerCase()))
+    .filter(s => /^[a-z0-9]+$/.test(s));
+  return syl.join(" ");
 }
 
 /* ---------- 3. 工具 ---------- */
@@ -275,12 +268,10 @@ function push(rec) {
   records.push(rec);
 }
 function aliasOf(name) {
-  const py = pinyinOf(name);
   return {
     norm: T.nameKey(name),
     cosmetic: T.cosmeticKey(name),
-    pinyin: py ? py.full : "",
-    initials: py ? py.initials : "",
+    pinyin: pinyinOf(name),
   };
 }
 
@@ -407,7 +398,9 @@ for (const e of ENT) {
       key: sk, kind: "skill", domain: "skill",
       name: s.name, englishName: s.englishName || "",
       aliases: aliasOf(s.name),
-      typeRaw: s.type || "", typeZh: SKILL_TAG_ZH[s.type] || "技能",
+      /* 装备牌赋予的技能在游戏原文里就叫「特技」（卡面：「特技：X」「角色最多装备1个「特技」」），
+         不看 typeRaw 的技能码——那是数据源的内部分类（VEHICLE 等），游戏里并没有这个概念 */
+      typeRaw: s.type || "", typeZh: "特技",
       desc: { effect, story: "", rules: "" },
       linkable: s.name.length >= 2 && !!effect,
       art: { hasFace: !!e.cardFace, ref: e.cardFace ? e.id : null, kind: e.cardFace ? "card" : "none" },
@@ -612,6 +605,50 @@ for (const r of records) {
   r.refs = [...set];
 }
 
+/* ---------- 8.6 特技牌的关联角色 ----------
+ * piovium 只给天赋牌标注所属角色（relatedCharacterId），特技牌（带技能的装备牌）留空。
+ * 两级推导，都只在源数据缺省时生效：
+ *   1) 出边：refs 引用的角色唯一（正文点名，如「（仅玛薇卡可用）」、咬咬鲨鱼点名词拉妮）；
+ *   2) id 结构：角色专属卡的 id = 1 + 角色id(4位) + 序号（112142→1214、122051→2205、
+ *      313001→1300 不存在即通用）——这是数据源自身的编码规律，比正文更结构化；
+ * 两者冲突时信出边并告警。通用装备（浪船等）两路都落空，保持 null——
+ * 「关联角色」的语义是「只属于谁」，不是「提到过谁」。
+ * 推导后重算元素：与天赋牌同一条 cardElementOf 回退链（自身 tag → 关联角色 → 门槛），
+ * 否则关联写上了、元素还停在推导前的空串。 */
+{
+  const skillOwners = new Set(
+    records.filter(r => r.kind === "skill" && r.rel.ownerKind === "card").map(r => r.rel.ownerKey),
+  );
+  let byRefs = 0, byId = 0;
+  for (const r of records) {
+    if (r.kind !== "card" || r.typeRaw !== "GCG_CARD_MODIFY") continue;
+    if (!skillOwners.has(r.key)) continue;      /* 只补特技牌：关联角色在此有明确消费方 */
+    if (r.rel.relatedCharacterId != null) continue;
+    const chars = [...new Set(r.refs.filter(k => /^char:\d+$/.test(k)))];
+    const refChar = chars.length === 1 ? Number(chars[0].slice(5)) : null;
+    let id = Number.isFinite(refChar) ? refChar : null;
+    let how = "refs";
+    if (id == null && /^1\d{5}$/.test(r.key.slice(5))) {
+      const cand = Number(r.key.slice(6, 10));
+      if (charTagsById.has(cand)) { id = cand; how = "id"; }
+    }
+    if (id == null) continue;
+    if (refChar != null && refChar !== id) {
+      console.log(`  ⚠ 关联冲突：${r.name} 出边=${refChar} vs id推导=${id}（取出边）`);
+      id = refChar;
+    }
+    r.rel.relatedCharacterId = id;
+    r.rel.relatedCharacterKey = "char:" + id;
+    const own = elemOfTags(r.stats.tagsRaw);
+    if (!own) {
+      const relTags = charTagsById.get(id);
+      if (relTags) r.stats.element = elemOfTags(relTags);
+    }
+    if (how === "refs") byRefs++; else byId++;
+  }
+  console.log(`  特技牌关联角色推导：补齐 ${byRefs + byId} 张（出边 ${byRefs} · id 结构 ${byId}）`);
+}
+
 /* ---------- 8.5 概念索引（名字 → 条目列表） ----------
  *
  * 一个名字可能同时属于多种概念：「护盾」既是状态牌也是关键词，「幻戏」既是机制术语
@@ -711,6 +748,13 @@ if (stats.chars !== CHAR.length) problems.push(`角色数不一致：记录 ${st
 if (stats.cards !== ENT.filter(e => e.name).length) problems.push(`卡牌记录数不一致：记录 ${stats.cards} / 源 ${ENT.filter(e => e.name).length}`);
 for (const r of records) {
   if (r.kind === "skill" && !r.rel.ownerKey) problems.push(`技能缺少所属：${r.key}`);
+  /* 特技 = 装备牌赋予的技能（游戏概念），与技能码无关：这条一旦破，
+     检索标签、技能页、角色详情特技段会各自退回「技能」 */
+  if (r.kind === "skill" && r.rel.ownerKind === "card" && r.typeZh !== "特技") {
+    problems.push(`装备牌技能未标特技：${r.key}（${r.name}）`);
+  }
+  /* 拼音完善是硬约束：任何有名记录缺拼音，拼音检索就对它整条失效 */
+  if (r.name && !r.aliases.pinyin) problems.push(`记录缺拼音：${r.key}（${r.name}）`);
   if (r.kind === "skill" && r.linkable && !r.desc.effect) problems.push(`可链接技能无描述：${r.key}`);
 }
 const dup = new Set(), dups = [];
@@ -753,4 +797,5 @@ console.log(`  记录 ${stats.total}（角色 ${stats.chars} / 卡牌 ${stats.ca
 console.log(`  技能来源：角色 ${stats.skillChar} · 装备牌特技 ${stats.skillCard}`);
 console.log(`  可链接 ${stats.linkable} · 有牌面 ${stats.withFace} · 影子 ${stats.shadow} · 镜像 ${stats.mirror} · 测试 ${stats.test}`);
 console.log(`  出边引用 ${stats.refs} · 概念 ${stats.conceptNames} 名 / ${stats.conceptEntries} 条`);
+console.log(`  拼音抽样：称名之刻 → ${pinyinOf("称名之刻")} ｜ 重云 → ${pinyinOf("重云")}`);
 console.log(`  dataset.json ${kb(Buffer.byteLength(json))} → br ${kb(br.length)} / gz ${kb(gz.length)}`);

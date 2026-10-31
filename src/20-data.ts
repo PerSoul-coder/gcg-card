@@ -13,9 +13,17 @@ import { buildSkillIndex } from "./47-skills";
 import { buildTermIndex } from "./40-concepts";
 import { buildPool } from "./45-pool";
 import { buildBacklinks } from "./50-backlinks";
-import { pruneDraft, renderDraft } from "./80-deck";
-import { renderDataInfo } from "./99-main";
 import { setStatus } from "./core/dom";
+
+/* 数据就绪后的界面刷新回调（牌组摘要 / 数据信息行）。
+   数据层不反向 import 视图层与牌组层——那会成环，而循环导入下 esbuild
+   的模块拆序不受控：视图层可能先于本模块求值，顶层启动就会踩到
+   未初始化的绑定（P4 曾因此 boot 即崩：dataOrigins 尚未赋值）。
+   由视图层在这里注册，loadData 完成后统一触发。 */
+const readyHooks: Array<() => void> = [];
+export function onDataReady(fn: () => void): void {
+  readyHooks.push(fn);
+}
 
 /** 本次加载实际用到的来源，供数据信息行展示。 */
 export const dataOrigins = new Set<string>();
@@ -55,7 +63,6 @@ async function loadData(forceNetwork = false): Promise<void> {
   buildTermIndex();      /* 概念索引：只读 dataset.terms */
   buildPool();           /* 卡池：记录投影 */
   buildBacklinks();      /* 反链：只读出边（refs） */
-  pruneDraft(); renderDraft();
-  renderDataInfo();
+  for (const fn of readyHooks) fn();
   dataReady = true;
 }

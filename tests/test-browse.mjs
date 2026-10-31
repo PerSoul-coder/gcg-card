@@ -231,6 +231,15 @@ return (async () => {
   assert(stu.type === "GCG_CARD_EVENT" && stu.u === true, "hash：开关与筛选一起编码：" + hu);
   assert(parseBrowseHash("#b=t=GCG_CARD_EVENT").u === false, "hash：无 u 时按关闭处理");
   assert(parseBrowseHash("#b=u=0,t=X").u === false && parseBrowseHash("#b=u=1").u === true, "hash：u=0 / u=1 都认");
+  /* 检索词编进链接：分享出去的是完整一屏（含第二阶段关键词），解析端不得丢弃 */
+  setShowUnbuildable(false);
+  Object.assign(browseState, { type: "", el: "", cost: "", energy: "", tag: "", ver: "", sort: "name", dir: 1 });
+  searchState.q = "芙宁娜";
+  const hq = browseHash();
+  assert(hq === "#b=q=" + encodeURIComponent("芙宁娜"), "hash：检索词编入：" + hq);
+  assert(parseBrowseHash(hq).q === "芙宁娜", "hash 解码：检索词往返一致");
+  assert(parseBrowseHash("#b=t=X").q === undefined, "hash：无 q 时该字段缺省（应用方按清空处理）");
+  searchState.q = "";
   /* 应用链接只改当前视图，不覆盖本机默认偏好 */
   setShowUnbuildable(true);
   setShowUnbuildable(true, false);
@@ -315,7 +324,7 @@ return (async () => {
   assert(String($("view-browse").innerHTML).includes("ele-svg"), "卡库视图：元素 chip 使用官方矢量图标");
   setBrowseExpanded(false);
   renderDataInfo();
-  assert(String($("dataInfo").innerHTML).includes("个概念"), "数据信息行：动态计数渲染");
+  assert(/概念/.test(String($("dataInfo").innerHTML)) && String($("dataInfo").innerHTML).includes(" 角色 · "), "数据信息行：动态计数渲染");
   assert(scopeRow().includes(String(searchCorpus().length)), "检索范围行：牌库规模动态化");
   assert(scopeRow().includes('data-scope="desc"'), "检索范围行：含描述开关（可关闭提速）");
 
@@ -359,6 +368,26 @@ return (async () => {
   switchView("browse");
   assert($("summary").style.display === "none", "视图切换：卡库视图收起牌组摘要（不再压在标签栏上方）");
   state.current = null;
+
+  /* ===== 10. 收藏：星标 / 过滤 / 分享链接 / 清账 ===== */
+  Object.assign(browseState, { type: "", el: "", cost: "", energy: "", tag: "", ver: "", sort: "name", dir: 1 });
+  const favTarget = browseFilter()[0];
+  assert(!!favTarget, "收藏测试前提：卡池非空");
+  if (isFav(favTarget.id)) toggleFav(favTarget.id);   /* 确保干净起点 */
+  assert(!isFav(favTarget.id), "起点干净：未收藏");
+  assert(toggleFav(favTarget.id) === true, "toggleFav：收藏");
+  assert(localStorage.getItem(STORAGE_KEYS.favs).includes(String(favTarget.id)), "收藏持久化到 localStorage");
+  setShowFavsOnly(true);
+  assert(browseFilter().length > 0 && browseFilter().every(x => favs.has(x.id)), "收藏过滤：只剩星标卡");
+  assert(browseHash().includes("f=1"), "收藏过滤编进链接（f=1）");
+  assert(parseBrowseHash(browseHash()).f === true, "链接解析：f=1");
+  setShowFavsOnly(false);
+  assert(browseFilter().some(x => x.id === favTarget.id), "关闭过滤：全量恢复");
+  toggleFav(favTarget.id);
+  assert(!isFav(favTarget.id), "toggleFav：取消收藏");
+  favs.add(999999999);
+  pruneFavs();
+  assert(!favs.has(999999999), "pruneFavs：失效 id 被清除");
 
 })();
 `;

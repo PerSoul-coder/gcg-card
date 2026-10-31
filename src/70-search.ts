@@ -4,7 +4,7 @@ import { $ } from "./core/dom";
 import { pool } from "./45-pool";
 import { recordOfId } from "./data/records";
 import { KIND_ZH, backlinks } from "./50-backlinks";
-import { escapeRe, termIndex } from "./40-concepts";
+import { escapeRe, termEntries, termIndex } from "./40-concepts";
 import { dataReady, ensureData } from "./20-data";
 
 /* ---------- 卡牌检索（本地全量数据，无额外网络请求） ----------
@@ -63,34 +63,37 @@ const conceptKeyOf = name => "concept#" + nameKey(name);
 const HAN_RE = /\p{Script=Han}/u;
 const normCompact = s => String(s || "").normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
 
-/* 拼音索引由 build-pinyin.mjs 构建期生成；缺失时自动退化为仅字面检索 */
-import { PINYIN_DATA } from "../gi-data/pinyin.js";
+/* 拼音数据只有一份：构建期由 pinyin-pro 算好写进每条记录的 aliases.pinyin
+   （空格分隔音节、无声调），随数据集压缩存储。这里按名字建运行时索引并派生
+   全拼与首字母——曾有独立的 pinyin.js（names + 逐字兜底表，126KB）原样打进
+   每个产物，数据集既然人手一份压缩包，它就没有存在意义了。 */
+import { DATASET } from "./07-dataset";
 import { state } from "./data/state";
 import type { PoolEntry, SearchHit, SuggestHit } from "./types";
 import { STORAGE_KEYS, eleIcon } from "./core/resources";
 import { esc, toast } from "./core/dom";
 import { typeZhOf, nameKey } from "./data/model";
 import { buildPool } from "./45-pool";
-const PY_DATA = PINYIN_DATA || null;
-const pyCache = new Map<string, { full: string; initials: string } | null>();
-function pinyinOf(name) {
-  if (!PY_DATA) return null;
-  if (pyCache.has(name)) return pyCache.get(name);
-  let v: { full: string; initials: string } | null = null;
-  const hit = PY_DATA.names && PY_DATA.names[name];
-  if (hit) {
-    const [full, initials] = hit.split("|");
-    v = { full, initials };
-  } else {
-    /* 未收录的新名字：逐字兜底（仅纯汉字名；含拉丁字符时无法可靠切分，直接放弃） */
-    const chars = [...String(name || "")];
-    if (chars.length && chars.every(ch => HAN_RE.test(ch))) {
-      const syl = chars.map(ch => (PY_DATA.chars || {})[ch]).filter(Boolean);
-      if (syl.length === chars.length) v = { full: syl.join(""), initials: syl.map(s => s[0]).join("") };
+let pyIndex: Map<string, { full: string; initials: string } | null> | null = null;
+let pyIndexFor: unknown = null;
+function pyIndexOf(): Map<string, { full: string; initials: string } | null> {
+  /* 数据集刷新（adopt 产生新对象）后按引用变化自动重建 */
+  if (pyIndexFor !== DATASET || !pyIndex) {
+    const idx = new Map<string, { full: string; initials: string } | null>();
+    for (const r of DATASET ? DATASET.records : []) {
+      if (!r.name || idx.has(r.name)) continue;
+      const syl = (r.aliases.pinyin || "").split(" ").filter(Boolean);
+      idx.set(r.name, syl.length ? { full: syl.join(""), initials: syl.map(s => s[0]).join("") } : null);
     }
+    pyIndex = idx;
+    pyIndexFor = DATASET;
+    return idx;
   }
-  pyCache.set(name, v);
-  return v;
+  return pyIndex;
+}
+function pinyinOf(name) {
+  if (!DATASET) return null;
+  return pyIndexOf().get(String(name)) ?? null;
 }
 
 function queryCtx(q) {
@@ -342,11 +345,14 @@ function nearNames(q, limit = 6) {
   return out.filter(x => { const k = x.kind + ":" + x.name; if (seen.has(k)) return false; seen.add(k); return true; }).slice(0, limit);
 }
 /* 检索结果分类 chips 的固定顺序（与 12-model.js 的类型序一致，概念收尾） */
-const CAT_ORDER = ["角色", "装备牌", "支援牌", "事件牌", "队伍状态", "状态牌", "召唤物", "附加状态", "概念"];
+const CAT_ORDER = ["角色", "装备牌", "支援牌", "事件牌", "队伍状态", "状态牌", "召唤物", "附加状态", "技能", "概念"];
 function resultTypeLabel(r) {
   if (r.kind === "char") return "角色";
   if (r.kind === "card") return recordOfId(r.id)?.typeZh || "卡牌";
   if (r.kind === "skill") return "技能";
+  /* 技能命中单列「技能」组：它们有自己的技能页（费用/所属/牌面），
+     不是无主的释义文本；具体是特技还是元素战技由瓦片自身标出 */
+  if (r.ckind === "skill") return "技能";
   return "概念";   /* 概念类统一一档分类；具体种类由卡块自身标出 */
 }
 /* ---------- 最近搜索（本地记录，可点击重放） ---------- */
@@ -403,7 +409,7 @@ function clearBrowseFilters() {
 const HOT_WORDS = ["感电", "护盾", "天赋", "芙宁娜", "幻戏", "秘传", "万能元素", "下落攻击"];
 const MATCH_ZH = { pinyin: "拼音", initials: "首字母", fuzzy: "模糊", en: "英文", desc: "释义", segment: "词首" };
 const sugState: { open: boolean; items: SuggestHit[]; idx: number } = { open: false, items: [], idx: -1 };
-let sugTimer = 0, liveTimer = 0;
+let sugTimer = 0;
 
 /** 取消待执行的建议刷新。计时器的读写只发生在搜索模块内部。 */
 export function resetSuggestTimer(): void {
@@ -427,6 +433,11 @@ function matchChip(r) {
 function sugKindLabel(r) {
   if (r.kind === "char") return "角色";
   if (r.kind === "card") return recordOfId(r.id)?.typeZh || "卡牌";
+  /* 技能建议标具体类型（特技 / 元素战技…），与检索瓦片同一口径 */
+  if (r.ckind === "skill") {
+    const e = termEntries(r.name).find(x => x.kind === "skill");
+    return (e && e.type) || "技能";
+  }
   return KIND_ZH[r.ckind] || "概念";
 }
 
@@ -528,4 +539,4 @@ async function refreshSuggest() {
   renderSuggestItems(v, searchCards(v, { limit: 8, noDesc: true, corpus: browseFilter() }));
 }
 
-export { searchState, loadSearchScope, searchScope, saveSearchScope, browseActive, corpusKey, searchCorpus, conceptInCorpus, CARD_LIKE_KINDS, conceptEntriesOf, isConceptRow, conceptKeyOf, HAN_RE, normCompact, PY_DATA, pyCache, pinyinOf, queryCtx, segmentsOf, literalScore, englishScore, pinyinScore, subseqWindow, withinOneEdit, fuzzyScore, scoreName, compareResults, searchCards, nearNames, CAT_ORDER, resultTypeLabel, loadRecent, pushRecent, scopeRow, inputHint, toggleSearchScope, clearBrowseFilters, HOT_WORDS, MATCH_ZH, sugState, sugTimer, liveTimer, matchChip, sugKindLabel, hlText, renderSuggestItems, openSuggest, closeSuggest, moveSuggest, selectSuggest, refreshSuggest };
+export { searchState, loadSearchScope, searchScope, saveSearchScope, browseActive, corpusKey, searchCorpus, conceptInCorpus, CARD_LIKE_KINDS, conceptEntriesOf, isConceptRow, conceptKeyOf, HAN_RE, normCompact, pinyinOf, queryCtx, segmentsOf, literalScore, englishScore, pinyinScore, subseqWindow, withinOneEdit, fuzzyScore, scoreName, compareResults, searchCards, nearNames, CAT_ORDER, resultTypeLabel, loadRecent, pushRecent, scopeRow, inputHint, toggleSearchScope, clearBrowseFilters, HOT_WORDS, MATCH_ZH, sugState, matchChip, sugKindLabel, hlText, renderSuggestItems, openSuggest, closeSuggest, moveSuggest, selectSuggest, refreshSuggest };

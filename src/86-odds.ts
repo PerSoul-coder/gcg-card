@@ -7,6 +7,7 @@ import type { ParsedCard } from "./types";
 import { esc, setStatus, toast } from "./core/dom";
 import { costText } from "./30-deps";
 import { navBar } from "./90-detail";
+import { overlayHashClear } from "./core/history";
 
 /* ---------- 抽牌概率模型 ----------
    行动牌是 30 张的无放回抽样池，抽牌等价于超几何分布：
@@ -151,6 +152,7 @@ function showOdds() {
     return;
   }
   if (!state.current) { toast("请先解析一个牌组", true); return; }
+  overlayHashClear();   /* 整栈替换：先清掉已推的弹层历史，hash 与栈保持一致 */
   state.overlayStack = [{ kind: "odds", pick: oddsState.pick }];
   renderOverlay();
 }

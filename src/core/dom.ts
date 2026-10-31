@@ -33,6 +33,27 @@ export function toast(msg: string, err = false): void {
   setTimeout(() => t.remove(), 2600);
 }
 
+/* 剪贴板：优先 async Clipboard API；file:// 等场景可能拒权或缺失，
+   退回 textarea + execCommand 兜底（两路都失败才拒绝，调用方各自决定提示）。 */
 export function copyText(t: string): Promise<void> {
-  return navigator.clipboard.writeText(t);
+  const clip = navigator.clipboard;
+  if (clip && typeof clip.writeText === "function") {
+    return clip.writeText(t).catch(() => copyViaExecCommand(t));
+  }
+  return copyViaExecCommand(t);
+}
+function copyViaExecCommand(t: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const ta = document.createElement("textarea");
+    ta.value = t;
+    ta.setAttribute("readonly", "");
+    ta.style.position = "fixed";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.select();
+    let ok = false;
+    try { ok = document.execCommand("copy"); } catch (e) { ok = false; }
+    ta.remove();
+    ok ? resolve() : reject(new Error("复制失败"));
+  });
 }

@@ -2,7 +2,6 @@
 /* 单文件构建 —— 把样式、脚本、统一数据包全部内联进一个 HTML，双击即可打开。
  *
  *   node scripts/build-single.mjs              内置数据包（离线可用）
- *   node scripts/build-single.mjs --lite       不内嵌数据（约 440KB，首次打开需联网拉取）
  *   node scripts/build-single.mjs --out=x.html 指定输出文件名（相对项目根目录）
  *
  * 为什么不直接复制几份文件：单文件没有相对路径依赖，微信/邮件传一个文件就能用，
@@ -28,11 +27,10 @@ const kb = n => (n / 1024).toFixed(1) + " KB";
 const mb = n => (n / 1024 / 1024).toFixed(2) + " MB";
 
 const argv = process.argv.slice(2);
-const lite = argv.includes("--lite");
 const outArg = argv.find(a => a.startsWith("--out="));
 const OUT = outArg
   ? outArg.slice("--out=".length)
-  : (lite ? "dist/七圣召唤-卡牌与牌组浏览器-轻量.html" : "dist/七圣召唤-卡牌与牌组浏览器.html");
+  : "dist/七圣召唤-卡牌与牌组浏览器.html";
 
 /* 先构建应用包：单文件版内联的就是 dist/app.js，避免产物落后于 TS 源码 */
 {
@@ -69,7 +67,7 @@ let dsBytes = 0;
 try {
   dsB64 = readFileSync(gzPath).toString("base64");
   dsBytes = statSync(gzPath).size;
-} catch (e) { /* 未构建数据集时留空：单文件版退化为联网取包 */ }
+} catch (e) { /* 未构建数据集时留空：运行时回退到站点数据包（http(s) 下才可行，file:// 下必然被拦） */ }
 const dsPayload = dsB64
   ? `<script id="builtin-dataset" type="text/plain">${dsB64}</script>
 <script>
@@ -79,7 +77,7 @@ catch (e) { console.error("内置数据集读取失败：", e); }
 </script>
 `
   : "";
-const payload = lite ? "" : dsPayload;
+const payload = dsPayload;
 
 /* 应用脚本整块替换：多文件版是 16 个 <script src="src/...">，单文件版按同一顺序合并为一段 */
 const appBlock = /<!-- app-sources:start[\s\S]*?<!-- app-sources:end -->/;
@@ -90,8 +88,8 @@ html = html.replace(appBlock, () => `${payload}<script>\n${app}\n</script>`);
 const stamp = new Date();
 const stampText = `${stamp.getFullYear()}-${String(stamp.getMonth() + 1).padStart(2, "0")}-${String(stamp.getDate()).padStart(2, "0")} ${String(stamp.getHours()).padStart(2, "0")}:${String(stamp.getMinutes()).padStart(2, "0")}`;
 const buildNote = `<!-- 单文件版 · build-single.mjs 生成于 ${stampText}
-     样式、脚本、${lite ? "（未内嵌数据，首次打开需联网）" : `统一数据集（${kb(dsBytes)} gzip）`} 均已内联，单文件即可运行
-     重新生成：node scripts/build-single.mjs${lite ? " --lite" : ""} -->`;
+     样式、脚本、统一数据集（${kb(dsBytes)} gzip） 均已内联，单文件即可运行
+     重新生成：node scripts/build-single.mjs -->`;
 html = html.replace(/<!--\s*\?v=\s*版本戳[^]*?-->/, () => buildNote);
 
 /* ---------- 4. 残留外部引用自检 ----------
@@ -113,8 +111,8 @@ const gz = gzipSync(Buffer.from(html)).length;
 
 console.log(`输出：${OUT}`);
 console.log(`  原始体积 ${mb(bytes)}　gzip 后 ${kb(gz)}`);
-console.log(`  模式：${lite ? "轻量（不内嵌数据，首次打开需联网）" : "内置数据包（离线可用）"}`);
-if (!lite && dsBytes) console.log(`  内置数据集：${kb(dsBytes)}（gzip，base64 内联）`);
+console.log(`  模式：内置数据包（离线可用）`);
+if (dsBytes) console.log(`  内置数据集：${kb(dsBytes)}（gzip，base64 内联）`);
 if (leftovers.length) {
   console.log(`\n⚠ 仍有 ${leftovers.length} 处外部本地引用，单文件可能不完整：`);
   for (const l of leftovers.slice(0, 5)) console.log("   " + l);

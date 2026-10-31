@@ -47,7 +47,7 @@ assert(iStyle > 0 && iData > iStyle, "样式在数据包之前内联");
 assert(iHook > iData && iHook < iApp, "数据包读取钩子位于数据块之后、应用之前（否则数据集不可见）");
 assert(iApp > 0, "应用脚本已内联");
 
-/* 资源（拼音索引 / 补充概念库 / 元素图标）已是 ESM 模块，随应用包一起内联 */
+/* 资源（补充概念库 / 元素图标）已是 ESM 模块，随应用包一起内联 */
 const appSrc = fs.readFileSync(path.join(here, "dist/app.js"), "utf8");
 const cssSrc = fs.readFileSync(path.join(here, "deck-viewer.css"), "utf8");
 /* 整段逐字比对：只比前缀会让「产物落后于源码」静默通过 */
@@ -56,9 +56,11 @@ assert(html.includes(appBlock), "内联的应用脚本与打包产物逐字一�
 assert(html.includes(`<style>\n${cssSrc}\n</style>`), "内联的样式与源文件逐字一致（整段比对）");
 assert(html.includes("ELEMENT_ICONS_SVG"), "官方七元素矢量图标已随应用包内联");
 /* 补充概念库（genshin-db 快照）不再作为运行时依赖：它在构建期被归一进 dataset.terms，
-   运行时只读归一化结果。断言它没有随包内联，防止有人把旧的全局写法加回来。 */
+   运行时只读归一化结果。断言它没有随包内联，防止有人把旧的全局写法加回来。
+   拼音同理：它写进记录别名（aliases.pinyin）随 dataset.gz 内联，不再有独立的
+   PINYIN_DATA 索引——出现旧标识说明把废弃管线又接了回来。 */
 assert(!html.includes("CONCEPTS_EXTRA"), "补充概念库已并入数据集，不再随应用包内联");
-assert(html.includes("PINYIN_DATA"), "拼音索引已随应用包内联");
+assert(!html.includes("PINYIN_DATA"), "拼音已并入数据集记录，拼音索引不再随包内联");
 
 /* ===== 4. 体积与构建信息 ===== */
 /* 主文件 = 应用包（约 0.34MB）+ 数据集 gzip base64（约 0.55MB）+ 样式。
@@ -69,18 +71,10 @@ assert(/单文件版 · build-single\.mjs 生成于 \d{4}-\d{2}-\d{2}/.test(html
 assert(/统一数据集（[\d.]+ KB gzip）/.test(html), "头部标注内置数据集规模");
 assert(!/deck-viewer\.(?:css|js|html)\?v=/.test(html), "无残留的资源版本戳查询串（单文件不靠 URL 版本戳）");
 
-/* ===== 5. 轻量版 ===== */
-const LITE = path.join(here, "dist", "七圣召唤-卡牌与牌组浏览器-轻量.html");
-if (fs.existsSync(LITE)) {
-  const liteHtml = fs.readFileSync(LITE, "utf8");
-  assert(!liteHtml.includes('id="builtin-dataset"'), "轻量版不内嵌数据包");
-  assert(!/<script[^>]+src=/i.test(liteHtml), "轻量版脚本同样全内联");
-  assert(liteHtml.includes(appBlock), "轻量版应用脚本与源文件逐字一致（整段比对）");
-  assert(liteHtml.includes(`<style>\n${cssSrc}\n</style>`), "轻量版样式与源文件逐字一致（整段比对）");
-  /* 轻量版只有应用包 + 样式：数据首次打开时从站点取。 */
-  assert(Buffer.byteLength(liteHtml) < 600_000, `轻量版体积 < 600KB（${(Buffer.byteLength(liteHtml) / 1024).toFixed(0)} KB）`);
-  assert(liteHtml.includes("dataset.gz"), "轻量版保留数据包的获取路径（运行时按需拉取）");
-}
+/* ===== 5. 轻量版已移除 =====
+   数据归一化后单文件只内联一份 dataset.gz（<1MB），「不内嵌数据、联网取包」的轻量版
+   没有存在意义；这里守住它不再被加回来。 */
+assert(!fs.existsSync(path.join(here, "dist", "七圣召唤-卡牌与牌组浏览器-轻量.html")), "轻量版产物已删除");
 
 console.log(fails ? `\n${fails} 条断言失败` : "\n全部通过");
 process.exit(fails ? 1 : 0);

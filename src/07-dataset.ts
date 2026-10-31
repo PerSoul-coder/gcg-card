@@ -87,6 +87,12 @@ async function loadDataset(force = false): Promise<Dataset | null> {
     }
   }
 
+  /* file:// 下浏览器把每个本地文件视为独立源，fetch 相对路径必然被拦
+     （控制台报 "Unsafe attempt to load URL / CORS"），永远不可能成功。
+     数据只可能来自宿主注入或内联包；两者都没有就明确失败，
+     不发注定失败的网络请求去刷控制台。 */
+  if (typeof location !== "undefined" && location.protocol === "file:") return null;
+
   /* 刷新时加时间戳参数，绕过 HTTP 缓存，确保真的拿到新包 */
   const bust = force ? `?t=${Date.now()}` : "";
   for (const url of [DATASET_GZ_URL, DATASET_BR_URL, DATASET_JSON_URL]) {

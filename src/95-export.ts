@@ -182,9 +182,10 @@ $("exportMenu").addEventListener("click", ev => {
   $("exportMenu").classList.remove("show");
   const act = b.dataset.exp;
   try {
-    if (act === "text") { copyText(deckText()); toast("文本牌表已复制"); }
-    else if (act === "md") { copyText(deckMarkdown()); toast("Markdown 牌表已复制"); }
-    else if (act === "json-copy") { copyText(JSON.stringify(buildExport(), null, 2)); toast("结构化 JSON 已复制"); }
+    /* 复制是异步的：成功/失败都要有回音，不留 unhandled rejection */
+    if (act === "text") { copyText(deckText()).then(() => toast("文本牌表已复制"), () => toast("复制失败", true)); }
+    else if (act === "md") { copyText(deckMarkdown()).then(() => toast("Markdown 牌表已复制"), () => toast("复制失败", true)); }
+    else if (act === "json-copy") { copyText(JSON.stringify(buildExport(), null, 2)).then(() => toast("结构化 JSON 已复制"), () => toast("复制失败", true)); }
     else if (act === "json-dl") { download(`${fileStamp()}.json`, JSON.stringify(buildExport(), null, 2), "application/json"); toast("JSON 已下载"); }
     else if (act === "csv") { download(`${fileStamp()}.csv`, toCSV(), "text/csv;charset=utf-8"); toast("CSV 已下载（Excel 可直开）"); }
   } catch (e) { toast("导出失败：" + (e as Error).message, true); }

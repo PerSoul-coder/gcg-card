@@ -8,9 +8,10 @@
  * 它们不可入构筑但可以查）。测试卡与准备状态影子在构建期就标好了，这里按标记排除
  * 并计数——排除理由是数据事实，不是运行时猜测。 */
 
-import { charRecords, cardRecords, nameOfId } from "./data/records";
+import { charRecords, cardRecords, nameOfId, recordOfId } from "./data/records";
 import type { GcgRecord, PoolEntry, PoolStats } from "./types";
 import { TYPE_ORDER } from "./data/model";
+import { STORAGE_KEYS } from "./core/resources";
 
 /* 类型顺序来自 model.ts 的 TYPE_ORDER（唯一定义）；这里保留旧名以便既有调用处不变 */
 const POOL_TYPE_ORDER = TYPE_ORDER;
@@ -109,6 +110,37 @@ function buildPool() {
     versions: [...new Set(pool.map(x => x.ver).filter((v): v is string => !!v))].sort(verCmp),
   };
   poolVersion++;
+}
+
+/* ---------- 收藏 ----------
+   星标是跨视图的记忆：卡库筛选、详情页（后续牌组构筑也会用）读同一份。
+   只存池内 id；数据集更新后 prune 掉失效 id，避免收藏里堆死链。 */
+export const favs = new Set<number>();
+export function loadFavs(): void {
+  favs.clear();
+  try {
+    const raw = JSON.parse(localStorage.getItem(STORAGE_KEYS.favs) || "[]");
+    if (Array.isArray(raw)) for (const id of raw) if (Number.isFinite(id)) favs.add(Number(id));
+  } catch (e) {}
+}
+function saveFavs(): void {
+  try { localStorage.setItem(STORAGE_KEYS.favs, JSON.stringify([...favs])); } catch (e) {}
+}
+export const isFav = (id: number): boolean => favs.has(Number(id));
+/** 切换收藏，返回切换后的状态。 */
+export function toggleFav(id: number): boolean {
+  id = Number(id);
+  if (favs.has(id)) favs.delete(id); else favs.add(id);
+  saveFavs();
+  return favs.has(id);
+}
+/** 数据就绪后清掉失效 id（池里已不存在的卡）。 */
+export function pruneFavs(): void {
+  let dirty = false;
+  for (const id of favs) {
+    if (!recordOfId(id)) { favs.delete(id); dirty = true; }
+  }
+  if (dirty) saveFavs();
 }
 
 export { POOL_TYPE_ORDER, verTuple, verCmp, pool, poolVersion, poolStats, buildPool };

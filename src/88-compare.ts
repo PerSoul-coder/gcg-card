@@ -11,7 +11,8 @@ import { draftEncode } from "./80-deck";
 import { parseShareIds } from "./60-parse";
 import { dataReady, ensureData } from "./20-data";
 import { state } from "./data/state";
-import { ELE_ZH, tagZh, eleIcon } from "./core/resources";
+import { ELE_ZH, tagZh, eleIcon, ICON_X, ICON_SWAP } from "./core/resources";
+import { overlayHashClear } from "./core/history";
 import { esc, setStatus, toast } from "./core/dom";
 import { TYPE_ZH, cardArtHtml } from "./data/model";
 import { decks } from "./80-deck";
@@ -32,7 +33,7 @@ function compareName(id: number) {
 }
 function cmpBtnHtml(id) {
   const on = compareState.ids.includes(Number(id));
-  return `<button class="cmpbtn${on ? " on" : ""}" data-cmp="${id}" title="加入对比（最多 ${COMPARE_MAX} 张）" aria-pressed="${on}">⇄</button>`;
+  return `<button class="cmpbtn${on ? " on" : ""}" data-cmp="${id}" title="加入对比（最多 ${COMPARE_MAX} 张）" aria-pressed="${on}">${ICON_SWAP}</button>`;
 }
 function toggleCompare(id) {
   id = Number(id);
@@ -67,7 +68,7 @@ function renderCompareBar() {
   /* 常驻对比栏会盖住页面最后一行，按显示状态给正文补底部留白 */
   if (body && body.classList) body.classList.add("cmp-on");
   bar.innerHTML = `<span class="cmpbar-title">对比 <b>${ids.length}</b>/${COMPARE_MAX}</span>
-    <span class="cmpbar-chips">${ids.map(id => `<span class="cmpbar-chip"><button class="cmpbar-name" data-goto="${id}" title="查看详情">${esc(compareName(id))}</button><button data-cmprm="${id}" title="移出对比">✕</button></span>`).join("")}</span>
+    <span class="cmpbar-chips">${ids.map(id => `<span class="cmpbar-chip"><button class="cmpbar-name" data-goto="${id}" title="查看详情">${esc(compareName(id))}</button><button data-cmprm="${id}" title="移出对比">${ICON_X}</button></span>`).join("")}</span>
     <span class="cmpbar-acts"><button data-cmpclear="1">清空</button><button class="primary" data-cmpopen="1"${ids.length < 2 ? " disabled" : ""} title="${ids.length < 2 ? "至少选择 2 张" : "开始对比"}">对比</button></span>`;
 }
 
@@ -201,7 +202,7 @@ function renderSimilarSection(items) {
             <span class="sim-meta">${esc(c.meta)}</span>
             <span class="sim-why">${esc(c.why)}</span>
             ${inCurrentDeck(c.id) ? `<span class="sim-in">已在牌组</span>` : ""}
-            <button class="sim-swap" data-csimswap="${it.id}" data-simto="${c.id}"${inCmp ? ` disabled title="已在对比中"` : ` title="用这张卡替换对比位"`}>${inCmp ? "已在对比" : "⇄ 换入"}</button>
+            <button class="sim-swap" data-csimswap="${it.id}" data-simto="${c.id}"${inCmp ? ` disabled title="已在对比中"` : ` title="用这张卡替换对比位"`}>${inCmp ? "已在对比" : `${ICON_SWAP} 换入`}</button>
           </div>`;
         }).join("") : `<div class="sim-empty">没有可替换的同类型卡牌</div>`}
       </div>`;
@@ -224,7 +225,7 @@ function renderCompareView(v) {
     items.map(it => `<div class="cmp-hcell">
       ${cardArtHtml(it.id, { kind: "cmp", alt: it.name })}
       <button class="cmp-hname" data-goto="${it.id}" title="查看详情">${esc(it.name)}</button>
-      <button class="cmp-hx" data-cmprm="${it.id}" title="移出对比">✕</button></div>`).join("");
+      <button class="cmp-hx" data-cmprm="${it.id}" title="移出对比">${ICON_X}</button></div>`).join("");
   const body = shown.map(r => `<div class="cmp-label${r.diff ? " diff" : ""}">${r.label}</div>` +
     r.vals.map(val => `<div class="cmp-val${r.diff ? " diff" : ""}">${val.html}</div>`).join("")).join("");
   const extra = `<button class="lbtn${v.onlyDiff ? " on" : ""}" data-cdiff="1" title="只显示存在差异的字段">${v.onlyDiff ? "显示全部" : "仅看差异"}</button>
@@ -248,7 +249,7 @@ function showCompare() {
     /* 从详情打开时压栈：返回键回到那张卡，而不是把详情上下文丢掉 */
     if (top.kind === "compare") { top.ids = view.ids; top.showSim = false; }
     else state.overlayStack.push(view);
-  } else state.overlayStack = [view];
+  } else { overlayHashClear(); state.overlayStack = [view]; }
   renderOverlay();
 }
 
@@ -428,6 +429,7 @@ function showDeckDiff() {
     return;
   }
   if (!deckDiffState.a && state.current?.code) deckDiffState.a = state.current!.code;
+  overlayHashClear();   /* 整栈替换：先清掉已推的弹层历史，hash 与栈保持一致 */
   state.overlayStack = [{ ...deckDiffState }];
   renderOverlay();
   focusDeckDiffInput();

@@ -55,6 +55,24 @@ export const DOMAIN_ZH: Record<string, string> = {
   char: "角色", card: "卡牌", field: "对局实体", term: "术语", skill: "技能",
 };
 
+/* 技能类型 → 中文标签。角色技能与装备牌特技共用一份记录形状，区别在 rel.ownerKind：
+   card-owned 的技能在游戏原文里就叫「特技」（卡面写着「特技：X」「角色最多装备1个「特技」」），
+   其 typeRaw 是 GCG_SKILL_TAG_VEHICLE（载具技能码）——这里给 VEHICLE 一个正名，
+   构建期再把 ownerKind=card 的技能统一改写为「特技」，两处互为印证。
+   构建脚本经 loadTaxonomy 取用本表，运行时 47-skills 也 import 它：只此一份。 */
+export const SKILL_TAG_ZH: Record<string, string> = {
+  GCG_SKILL_TAG_A: "普通攻击",
+  GCG_SKILL_TAG_E: "元素战技",
+  GCG_SKILL_TAG_Q: "元素爆发",
+  GCG_SKILL_TAG_PASSIVE: "被动技能",
+  GCG_SKILL_TAG_NONE: "特殊技能",
+  GCG_SKILL_TAG_VEHICLE: "特技",
+};
+export const SKILL_TAG_ORDER = [
+  "GCG_SKILL_TAG_A", "GCG_SKILL_TAG_E", "GCG_SKILL_TAG_Q",
+  "GCG_SKILL_TAG_PASSIVE", "GCG_SKILL_TAG_NONE", "GCG_SKILL_TAG_VEHICLE",
+];
+
 /* 原始类型 → 基础译名（兼容老代码里的 TYPE_ZH[e.type] 查表；值由 TYPE_SPEC 派生，
    不再有第二份字面量，避免两处标签各改一半） */
 export const TYPE_ZH: Record<string, string> = Object.fromEntries(
@@ -138,11 +156,13 @@ export interface NoArtOptions {
   iconId?: number;
 }
 
-/* 无牌面卡壳。iconId 传 0 表示不尝试图标（数据缺失等）。 */
+/* 无牌面卡壳。iconId 传 0 表示不尝试图标（数据缺失等）。
+   图标的 load / error 由本文件底部的 document 捕获监听统一处理——
+   内联 onload/onerror 引用的是全局函数，而生产 IIFE 没有全局（P4 去全局化）。 */
 export function noArtHtml({ kind = "tile", zh = "", name = "", type = "", iconId = 0 }: NoArtOptions = {}): string {
   const k = NO_ART_KIND[type] || "other";
   const icon = iconId && !NO_ICON_IDS.has(iconId)
-    ? `<span class="noart-disc"><img class="noart-icon" src="${imgFull(iconId)}" width="128" height="128" loading="lazy" decoding="async" alt="" onload="artIconReady(this)" onerror="artIconFail(this)"></span>`
+    ? `<span class="noart-disc"><img class="noart-icon" src="${imgFull(iconId)}" width="128" height="128" loading="lazy" decoding="async" alt=""></span>`
     : "";
   return `<div class="noart noart-${kind}" data-kind="${k}" role="img" aria-label="${esc(name)}（${esc(zh)}，对局实体，无牌面）">
       <i class="noart-rib" aria-hidden="true"></i><span class="noart-mark" aria-hidden="true">◈</span>${icon}<span class="noart-kind">${esc(zh)}</span></div>`;
@@ -157,7 +177,7 @@ export interface CardArtOptions {
 export function cardArtHtml(id: number, { kind = "tile", alt = "", cls = "" }: CardArtOptions = {}): string {
   const r = recordOfId(id);
   if (r && r.art.hasFace) {
-    return `<img${cls ? ` class="${cls}"` : ""} src="${imgFull(id)}" width="${CARD_ART_W}" height="${CARD_ART_H}" loading="lazy" decoding="async" alt="${esc(alt)}" onerror="artFallback(this)">`;
+    return `<img${cls ? ` class="${cls}"` : ""} src="${imgFull(id)}" width="${CARD_ART_W}" height="${CARD_ART_H}" loading="lazy" decoding="async" alt="${esc(alt)}">`;
   }
   return noArtHtml({
     kind,
@@ -197,4 +217,8 @@ export function artFallback(img: HTMLImageElement | null): void {
   if (img.replaceWith) img.replaceWith(div);
   else if (img.parentNode) { img.parentNode.removeChild(img); (box as HTMLElement).appendChild(div); }
 }
+
+/* 牌面 load / error 的分发逻辑见 90-detail（document 捕获监听）——
+   本模块只提供处理函数；数据层不挂 DOM 监听，否则构建期的 taxonomy
+   vm 求值（没有 document）也会被顶层副作用拖垮。 */
 

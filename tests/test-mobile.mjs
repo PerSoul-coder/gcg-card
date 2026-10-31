@@ -138,7 +138,7 @@ assert(/\.dd-swap-t \{[^}]*display:\s*inline/.test(narrow760),
   "窄屏牌组对比的「⇅」补上可见的「交换」文字");
 assert(/\.odds-pick select \{[^}]*flex:\s*1 1 100%/.test(narrow760),
   "窄屏关键牌下拉独占一行，便于点选");
-assert(/\.dd-field input,\s*\.odds-pick select[^{]*\{[^}]*font-size:\s*16px/.test(coarse),
+assert(/\.dd-field input,\s*\.odds-pick select[^{]*\{[^}]*font-size:\s*(16px|var\(--fs-16\))/.test(coarse),
   "触屏输入控件 16px（iOS 聚焦时不会放大整页）");
 assert(/\.tile:hover \{ transform:\s*none/.test(coarse),
   "触屏取消卡片悬停位移（点按后不会粘住抬起状态）");

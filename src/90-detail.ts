@@ -11,15 +11,16 @@ import { termEntries } from "./40-concepts";
 import { state } from "./data/state";
 import type { GcgRecord, OverlayEntry } from "./types";
 import { recordOfId, nameOfId, isCharId, isShadowId, cardRecords } from "./data/records";
-import { ELE_ZH, ELE_COLOR, tagZh, eleIcon, enPips } from "./core/resources";
+import { ELE_ZH, ELE_COLOR, tagZh, eleIcon, enPips, ICON_X, ICON_SWAP, ICON_STAR } from "./core/resources";
 import { esc, toast, copyText } from "./core/dom";
 import { registerLayer, syncScrollLock } from "./core/layers";
-import { cardArtHtml } from "./data/model";
+import { overlayHashOf, overlayHashParse, overlayHashPush, overlayHashReplace, overlayHashBack, overlayHashCloseAll, overlayHashPop, overlayHashAdopt, overlayPushDepth, overlayHashClear } from "./core/history";
+import { cardArtHtml, artFallback, artIconFail, artIconReady } from "./data/model";
 import { dataOrigins } from "./20-data";
 import { costHtml } from "./30-deps";
 import { linkify } from "./40-concepts";
-import { pool, poolStats } from "./45-pool";
-import { skillsHtml, skillsHtmlCard } from "./47-skills";
+import { pool, poolStats, isFav, toggleFav } from "./45-pool";
+import { skillsHtml, skillsHtmlCard, equipSkillsHtml } from "./47-skills";
 import { termHtml } from "./50-backlinks";
 import { COMPARE_MAX } from "./88-compare";
 
@@ -53,11 +54,17 @@ function backlinkHtml(name: string, selfId: number | null = null) {
   const more = total > shown.length ? `<span class="blmore">…等 ${total} 个引用来源</span>` : "";
   return `<div class="drel"><b>被引用</b><span class="blchips">${chips}${more}</span></div>`;
 }
-/* 角色天赋牌 chips（卡牌详情中排除自身，避免自指） */
-function charTalentChips(charId: number, excludeId: number | null = null): string {
+/* 角色天赋牌 chips（卡牌详情中排除自身，避免自指）。
+   只在当前卡自身是天赋牌时输出：relatedCharacterId 推导后，角色专属装备牌
+   （咬咬鲨鱼、驰轮车）也有关联角色——给它们列一串天赋牌 chips 是噪音。 */
+function charTalentChips(charId: number, excludeId: number | null = null, onlyForTalent = false): string {
   const list = cardRecords().filter(r =>
     r.rel.relatedCharacterId === charId && r.stats.tagsRaw.includes("GCG_TAG_TALENT"));
   if (!list.length) return "";
+  if (onlyForTalent) {
+    const self = excludeId != null && recordOfId(excludeId);
+    if (!self || !self.stats.tagsRaw.includes("GCG_TAG_TALENT")) return "";
+  }
   return `<div class="drel"><b>天赋牌</b><span class="blchips">` + list.map(r => {
     const cid = Number(r.key.slice(5));
     return `<button class="blchip${cid === excludeId ? " self" : ""}" data-goto="${cid}" title="${esc(r.name)}${cid === excludeId ? "（当前卡牌）" : ""}">${esc(r.name)}</button>`;
@@ -95,10 +102,34 @@ const overlayOpen = () => $("overlay").classList.contains("show");
    只挂 fixed 遮罩是不够的——弹层滚到边界后滚动链会继续传给文档，
    于是"在弹层里上下滑，背景的卡面视图跟着动"。锁滚动与 scrollbar 补偿
    都收在 core/layers 里，其他浮层共用同一套。 */
+/* 退场动画只在「支持且未关闭动效」时播放：reduced-motion 与测试环境（无 matchMedia）
+   都直接瞬时关闭——与 CSS 的 reduced-motion 归零语义一致，也不拖慢同步断言。 */
+function motionOK(): boolean {
+  try {
+    return typeof window.matchMedia === "function"
+      && !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  } catch (e) { return false; }
+}
 function setOverlayOpen(open: boolean) {
   const ov = $("overlay");
   if (!ov || !ov.classList) return;
-  ov.classList.toggle("show", open);
+  if (!open && ov.classList.contains("show") && motionOK()) {
+    /* 退场：先播 .closing（淡出 + 下沉），动画结束再摘 .show。
+       兜底定时器防止 animationend 因元素复用而丢失；期间滚动锁同步解除。 */
+    ov.classList.add("closing");
+    let done = false;
+    const fin = () => {
+      if (done) return;
+      done = true;
+      ov.classList.remove("show", "closing");
+      ov.removeEventListener("animationend", fin);
+    };
+    ov.addEventListener("animationend", fin);
+    setTimeout(fin, 280);
+  } else {
+    ov.classList.remove("closing");
+    ov.classList.toggle("show", open);
+  }
   syncScrollLock();
   if (open) hideTip();      /* 弹层盖上来时，残留的悬浮预览会浮在遮罩之上 */
 }
@@ -149,20 +180,66 @@ function renderOverlay(resetScroll = false) {
 }
 /* 打开详情：弹层已开（反链 / 关联 / 术语身份跳转）→ 压栈，返回可回上一张；
    未开 → 重置栈。同 id 连续点击不重复压栈。 */
-function showDetail(id: number, ids?: number[]) {
+function showDetail(id: number, ids?: number[], fromHistory = false) {
   id = Number(id);
   const top = topView();
   if (overlayOpen() && top && top.kind === "detail" && top.id === id) return;
   if (!overlayOpen()) state.overlayStack = [];
   state.overlayStack.push(detailView(id, ids || pagerContextFor(id)));
+  const nt = topView();
+  const h = overlayHashOf(nt);
+  if (!fromHistory && h) { overlayHashPush(h); nt!.hpushed = true; }   /* 写入历史：后退键逐层回退 */
   renderOverlay();
 }
 function overlayBack() {
+  const top = topView();
+  /* 有历史条目的层把返回交给历史：popstate 统一做差量同步（含前进重开） */
+  if (top && top.hpushed && overlayHashBack()) return;
   state.overlayStack.pop();
   if (!state.overlayStack.length) { setOverlayOpen(false); return; }
   renderOverlay();
 }
-function overlayClose() { state.overlayStack = []; setOverlayOpen(false); }
+function overlayClose() {
+  /* 全部关闭：一次吞掉整链历史，单个 popstate 完成清栈 */
+  if (overlayHashCloseAll()) return;
+  state.overlayStack = []; setOverlayOpen(false);
+}
+/* popstate 差量同步：把可回退层弹到目标深度（不触发历史），缺的层按 hash 重开。
+   后退 = 弹栈；前进 = 重开；夹在中间的普通层（compare / odds）一并清掉。
+   99-main 的 popstate 监听负责调用它。 */
+function overlayMatches(top, want): boolean {
+  if (!top || !want) return false;
+  if (want.kind === "detail") return top.kind === "detail" && top.id === want.id;
+  if (want.kind === "term") return top.kind === "term" && top.name === want.name;
+  return top.kind === "skill" && top.key === want.key;
+}
+function syncOverlayToHash(targetDepth: number, want) {
+  const isH = v => v && (v.kind === "detail" || v.kind === "term" || v.kind === "skill");
+  /* 深链 / 前进重开的层没有自己的条目：按「带条目的层数」对齐目标深度 */
+  const entryDepth = () => state.overlayStack.filter(v => isH(v) && v.hpushed).length;
+  while (state.overlayStack.length) {
+    const top = topView();
+    if (!top) break;
+    if (isH(top) && top.hpushed) {
+      if (entryDepth() <= targetDepth) break;
+      state.overlayStack.pop();
+      overlayHashPop();
+      continue;
+    }
+    /* 普通层（compare / odds）没有历史身份：一律弹。
+       无条目的可回退层：hash 认它就留，不认就弹。 */
+    if (isH(top) && want && overlayMatches(top, want) && entryDepth() >= targetDepth) break;
+    state.overlayStack.pop();
+  }
+  /* 前进重开：目标深度还没到，按 hash 补上缺的那层（不写历史，但认领该条目） */
+  if (want && entryDepth() < targetDepth) {
+    if (want.kind === "detail") { if (recordOfId(want.id)) { state.overlayStack.push(detailView(want.id)); topView()!.hpushed = true; overlayHashAdopt(); } }
+    else if (want.kind === "term") { if (termEntries(want.name).length) { state.overlayStack.push({ kind: "term", name: want.name }); topView()!.hpushed = true; overlayHashAdopt(); } }
+    else if (want.kind === "skill" && skillOf(want.key)) { state.overlayStack.push({ kind: "skill", key: want.key }); topView()!.hpushed = true; overlayHashAdopt(); }
+  }
+  renderedView = null;
+  renderOverlay();
+}
 /* 登记为最顶层（z-index 50）。Esc 走 overlayBack 逐层退回，栈空时它自己关闭弹层。 */
 registerLayer({ id: "overlay", isOpen: overlayOpen, close: overlayBack, order: 50, modal: true });
 /* 翻页：同一列表内前后跳 */
@@ -173,6 +250,14 @@ function modalStep(d) {
   if (n < 0 || n >= top.ids!.length) return;
   top.id = top.ids![n]; top.idx = n;
   renderOverlay(true);
+  { const h = overlayHashOf(top); if (h) overlayHashReplace(h); }   /* 翻页原地换 hash，不加历史 */
+  /* 方向感：内容沿翻页方向滑入（动画挂在 #detail 容器上，不与面板入场动画叠加） */
+  const box = $("detail");
+  if (box && box.classList) {
+    box.classList.remove("pg-prev", "pg-next");
+    void (box as HTMLElement).offsetWidth;   /* 重置动画：连续翻页也要每次都播 */
+    box.classList.add(d > 0 ? "pg-next" : "pg-prev");
+  }
 }
 /* 视图标签（返回钮文字）：概念名 / 卡牌名 */
 function viewLabel(v) {
@@ -190,7 +275,7 @@ function navBar(extra = "") {
   const back = prev
     ? `<button class="lbtn tm-back" title="返回「${esc(viewLabel(prev))}」" data-act="back">‹ ${esc(viewLabel(prev))}</button>` : "";
   return `<div class="navbtns">${back}${extra}
-      <button title="关闭 (Esc)" data-act="close">✕</button></div>`;
+      <button title="关闭 (Esc)" data-act="close">${ICON_X}</button></div>`;
 }
 /* 翻页控件：同级列表不足 2 张时不出现（避免"永远禁用"的误导），多张时显示位置「3/22」 */
 function pagerHtml(v: Extract<OverlayEntry, { kind: "detail" }>): string {
@@ -217,8 +302,8 @@ function renderDetailView(v) {
     ? `<button class="lbtn${cmpOn ? " on" : ""}" data-cmp="${id}" data-cmp-label="对比" title="加入卡牌对比（最多 ${COMPARE_MAX} 张）">${cmpOn ? "✓ 已选" : "对比"}</button>` : "";
   /* 已选 2 张及以上时，详情里就能直接打开对比面板；返回仍回到这张卡 */
   const cmpOpenBtn = compareState.ids.length >= 2
-    ? `<button class="lbtn" data-cmpopen="1" title="打开卡牌对比面板">⇄ ${compareState.ids.length}</button>` : "";
-  const nav = navBar(`${pagerHtml(v)}${joinBtn}${cmpBtn}${cmpOpenBtn}<button class="lbtn" title="复制该卡链接" data-act="copyLink">复制链接</button>`);
+    ? `<button class="lbtn" data-cmpopen="1" title="打开卡牌对比面板">${ICON_SWAP} ${compareState.ids.length}</button>` : "";
+  const nav = navBar(`${pagerHtml(v)}${joinBtn}${cmpBtn}${cmpOpenBtn}<button class="lbtn${isFav(v.id) ? " on" : ""}" data-fav="${v.id}" aria-pressed="${isFav(v.id)}" title="${isFav(v.id) ? "取消收藏" : "收藏"}">${ICON_STAR} ${isFav(v.id) ? "已收藏" : "收藏"}</button><button class="lbtn" title="复制该卡链接" data-act="copyLink">复制链接</button>`);
   let html;
   if (c) {
     const el = c.stats.element;
@@ -228,6 +313,7 @@ function renderDetailView(v) {
       <div class="meta">${el ? `<span class="tagpill">${eleIcon(el)}${esc(ELE_ZH[el] || el)}</span>` : ""}${tags.map(t => `<span class="tagpill">${esc(t)}</span>`).join("")}<span class="tagpill">生命 ${c.stats.hp}</span><span class="tagpill">充能上限 ${enPips(c.stats.maxEnergy || 0)}</span><span class="tagpill">${esc(c.version || "")}</span></div>
       ${c.desc.story ? `<div class="dtext dstory">${esc(c.desc.story)}</div>` : ""}
       ${skillsHtml(id)}
+      ${equipSkillsHtml(id)}
       ${charTalentChips(id)}${backlinkHtml(c.name, id)}</div>`;
   } else if (e) {
     const tags = e.stats.tags;
@@ -257,7 +343,7 @@ function renderDetailView(v) {
       ${reqBlock}
       <div class="dtext">${linkify(esc(e.desc.effect.trim()))}</div>
       ${skillsHtmlCard(id)}
-      ${relChip}${e.rel.relatedCharacterId != null ? charTalentChips(e.rel.relatedCharacterId, id) : ""}${backlinkHtml(e.name, id)}</div>`;
+      ${relChip}${e.rel.relatedCharacterId != null ? charTalentChips(e.rel.relatedCharacterId, id, true) : ""}${backlinkHtml(e.name, id)}</div>`;
   } else html = nav;
   $("detail").innerHTML = html;
 }
@@ -289,8 +375,18 @@ function draftRemoveFromDetail(): void {
 };
 /* 弹层内的操作按钮：模板只输出 data-act，具体调用在这里分发。
    以前是 onclick="fn()" 配 window.fn——模板字符串能调到任何东西，
-   等于把模块边界又打开了一次，重构时也没法靠类型发现遗漏。 */
+   等于把模块边界又打开了一次，重构时也没法靠类型发现遗漏。
+   详情页的收藏钮也在这里就近分发（卡库瓦片的星标在 85-views 自己的委托里处理）。 */
 $("detail").addEventListener("click", ev => {
+  const favB = (ev.target as HTMLElement).closest("[data-fav]") as HTMLElement | null;
+  if (favB) {
+    const on = toggleFav(Number(favB.dataset.fav));
+    favB.classList.toggle("on", on);
+    favB.setAttribute("aria-pressed", String(on));
+    favB.title = on ? "取消收藏" : "收藏";
+    favB.innerHTML = `${ICON_STAR} ${on ? "已收藏" : "收藏"}`;
+    return;
+  }
   const b = (ev.target as HTMLElement).closest("[data-act]") as HTMLElement | null;
   if (!b) return;
   switch (b.dataset.act) {
@@ -312,8 +408,9 @@ document.addEventListener("click", ev => {
 
 /* ---------- 帮助面板（快捷键与说明，复用详情弹层容器） ---------- */
 function showHelp() {
-  state.overlayStack = [];   /* 帮助不是视图栈的一层：先清栈，关闭时不会退回旧页面 */
-  $("detail").innerHTML = `<div class="navbtns"><button title="关闭 (Esc)" data-act="close">✕</button></div>
+  overlayHashClear();        /* 帮助不是视图栈的一层：清栈（连同已推的历史） */
+  state.overlayStack = [];
+  $("detail").innerHTML = `<div class="navbtns"><button title="关闭 (Esc)" data-act="close">${ICON_X}</button></div>
     <div class="dinfo"><h2>快捷键与说明</h2>
     <div class="dtext">
 <b>快捷键</b>
@@ -336,9 +433,9 @@ Ctrl+P　打印当前列表视图
 · 类别筛选的数字是<b>「可构筑 / 不可构筑」双计数</b>（如「队伍状态 0/234」），一眼能看出这类里有没有能组进牌组的牌。卡库按页挂载、滑出视口多页后自动释放，长列表滑动不卡、内存不随滚动增长。
 · <b>依赖与限制</b>统一在详情页分两组呈现：<b>牌组限制</b>（加入牌组前就要满足——需包含某角色、至少 2 名某元素/地区/阵营角色）与<b>打出限制</b>（对局中生效——秘传限 1、天赋须在场、武器限定、限打张数）。卡面左上角的徽标是同一套信息的简写，悬浮可看完整说明。
 · 牌组限制会实时校验：不满足「才能加入牌组」的卡无法加入当前牌组，管理面板也会列出缺口（如「需要牌组中包含至少 2 名冰元素角色（当前 1）」）。
-· 卡库浏览支持多维筛选，筛选状态会编码进地址栏（#b=...），复制链接即可分享当前视图。「显示不可构筑」开关也编在里面（u=1），对方打开就是同一屏；但链接只改这一屏，不会动对方本机的默认偏好。
+· 卡库浏览支持多维筛选，筛选状态会编码进地址栏（#b=...），复制链接即可分享当前视图。「显示不可构筑」开关（u=1）与检索词（q=）也编在里面，对方打开就是同一屏；但链接只改这一屏，不会动对方本机的默认偏好。
 · 卡块上的「⇄」把卡加入对比（最多 4 张）；对比面板的「相似卡」按同类型 / 同费用 / 标签重合给出替换候选，可直接换入对比。
-· 「更多 → 牌组对比」比较两套分享码；「更多 → 抽牌概率」查看费用曲线与关键牌起手 / 前几回合的抽到概率（超几何分布，不含调度）。
+· 「牌组工具 → 牌组对比」比较两套分享码；「牌组工具 → 抽牌概率」查看费用曲线与关键牌起手 / 前几回合的抽到概率（超几何分布，不含调度）。
 · 底部牌组栏可管理多套牌组；凑齐 3 角色 + 30 行动牌后「生成分享码」，可复制给他人导入。
 
 <b>数据来源</b>
@@ -370,6 +467,80 @@ function canHover() {
 }
 let tipTerm: string | null = null;      /* 预览当前展示的术语名，用于避免重复重建 DOM */
 function hideTip() { if (tip && tip.classList) { tip.classList.remove("show"); tipTerm = null; } }
+/* 概念预览的按需截断：不硬编码行数——内容渲染后实测量一下，放不下才裁，
+   二分找「还能放下的最长前缀」并以省略号收尾；装得下就原样展示。
+   裁剪只动描述段（最后一个 <p>）——名称 / 类别标签是定位信息，不参与牺牲。
+   截断若由「清空后续节点」达成，幸存文本也会补上省略号，不留无标记的断头。
+   带牌面的条目若牌面自身就超出预算，先逐级缩小牌面（78 → 60 → 44 → 隐藏）
+   再裁文本；框体自身的 padding 提供底部留白，裁剪发生在内容区，不顶满框底。 */
+function clampTip(): void {
+  const maxH = Math.round(innerHeight * 0.72);
+  if (!isFinite(maxH) || maxH <= 0) return;
+  tip.style.maxHeight = maxH + "px";
+  /* 溢出以「内容实际高度 vs 盒内容区」判定：box-sizing:border-box 下 max-height
+     约束的是盒整体，scrollHeight/clientHeight 都是内容区口径，二者才可比 */
+  const overflow = () => tip.scrollHeight > tip.clientHeight + 1;
+  if (!overflow()) return;
+  const ps = tip.querySelectorAll("p");
+  const lastP = ps.length ? ps[ps.length - 1] : null;
+  if (!lastP) return;                   /* 没有描述段：退回原生裁剪 */
+  const walker = document.createTreeWalker ? document.createTreeWalker(lastP, NodeFilter.SHOW_TEXT) : null;
+  if (!walker) return;
+  const nodes: Text[] = [];
+  for (let n = walker.nextNode(); n; n = walker.nextNode()) nodes.push(n as Text);
+  const origTexts = nodes.map(t => t.data);
+  const arts = tip.querySelectorAll(".term-art");
+
+  /* 一轮「装填」：按给定牌面宽度重排内容并裁描述段，返回是否装得下。
+     artWidth=null 保持原状；0 表示隐藏牌面。 */
+  const attempt = (artWidth: number | null): boolean => {
+    arts.forEach(a => {
+      const el = a as HTMLElement;
+      if (artWidth == null) return;
+      if (!artWidth) { el.style.display = "none"; return; }
+      el.style.display = "";
+      el.style.width = artWidth + "px";
+    });
+    nodes.forEach((t, i) => { t.data = origTexts[i]; });
+    if (!overflow()) return true;
+    let cutSomething = false;
+    for (let i = nodes.length - 1; i >= 0 && overflow(); i--) {
+      const t = nodes[i];
+      const orig = origTexts[i] || "";
+      if (!orig.trim()) continue;       /* 空白节点直接跳过，继续往前裁 */
+      let lo = 0, hi = orig.length, best = -1;
+      while (lo <= hi) {                /* 二分：连同省略号一起量，找到装得下的最长前缀 */
+        const mid = (lo + hi) >> 1;
+        t.data = orig.slice(0, mid) + "…";
+        if (overflow()) hi = mid - 1; else { best = mid; lo = mid + 1; }
+      }
+      if (best < 0) { t.data = ""; cutSomething = true; continue; }  /* 连省略号都放不下：清空，往前裁 */
+      t.data = best >= orig.length ? orig : orig.slice(0, best) + "…";
+      cutSomething = cutSomething || best < orig.length;
+      break;                            /* 本节点收尾：之后（更早）的文本保持原样 */
+    }
+    /* 截断若由「清空后续节点」达成，幸存文本要补省略号——否则是不带标记的断头 */
+    if (cutSomething) {
+      const kept = nodes.filter(t => t.data);
+      const last = kept[kept.length - 1];
+      if (last && !last.data.endsWith("…")) {
+        const orig = origTexts[nodes.indexOf(last)];
+        let lo = 0, hi = orig.length, best = -1;
+        while (lo <= hi) {
+          const mid = (lo + hi) >> 1;
+          last.data = orig.slice(0, mid) + "…";
+          if (overflow()) hi = mid - 1; else { best = mid; lo = mid + 1; }
+        }
+        last.data = best > 0 ? orig.slice(0, best) + "…" : "…";
+      }
+    }
+    return !overflow();
+  };
+
+  if (attempt(null)) return;
+  for (const w of [60, 44, 0]) if (attempt(w)) return;
+  /* 牌面隐藏、描述段裁完仍装不下（极端小窗）：接受原生裁剪 */
+}
 document.addEventListener("mousemove", ev => {
   /* 触摸设备没有悬停：不显示预览（触屏的"预览"由点击后的概念页承担）。
      弹层内不在此禁用——卡文里的术语在详情弹层里同样需要悬浮预览，
@@ -387,6 +558,7 @@ document.addEventListener("mousemove", ev => {
     tip.innerHTML = `<div class="tip-kind">${entries.map(e => KIND_ZH[e.kind] || e.kind).join(" / ")}</div>${termHtml(entries)}`;
   }
   tip.classList.add("show");
+  clampTip();
   /* 四边钳制：以前只挡了右/下边界，靠屏幕右侧点时 x 会算成负数，
      预览框左半截跑到视口外，看起来像"被截断的第二个框"。 */
   const r = tip.getBoundingClientRect();
@@ -417,12 +589,15 @@ function renderTermView(v) {
     ${backlinkHtml(name)}</div>`;
 }
 /* 打开 / 下钻概念页。弹层已开 → 压栈；同名连续点击不重复压栈 */
-function showTermModal(name) {
+function showTermModal(name, fromHistory = false) {
   if (!termEntries(name).length) return;
   const top = topView();
   if (top && top.kind === "term" && top.name === name) return;
   if (!overlayOpen()) state.overlayStack = [];
   state.overlayStack.push({ kind: "term", name });
+  const nt = topView();
+  const h = overlayHashOf(nt);
+  if (!fromHistory && h) { overlayHashPush(h); nt!.hpushed = true; }
   renderOverlay();
 }
 /* 概念点击路由（纯函数）：唯一身份（卡牌 / 角色）→ 直接开详情；
@@ -464,6 +639,24 @@ document.addEventListener("click", ev => {
 $("overlay").addEventListener("click", ev => {
   if (ev.target === $("overlay")) overlayClose();
 });
+
+/* ---------- 牌面加载事件的统一入口 ----------
+   load / error 不冒泡，但捕获阶段能在 document 上接住所有图片的加载结果。
+   这里替代模板里的内联 onload/onerror：内联处理器引用的是全局函数，
+   生产 IIFE 没有全局（P4 去全局化后残留，会抛 ReferenceError 兜底失效）。
+   处理函数住在 model（数据语义），接线在这里（与其他 document 监听同处）。 */
+document.addEventListener("load", ev => {
+  const t = ev.target as HTMLImageElement | null;
+  if (t && t.tagName === "IMG" && t.classList.contains("noart-icon")) artIconReady(t);
+  /* 卡面图淡入：load 后加 .ld，配合 CSS 的 opacity 过渡（shimmer 占位在图到前打底） */
+  if (t && t.tagName === "IMG" && t.classList.contains("card-img")) t.classList.add("ld");
+}, true);
+document.addEventListener("error", ev => {
+  const t = ev.target as HTMLImageElement | null;
+  if (!t || t.tagName !== "IMG") return;
+  if (t.classList.contains("noart-icon")) { artIconFail(t); return; }
+  artFallback(t);
+}, true);
 /* 弹层内方向键导航；Esc 统一由全局处理器逐层关闭（见文末快捷键区） */
 document.addEventListener("keydown", ev => {
   if (!$("overlay").classList.contains("show")) return;
@@ -475,4 +668,4 @@ document.addEventListener("keydown", ev => {
   if (el) showDetail(Number(el.dataset.id));
 }));
 
-export { backlinkHtml, charTalentChips, draftHas, deckActionHtml, topView, overlayOpen, setOverlayOpen, pagerContextFor, detailView, renderedView, renderOverlay, showDetail, overlayBack, overlayClose, modalStep, viewLabel, navBar, pagerHtml, renderDetailView, showHelp, tip, canHover, tipTerm, hideTip, renderTermView, showTermModal, termRoute, openTermName };
+export { backlinkHtml, charTalentChips, draftHas, deckActionHtml, topView, overlayOpen, setOverlayOpen, pagerContextFor, detailView, renderedView, renderOverlay, showDetail, overlayBack, overlayClose, modalStep, viewLabel, navBar, pagerHtml, renderDetailView, showHelp, tip, canHover, tipTerm, hideTip, renderTermView, showTermModal, termRoute, openTermName, syncOverlayToHash };

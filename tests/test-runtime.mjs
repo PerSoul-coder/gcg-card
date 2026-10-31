@@ -27,6 +27,10 @@ const JSONRES = (obj) => ({ ok: true, json: async () => obj });
 const harness = `
 return (async () => {
   /* ===== 1. 首次加载：网络取包 → 派生索引就绪 ===== */
+  /* boot（main.ts 末尾）在源码求值时已经开始拉数据（本文件删掉了 __DATASET_JSON，
+     它必然失败）；先让它落地，否则这里的 ensureData 会接上 boot 的失败 flight */
+  await new Promise(r => setTimeout(r, 30));
+  resetDataState();
   fetchCtl.reset();
   fetchCtl.impl = async url => url.includes("dataset.gz") ? GZ(PAYLOAD) : JSONRES(PAYLOAD);
   await ensureData();
@@ -82,6 +86,20 @@ return (async () => {
   const order = fetchCtl.log.map(u => (u.match(/dataset\\.(\\w+)/) || [])[1]).filter(Boolean);
   assert(order.join(">") === "gz>br>json", "回退顺序：gz → br → json（实际 " + order.join(">") + "）");
   assert(dataReady === true, "回退到 json 后成功加载");
+
+  /* ===== 7. file:// 下不发注定失败的网络请求 =====
+     file: 源被浏览器视为独立源，fetch 相对路径必然被拦（控制台报
+     Unsafe attempt to load URL / CORS）。单文件版数据已内置，
+     数据层要在这里明确失败，而不是发三次必败请求去刷控制台。 */
+  resetDataState();
+  fetchCtl.reset();
+  const savedProto = location.protocol;
+  location.protocol = "file:";
+  let eFile = null;
+  await ensureData(true).catch(e => { eFile = e; });
+  assert(fetchCtl.log.length === 0, "file:// 下强制刷新：不发任何网络请求（实际 " + fetchCtl.log.length + " 次）");
+  assert(!!eFile && /数据包加载失败/.test(eFile.message), "file:// 下明确失败（" + (eFile ? eFile.message : "") + "）");
+  location.protocol = savedProto;
 })();
 `;
 

@@ -127,7 +127,7 @@ export const emptyFetch = async () => ({ ok: false, status: 404, json: async () 
  *
  * harness 以字符串注入，因为它需要在应用源码同一作用域内运行才能访问模块内部状态
  * （`state`、`pool` 等由 test-api.ts 暴露为全局活绑定）。 */
-export function createTest({ data = readSources(), storage = null, window: win = {}, fetch = null } = {}) {
+export function createTest({ data = readSources(), storage = null, window: win = {}, fetch = null, history: hist = null, location: loc = null } = {}) {
   let fails = 0;
   const assert = (cond, msg) => {
     if (cond) console.log("  ok:", msg);
@@ -142,8 +142,8 @@ export function createTest({ data = readSources(), storage = null, window: win =
     document: dom,
     window: win,
     localStorage: ls,
-    location: { hash: "", search: "", pathname: "/" },
-    history: { replaceState() {}, pushState() {} },
+    location: loc || { hash: "", search: "", pathname: "/" },
+    history: hist || { replaceState() {}, pushState() {} },
     fetch: fetch || makeFetch(data),
     navigator: { clipboard: {}, userAgent: "node" },
   };
@@ -156,7 +156,7 @@ export function createTest({ data = readSources(), storage = null, window: win =
     env,
     getFails: () => fails,
     readSources,
-    /** 执行 harness。`extra` 的键会作为额外形参按同名注入（如 DATA / PINYIN_DATA）。 */
+    /** 执行 harness。`extra` 的键会作为额外形参按同名注入（如 SAMPLE）。 */
     async run(harness, extra = {}) {
       const names = [
         "document", "window", "localStorage", "location", "history", "fetch", "navigator",

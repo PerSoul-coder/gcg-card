@@ -6,11 +6,8 @@
 export const API = "https://static-data.piovium.org/api/v5";
 export const LANG = "CHS";
 export const SAMPLE = "JDCS4mwOFiLBRXUkJlLiRkwkEmCx8YAPGxFxaLcWFYGBilgYI6Ey2zMdDLEyaVIWJJAA";
-export const CACHE_TTL_MS = 24 * 3600 * 1000;
-export const FETCH_TIMEOUT_MS = 15000;
 
-/** localStorage 键：统一前缀便于整体清理，值保持历史版本不变（老用户缓存可直接沿用）。 */
-export const STORAGE_PREFIX = "gi-viewer";
+/** localStorage 键：统一 gi-viewer 前缀便于整体清理，值保持历史版本不变（老用户缓存可直接沿用）。 */
 export const STORAGE_KEYS = {
   history: "gi-viewer-history",
   searchScope: "gi-viewer-search-scope",
@@ -21,9 +18,10 @@ export const STORAGE_KEYS = {
   browseOther: "gi-viewer-browse-other",
   browseUnbuildable: "gi-viewer-browse-ub",
   view: "gi-viewer-view",
+  theme: "gi-viewer-theme",
+  favs: "gi-viewer-favs",
 } as const;
 
-export const cacheKey = (cat: string): string => `${STORAGE_PREFIX}-${LANG}-latest-${cat}`;
 export const imgFull = (id: number): string => `${API}/image/${id}`;
 
 /* 统一数据集：gzip 为浏览器原生主路径（DecompressionStream 不支持 brotli），
@@ -99,6 +97,17 @@ for (const [k, v] of Object.entries(ELE_ZH)) ELE_CODE[v] = "GCG_TAG_ELEMENT_" + 
    生成时已把填充色归一为 currentColor，因此这里只按元素色着色即可。 */
 export const ENERGY_ICON =
   '<svg class="ico i-en" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 1.5C13.4 7.2 16.8 10.6 22.5 12 16.8 13.4 13.4 16.8 12 22.5 10.6 16.8 7.2 13.4 1.5 12 7.2 10.6 10.6 7.2 12 1.5Z"/><circle class="core" cx="12" cy="12" r="1.5"/></svg>';
+
+/* ---------- 动作图标（行内 SVG，currentColor 随上下文着色） ----------
+   只覆盖最高频的动作语义：关闭 / 对比换位 / 加牌 / 收藏星标；
+   其余文字符号（▾ ‹ › −）与中文文案混排，保持原样不做全面替换。 */
+const actionSvg = (d: string): string =>
+  `<svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><path d="${d}" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+export const ICON_X = actionSvg("M4.5 4.5l7 7M11.5 4.5l-7 7");
+export const ICON_PLUS = actionSvg("M8 3.5v9M3.5 8h9");
+export const ICON_SWAP = actionSvg("M3.5 5h9m0 0L10 2.5M12.5 5 10 7.5M12.5 11h-9m0 0L6 8.5M3.5 11 6 13.5");
+export const ICON_STAR =
+  `<svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 1.6l2 4.05 4.47.65-3.24 3.15.77 4.45L8 11.78l-4 2.1.77-4.45L1.53 6.3 6 5.65z"/></svg>`;
 
 /* 七元素图标由 build-icons.mjs 从官方矢量 SVG 生成，以 ESM 常量导出。 */
 import { ELEMENT_ICONS_SVG } from "../../gi-data/element-icons.js";

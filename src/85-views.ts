@@ -10,7 +10,8 @@ import { copyLimit, draft, draftAdd } from "./80-deck";
 import { dataReady } from "./20-data";
 import { openTermName, showDetail } from "./90-detail";
 import { state } from "./data/state";
-import { STORAGE_KEYS, imgFull, ELE_ZH, ELE_COLOR, ENERGY_ICON, ELE_ICONS, eleIcon, enPips } from "./core/resources";
+import { STORAGE_KEYS, imgFull, ELE_ZH, ELE_COLOR, ENERGY_ICON, ELE_ICONS, eleIcon, enPips, ICON_PLUS, ICON_STAR } from "./core/resources";
+import { favs, isFav, toggleFav } from "./45-pool";
 import { esc } from "./core/dom";
 import type { PoolEntry, SearchHit } from "./types";
 import { TYPE_ZH, cardArtHtml } from "./data/model";
@@ -54,7 +55,7 @@ function renderSummary() {
 
   $("summary").innerHTML = `
     <div class="sum-chars">${state.current!.chars.map(c => `
-      <span class="chip"><span class="edot" style="--ec:${ELE_COLOR[c.element || ""] || '#888'}">${ELE_ICONS[c.element || ""] || ""}</span>${esc(c.name)}<small class="chip-en">${enPips(c.energy || 0)}</small></span>`).join("")}
+      <span class="chip"><span class="edot" style="--ec:${ELE_COLOR[c.element || ""] || "var(--faint)"}">${ELE_ICONS[c.element || ""] || ""}</span>${esc(c.name)}<small class="chip-en">${enPips(c.energy || 0)}</small></span>`).join("")}
     </div>
     <div class="sum-types"><span>元素构成：<b>${elesHtml}</b></span><span>${typeCounts}</span><span>版本跨度：<b>${esc(vers.join(" ~ "))}</b></span></div>
     <div class="sum-extra">${energyChip}${rChips}<button class="sum-odds" data-odds="1" title="查看费用曲线与关键牌起手 / 前几回合的抽到概率">抽牌概率与费用曲线 ›</button></div>
@@ -96,9 +97,8 @@ function renderGrid() {
   $("view-grid").innerHTML = `<div class="sec-title">角色牌</div>
     <div class="char-row">${state.current!.chars.map(c => `
       <div class="char-card"><div class="imgbox" data-id="${c.id}">
-        <img class="card-img" src="${imgFull(c.id)}" decoding="async" width="420" height="720" alt="${esc(c.name)}"
-          onerror="this.onerror=null;this.outerHTML='<div class=fallback>${esc(c.name)}</div>'">
-        <span class="el-badge" style="background:${ELE_COLOR[c.element] || '#888'}"><span class="badge-ico">${ELE_ICONS[c.element] || ""}</span>${ELE_ZH[c.element] || c.element}</span>
+        <img class="card-img" src="${imgFull(c.id)}" decoding="async" width="420" height="720" alt="${esc(c.name)}">
+        <span class="el-badge" style="background:${ELE_COLOR[c.element] || "var(--faint)"}"><span class="badge-ico">${ELE_ICONS[c.element] || ""}</span>${ELE_ZH[c.element] || c.element}</span>
         <span class="en-badge">${enPips(c.energy || 0)}</span>
       </div>
       <div class="cap">${esc(c.name)}<small>生命 ${c.hp} · 充能 ${c.energy} · ${esc(c.since || "")}</small></div></div>`).join("")}
@@ -142,7 +142,7 @@ function renderList() {
     .map(x => `<tr data-id="${x.id}">
     <td class="cnt">${x.count > 1 ? "×" + x.count : "1"}</td>
     <td>${x.element ? eleIcon(x.element, "inline-el") : ""}${esc(x.name)}</td><td>${costHtml(x.playCost)}</td>
-    <td>${allReqs(x).map(reqPill).join("") || '<span style="color:#4a5261">—</span>'}</td>
+    <td>${allReqs(x).map(reqPill).join("") || '<span style="color:var(--faint)">—</span>'}</td>
     <td>${esc(x.related || "—")}</td><td>${esc(x.since || "—")}</td>
     <td class="desc">${linkify(esc(x.desc))}</td></tr>`).join("");
   const sections = state.current!.order.map(t => {
@@ -161,7 +161,7 @@ function renderList() {
   $("view-list").innerHTML = `
     <div class="list-tools"><input id="listSearch" placeholder="筛选：名称 / 限制 / 标签 / 效果关键词…" value="${esc(listFilter)}">
       <span class="hint">点击行看详情 · 点表头排序 · 快捷键 1/2 切视图 · / 聚焦筛选 · Ctrl+P 打印</span></div>` +
-    (sections || `<div style="color:var(--dim);padding:30px;text-align:center">无匹配卡牌</div>`);
+    (sections || `<div class="empty-hint slim">无匹配卡牌</div>`);
   $("listSearch").addEventListener("input", e => {
     listFilter = (e.target as HTMLInputElement).value;
     const p = (e.target as HTMLInputElement).selectionStart;
@@ -181,6 +181,18 @@ function hlName(s) { return hlText(s, searchState.q); }
 
 function searchTile(r) {
   if (r.kind === "concept") {
+    /* 技能命中：带所属牌面的技能瓦片（概念命中里唯一有「页面」的一类，
+       费用/所属/牌面都在技能页里）——不再渲染成无脸的概念文字块 */
+    if (r.ckind === "skill") {
+      const entry = termEntries(r.name).find(e => e.kind === "skill");
+      if (entry) {
+        const meta = `${entry.type || "技能"}${entry.owner ? ` · ${entry.owner}` : ""}`;
+        return `<div class="tile stile" data-term="${esc(r.name)}" title="点击查看技能">
+          <div class="imgbox">${entry.artId != null ? cardArtHtml(entry.artId, { kind: "tile", alt: r.name }) : `<div class="cbox"><span>${esc(entry.type || "技能")}</span></div>`}</div>
+          <div class="tname">${hlName(r.name)}</div>
+          <div class="tmeta">${esc(meta)} ${matchChip(r)}</div></div>`;
+      }
+    }
     /* 用行上携带的具体种类（ckind），而不是词条列表首项——
        首项可能是同名的卡牌/角色条目，会把"术语"错标成"卡牌" */
     const k = r.ckind || termEntries(r.name).find(e => e.kind !== "card" && e.kind !== "char")?.kind || "keyword";
@@ -211,7 +223,7 @@ function searchTile(r) {
       ${badges ? `<div class="badges">${badges}</div>` : ""}${qtyBadge}${cmpBtnHtml(r.id)}</div>
     <div class="tname">${hlName(r.name)}${noShareWarn}</div>
     <div class="tmeta">${meta} ${matchChip(r)}</div>
-    ${r.noShare ? "" : `<button class="addbtn" data-add="${r.id}" title="加入当前牌组">＋</button>`}</div>`;
+    ${r.noShare ? "" : `<button class="addbtn" data-add="${r.id}" title="加入当前牌组">${ICON_PLUS}</button>`}</div>`;
 }
 /* 检索结果 HTML：结果已经在第二阶段按当前卡库子集算好（searchState.results） */
 function browseSearchResultsHtml() {
@@ -241,7 +253,8 @@ function browseSearchResultsHtml() {
   const groups: Array<[string, SearchHit[]]> = ([
     ["角色", shown.filter(r => r.kind === "char")],
     ["行动牌", showUnbuildable ? cards : buildCards],
-    ["概念", shown.filter(r => r.kind === "concept")],
+    ["技能", shown.filter(r => r.kind === "concept" && r.ckind === "skill")],
+    ["概念", shown.filter(r => r.kind === "concept" && r.ckind !== "skill")],
   ] as Array<[string, SearchHit[]]>).filter(([, list]) => list.length);
   const otherBlock = !showUnbuildable && otherCards.length ? `<div class="nbgroup${nbOpen.search ? " open" : ""}">
       <button class="nbhead" data-nb="search" aria-expanded="${nbOpen.search}">
@@ -262,7 +275,7 @@ function browseSearchResultsHtml() {
     ${groups.map(([t, list]) => `<div class="sec-title">${t} <small>${list.length}</small></div>
       <div class="card-grid">${list.map(searchTile).join("")}</div>`).join("")}
     ${otherBlock}
-    ${shown.length ? "" : `<div style="color:var(--dim);padding:30px;text-align:center">该分类下无匹配结果</div>`}`;
+    ${shown.length ? "" : `<div class="empty-hint slim">该分类下无匹配结果</div>`}`;
 }
 
 /* ---------- 卡库浏览：多维筛选 / 排序 / 分片渲染 ----------
@@ -336,12 +349,12 @@ const _browseMemo: {
   split: { key: string; data: BrowseSplit | null };
 } = { filter: { key: "", list: null }, facets: { key: "", data: null }, split: { key: "", data: null } };
 function browseStateKey(st = browseState) {
-  return [st.type, st.el, st.cost, st.energy, st.tag, st.ver, st.sort, st.dir].join("\u0001") + "@" + poolVersion;
+  return [st.type, st.el, st.cost, st.energy, st.tag, st.ver, st.sort, st.dir].join("\u0001") + "@" + poolVersion + (showFavsOnly ? "|f" : "");
 }
 function browseFilter(st = browseState): PoolEntry[] {
   const key = browseStateKey(st);
   if (_browseMemo.filter.key === key) return _browseMemo.filter.list || [];
-  const list = pool.filter(x => passFilter(x, st)).sort((a, b) => browseCmp(a, b, st.sort, st.dir));
+  const list = pool.filter(x => passFilter(x, st) && (!showFavsOnly || favs.has(x.id))).sort((a, b) => browseCmp(a, b, st.sort, st.dir));
   _browseMemo.filter = { key, list };
   return list;
 }
@@ -362,6 +375,9 @@ function setShowUnbuildable(v: boolean, persist = true) {
   if (persist === false) return;
   try { localStorage.setItem(STORAGE_KEYS.browseUnbuildable, showUnbuildable ? "1" : "0"); } catch (e) {}
 }
+/* 收藏过滤：只看星标的卡。不落本机偏好（忘关会以为卡丢了），只随分享链接走（f=1）。 */
+let showFavsOnly = false;
+function setShowFavsOnly(v: boolean) { showFavsOnly = !!v; }
 const nbOpen = { browse: false, search: false };
 try { nbOpen.browse = localStorage.getItem(STORAGE_KEYS.browseOther) === "1"; } catch (e) {}
 function browseSplit(st = browseState): BrowseSplit {
@@ -429,13 +445,14 @@ function browseHash(st = browseState) {
   if (st.sort !== "name") p.push("s=" + st.sort);
   if (st.dir !== 1) p.push("d=-1");
   if (showUnbuildable) p.push("u=1");
+  if (showFavsOnly) p.push("f=1");
   if (searchState.q) p.push("q=" + encodeURIComponent(searchState.q));
   return p.length ? "#b=" + p.join(",") : "";
 }
-/* u：链接里的开关状态。hash 带 b= 时它就是这一屏的权威值（缺省 = 关闭），
-   这样收到链接的人看到的就是分享者看到的那一屏。 */
+/* u：链接里的开关状态；q：检索词（第二阶段）。hash 带 b= 时它就是这一屏的权威值
+   （u 缺省 = 关闭；q 缺省 = 清空检索词），收到链接的人看到的就是分享者看到的那一屏。 */
 function parseBrowseHash(hash) {
-  const st = { type: "", el: "", cost: "", energy: "", tag: "", ver: "", sort: "name", dir: 1, u: false };
+  const st = { type: "", el: "", cost: "", energy: "", tag: "", ver: "", sort: "name", dir: 1, u: false, f: false, q: undefined as string | undefined };
   const m = String(hash || "").match(/^#?b=(.*)$/);
   if (!m) return null;
   for (const kv of m[1].split(",")) {
@@ -451,6 +468,8 @@ function parseBrowseHash(hash) {
     else if (k === "s") st.sort = v;
     else if (k === "d") st.dir = -1;
     else if (k === "u") st.u = v === "1" || v === "on" || v === "true";
+    else if (k === "f") st.f = v === "1" || v === "on" || v === "true";
+    else if (k === "q") st.q = decodeURIComponent(v);
   }
   return st;
 }
@@ -474,7 +493,7 @@ const sumCells = (map?: Record<string, { b: number; o: number }>) =>
 function browseTile(x, inGroup) {
   const elCol = x.element ? ELE_COLOR[x.element] : "";
   const badges = depBadges(allReqs(x));
-  const add = x.share != null ? `<button class="addbtn" data-add="${x.id}" title="加入当前牌组">＋</button>` : "";
+  const add = x.share != null ? `<button class="addbtn" data-add="${x.id}" title="加入当前牌组">${ICON_PLUS}</button>` : "";
   const qty = x.kind === "card" ? (draft.cards.get(x.id) || 0) : 0;
   const qtyBadge = qty ? `<span class="qcnt${qty >= copyLimit(x.id) ? " max" : ""}" title="当前牌组已加入 ${qty}/${copyLimit(x.id)} 张">×${qty}</span>` : "";
   const meta = x.kind === "char"
@@ -487,7 +506,7 @@ function browseTile(x, inGroup) {
   return `<div class="tile stile btile" data-id="${x.id}" title="点击查看详情">
     <div class="imgbox"${elCol ? ` style="border-left-color:${elCol}"` : ""}>
       ${cardArtHtml(x.id, { kind: "tile", alt: x.name })}
-      <div class="badges">${badges}</div>${add}${qtyBadge}${cmpBtnHtml(x.id)}</div>
+      <div class="badges">${badges}</div>${add}<button class="favbtn${isFav(x.id) ? " on" : ""}" data-fav="${x.id}" aria-pressed="${isFav(x.id)}" title="${isFav(x.id) ? "取消收藏" : "收藏"}">${ICON_STAR}</button>${qtyBadge}${cmpBtnHtml(x.id)}</div>
     <div class="tname">${esc(x.name)}${warn}</div>
     <div class="tmeta">${meta}${x.ver ? " · " + esc(x.ver) : ""}</div></div>`;
 }
@@ -567,9 +586,11 @@ function browseBarHtml(st: BrowseState, facets: Facets) {
   /* 顶行（常驻）：筛选开关 + 已激活 chips（仅折叠态）+ 重置 + 排序 + 显示开关 + 计数 */
   const ubSwitch = `<button class="bg-sw${showUnbuildable ? " on" : ""}" data-bub="1" role="switch" aria-checked="${showUnbuildable}"
       title="把对局中生成的状态 / 召唤物与历史版本变体也平铺进来（默认收进底部分组）">显示不可构筑<i class="sw" aria-hidden="true"></i></button>`;
+  const favSwitch = `<button class="bg-sw${showFavsOnly ? " on" : ""}" data-bfav="1" role="switch" aria-checked="${showFavsOnly}"
+      title="只看收藏的卡牌（星标在卡块右上角与详情页）">${ICON_STAR} 收藏</button>`;
   const top = `<div class="bg-row bg-top">${toggle}
       ${browseExpanded ? "" : `<div class="bg-chips">${activeBrowseChips(st)}</div>`}
-      ${reset}<span class="bg-label">排序</span>${sortSel}${dirBtn}${ubSwitch}
+      ${reset}<span class="bg-label">排序</span>${sortSel}${dirBtn}${ubSwitch}${favSwitch}
       <span class="bg-count"></span></div>`;
   /* 展开态：六维筛选各行（激活态由 chip 高亮表示，无需再重复 chips） */
   const rows = browseExpanded ? `
@@ -858,6 +879,24 @@ $("view-browse").addEventListener("click", ev => {
     syncBrowseHash();
     return;
   }
+  /* 收藏过滤：只看星标 */
+  if ((ev.target as HTMLElement).closest("[data-bfav]")) {
+    setShowFavsOnly(!showFavsOnly);
+    renderBrowse();
+    syncBrowseHash();
+    return;
+  }
+  /* 星标：就地更新按钮状态；收藏过滤开着时列表要即时反映（卡可能消失） */
+  const favB = (ev.target as HTMLElement).closest("[data-fav]") as HTMLElement | null;
+  if (favB) {
+    ev.stopPropagation();
+    const on = toggleFav(Number(favB.dataset.fav));
+    favB.classList.toggle("on", on);
+    favB.setAttribute("aria-pressed", String(on));
+    favB.title = on ? "取消收藏" : "收藏";
+    if (showFavsOnly) { renderBrowseResults(); syncBrowseHash(); }
+    return;
+  }
   const chip = (ev.target as HTMLElement).closest("button[data-bg]");
   if (chip) {
     const g = (chip.dataset.bg || "") as keyof BrowseState;
@@ -909,4 +948,4 @@ $("view-browse").addEventListener("change", ev => {
   if (s) { browseState.sort = (s as HTMLSelectElement).value; renderBrowse(); syncBrowseHash(); }
 });
 
-export { renderSummary, tileHtml, renderGrid, listFilter, listSort, sortVal, renderList, hlName, searchTile, browseSearchResultsHtml, browseState, BROWSE_DIMS, BROWSE_PAGE, PAGE_KEEP, bPager, nbPager, viewH, viewTop, facetKey, passFilter, browseCmp, _browseMemo, browseStateKey, browseFilter, isBuildableEntry, showUnbuildable, setShowUnbuildable, nbOpen, browseSplit, otherGroupHtml, facetCounts, fcn, browseHash, parseBrowseHash, syncBrowseHash, browseChip, sumCells, browseTile, syncTileQty, BROWSE_EXP_KEY, browseExpanded, activeBrowseChips, browseBarHtml, browseSearchHtml, renderBrowse, renderBrowseResults, updateBrowseCount, browseVisibleIds, dirtyBrowse, makePager, measureH, pagerPage, pagerFill, pagerSentinel, pagerGrow, pagerFillAhead, pagerSweep, appendBrowseTiles, appendOtherTiles, browseTick, hasIO, browseMaybeMore, browseIO, ioPagers, observeSentinel, unobserveSentinel, toggleNbGroup, applyBrowseQuery, clearBrowseQuery };
+export { renderSummary, tileHtml, renderGrid, listFilter, listSort, sortVal, renderList, hlName, searchTile, browseSearchResultsHtml, browseState, BROWSE_DIMS, BROWSE_PAGE, PAGE_KEEP, bPager, nbPager, viewH, viewTop, facetKey, passFilter, browseCmp, _browseMemo, browseStateKey, browseFilter, isBuildableEntry, showUnbuildable, setShowUnbuildable, showFavsOnly, setShowFavsOnly, nbOpen, browseSplit, otherGroupHtml, facetCounts, fcn, browseHash, parseBrowseHash, syncBrowseHash, browseChip, sumCells, browseTile, syncTileQty, BROWSE_EXP_KEY, browseExpanded, activeBrowseChips, browseBarHtml, browseSearchHtml, renderBrowse, renderBrowseResults, updateBrowseCount, browseVisibleIds, dirtyBrowse, makePager, measureH, pagerPage, pagerFill, pagerSentinel, pagerGrow, pagerFillAhead, pagerSweep, appendBrowseTiles, appendOtherTiles, browseTick, hasIO, browseMaybeMore, browseIO, ioPagers, observeSentinel, unobserveSentinel, toggleNbGroup, applyBrowseQuery, clearBrowseQuery };

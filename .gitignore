@@ -9,3 +9,4 @@ Thumbs.db
 .build-tools/*.txt
 .build-tools/*.json
 .build-tools/*.err
+.zcode/

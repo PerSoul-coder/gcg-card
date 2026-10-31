@@ -21,12 +21,13 @@ export interface CostEntry {
   count: number;
 }
 
-/** 别名索引：norm 用于宽匹配（抹平引号/感叹号/空白），cosmetic 只抹平引号与空白。 */
+/** 别名索引：norm 用于宽匹配（抹平引号/感叹号/空白），cosmetic 只抹平引号与空白。
+ *  pinyin 是「空格分隔音节」的无声调全拼（如 "cheng ming zhi ke"）——全拼与首字母
+ *  都能从它派生，只存这一份；检索的拼音匹配全部读这里，不再有独立的拼音索引文件。 */
 export interface Aliases {
   norm: string;
   cosmetic: string;
   pinyin: string;
-  initials: string;
 }
 
 /** 文本按用途分流。三者不可混用：story 是叙事，永远不参与链接与反链。 */
@@ -83,6 +84,8 @@ export interface Flags {
   /** 名字属于某个身份（角色 / 卡牌），释义却不同（如角色的形态说明）。
       概念页保留该条目，检索不再单列——否则同一张牌会在两个栏目各出现一次。 */
   dupIdentity?: boolean;
+  /** 补充库条目与接回的身份同名同写法（概念索引种类归并的判据之一）。 */
+  sameIdentity?: boolean;
   /** 测试牌（数据源标记 GCG_TAG_TEST）。 */
   test: boolean;
   /** 对局实体（永不进牌组）。 */
@@ -241,6 +244,9 @@ interface OverlayBase {
   scrollTop?: number;
   /** 对比视图的横向滚动位置。 */
   cmpLeft?: number;
+  /** 这层有没有自己的历史条目（#card= / #t= / #s=）。深链/前进重开的层没有——
+      后退同步时按「有条目的层数」对齐目标深度，而不是数全部可回退层。 */
+  hpushed?: boolean;
 }
 
 /* 弹层视图栈的一层。

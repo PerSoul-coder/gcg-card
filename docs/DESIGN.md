@@ -96,8 +96,7 @@ type Record = {
   aliases: {              // 构建期算好，运行期直接查
     norm: string;         // 抹平引号/感叹号/加号/空白
     cosmetic: string;     // 只抹平引号/空白
-    pinyin?: string;
-    initials?: string;
+    pinyin: string;       // 空格分隔音节的无声调全拼（"yue sheng"）；全拼/首字母运行时由此派生
   };
   typeRaw: string;        // GCG_CARD_* / GCG_SKILL_TAG_* / 补充库 kind
   typeZh: string;
@@ -150,7 +149,7 @@ type Record = {
   "domain": "skill",
   "name": "跃升",
   "englishName": "",
-  "aliases": { "norm": "跃升", "cosmetic": "跃升", "pinyin": "yuesheng", "initials": "ys" },
+  "aliases": { "norm": "跃升", "cosmetic": "跃升", "pinyin": "yue sheng" },
   "typeRaw": "GCG_SKILL_TAG_NONE",
   "typeZh": "特殊技能",
   "desc": { "effect": "……", "story": "", "rules": "" },
@@ -293,6 +292,8 @@ type Record = {
 - Esc 按层栈逐层关闭；
 - 触摸：`touch-action: pan-y` 明确手势，避免背景抢滚动。
 
+**弹层 ↔ 浏览器历史桥（P6，`src/core/history.ts`）**：detail / term / skill 三类「可回退层」打开时写入一条历史（`#card=` / `#t=` / `#s=`，layer 上打 `hpushed` 标记），compare / odds / deckdiff 不是可回退层、不写历史但整栈替换时会清账（`overlayHashClear`）。浏览器返回键 → popstate → `syncOverlayToHash` 差量同步：带条目的层弹到目标深度（后退）、按 hash 重开缺的层（前进，`overlayHashAdopt` 认领条目）、夹在中间的普通层一并清掉；随后的 hashchange 打跳过标记防重复路由。深链打开的层没有条目，因此同步按「带条目的层数」对齐而不是数全部可回退层。测试环境无 `history.back` / `window.addEventListener`，全部退化为旧的即时行为。
+
 ---
 
 ## 10. 迁移映射
@@ -356,7 +357,8 @@ P4 验收：
   （两处刻意的更正除外：秘传费用不再算作骰子、8 个无分享码的角色不再标为可入组）；
 - 牌组限制与打出限制对账：1347 张实体、179 条牌组限制、218 条打出限制，构建期与旧运行时完全一致；
 - `deckReqsOf` / `restrictionsOf` / `isTestCard` / `cardElement` 等运行时启发式已删除；
-- 单文件只内联 `dataset.gz`（0.94MB，gzip 542KB；原 3.12MB），轻量版 0.41MB；
+- 单文件只内联 `dataset.gz`（0.94MB，gzip 542KB；原 3.12MB）；
+  「不内嵌数据、联网取包」的轻量版随之失去意义，已移除（连同构建分支与测试）；
 - 全量测试 14/14 通过，`tsc --noEmit` 0 错误。
 - 示例牌组改为按需加载，首屏不再写入历史记录。
 
@@ -369,3 +371,29 @@ P4 验收：
 | P2 | 浮层层管理、滑动链、Esc | 已完成：core/layers 统一登记层序，Esc 只关最上层；锁滚动只对模态层（overlay / draftPanel），历史与对比栏不再误锁 |
 | P3 | UI 重组：默认卡库、分享码入口下沉 | 已完成：一级视图卡库在前；牌组操作条只属于牌组视图（body[data-view] 驱动显隐）；页头只放全局动作；首屏不再自动解析示例 |
 | P4 | 建模补齐：卡池 / 详情 / 对比 / 导出全部消费统一记录，删除原始快照与运行时启发式 | 已完成：记录补 `share` / `reqs` / `searchText` 与卡片元素；`data/records.ts` 成为唯一查表入口；`30-deps` 只剩渲染与校验；单文件只内联数据包 |
+| P5 | 技能/特技建模统一、角色-装备关联、拼音覆盖 | 已完成：特技 = 装备牌技能（ownerKind=card ⇒ typeZh「特技」，技能码只作数据标记）；特技牌的 `relatedCharacterId` 两级推导补齐——出边点名唯一角色 / id 结构（1+角色id+序号），冲突信出边，12 张全覆盖、通用装备不硬凑（与天赋牌同链路，元素回退随之生效）；角色详情「技能 + 特技」两段聚合（所有关联角色统一）；检索技能命中单列「技能」组并带所属牌面；拼音索引来源补齐技能名；SKILL_TAG_ZH 单源化进 model.ts；牌面 load/error 改 document 捕获监听（修内联全局引用的 ReferenceError）；悬停概念预览按渲染实况截断（二分找最长前缀 + 省略号，只裁描述段，牌面逐级让位） |
+| P6 | 视觉体系化 + 浅色主题 + 弹层历史 + 收藏 | 已完成：设计令牌体系（`:root` 覆盖表面/文字/金色 alpha 阶/状态/元素/字号/圆角/动效/海拔/聚焦环/z 阶梯/卡壳，TS 侧 inline 颜色全部改引变量）；浅色主题 `html[data-theme="light"]` 只覆盖令牌，切换在页头、首次跟随系统、防 FOUC 内联脚本 + theme-color 同步；动效补齐（卡面淡入、弹层退场、翻页方向感、视图 crossfade、toast 退场、骨架屏接线、空态统一、动作图标小统一 ✕/＋/⇄/★）；弹层接入浏览器历史（后退关弹层 / 前进重开 / `#t=` `#s=` 深链）；收藏系统（星标、筛选、`f=1` 分享、失效 id 清理）；`#b=` 分享链接补齐检索词（q=）解析 |
+
+## 13. 路线图（已规划待实现）
+
+下两项已排定、尚未实现。先落要点在这里，动手时直接按此执行。
+
+### 13.1 技能图鉴页
+
+- **入口**：页头「牌组工具」菜单加「技能图鉴」；概念词典页技能条目区加聚合入口。
+- **内容**：全部技能（角色技能 + 装备牌特技）平铺列表，复用 `47-skills.ts` 的
+  `skillRowHtml`；按所属分组（角色 / 装备牌），特技用 `ownerKind==="card"` 判定。
+- **筛选**：类型 chips（普攻 / 元素战技 / 元素爆发 / 被动 / 特技 / 隐藏），走 SKILL_TAG_ZH
+  单源表；顶部接入与卡库一致的检索框（复用 `70-search` 的打分与拼音）。
+- **呈现**：技能行带所属牌面缩略（同技能页样式），点击进技能页弹层；数据量约 600+，
+  列表套用卡库的分页虚拟挂载（`makePager` / `browseTick` 同一套）。
+
+### 13.2 卡面灯箱 + 打印增强 + 帮助快捷键
+
+- **灯箱**：详情页 `.dimg` 点击 → 全屏遮罩展示原尺寸卡面（`imgFull`，同 URL 免二次
+  下载）；←/→ 在同级列表内翻页；Esc 关闭；登记进 `core/layers` 层序。
+- **打印**：`Ctrl+P` 目前只有文案提示。补打印专用视图：列表视图打印牌表（名称/费用/
+  限制列，隐藏交互控件），「牌组工具」加「打印牌表」按钮触发 `window.print()`；
+  `@media print` 已有基础样式（css 打印段），扩充为覆盖两种视图。
+- **快捷键**：`?` 打开帮助面板（当前只能从「更多」菜单进）；卡库网格方向键移动焦点 +
+  Enter 打开详情（与详情翻页键位区分：网格内先落焦，焦存在时方向键才接管）。

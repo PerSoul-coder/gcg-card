@@ -1,24 +1,17 @@
 /* 47-skills.ts —— 技能索引：角色技能与装备牌特技的统一形状。 */
 import { dsReady, dsSkills } from "./07-dataset";
+import { cardRecords } from "./data/records";
 import { $ } from "./core/dom";
 import { costHtml, costText } from "./30-deps";
 import { overlayBack, overlayOpen, renderOverlay, topView } from "./90-detail";
+import { overlayHashOf, overlayHashPush } from "./core/history";
 import { state } from "./data/state";
 import type { SkillEntry } from "./types";
 import { tagZh } from "./core/resources";
 import { esc } from "./core/dom";
-import { nameKey, cardArtHtml } from "./data/model";
+import { nameKey, cardArtHtml, SKILL_TAG_ZH, SKILL_TAG_ORDER } from "./data/model";
 import { linkify } from "./40-concepts";
 import { backlinkHtml, navBar } from "./90-detail";
-
-const SKILL_TAG_ZH = {
-  GCG_SKILL_TAG_A: "普通攻击",
-  GCG_SKILL_TAG_E: "元素战技",
-  GCG_SKILL_TAG_Q: "元素爆发",
-  GCG_SKILL_TAG_PASSIVE: "被动技能",
-  GCG_SKILL_TAG_NONE: "特殊技能",
-};
-const SKILL_TAG_ORDER = ["GCG_SKILL_TAG_A", "GCG_SKILL_TAG_E", "GCG_SKILL_TAG_Q", "GCG_SKILL_TAG_PASSIVE", "GCG_SKILL_TAG_NONE"];
 
 let SKILLS: SkillEntry[] = [];
 const skillByKey = new Map<string, SkillEntry>();   /* "角色id:技能id" → 技能 */
@@ -110,11 +103,25 @@ function skillsHtml(charId) {
   if (!list.length) return "";
   return `<div class="skills">${list.map(skillRowHtml).join("")}</div>`;
 }
-/* 装备牌 / 载具赋予的特技：与角色技能同一套行渲染，卡牌详情里单独成段 */
+/* 装备牌赋予的特技：与角色技能同一套行渲染，卡牌详情里单独成段 */
 function skillsHtmlCard(cardId) {
   const list = skillsOfCard(cardId);
   if (!list.length) return "";
   return `<div class="sk-sec">特技</div><div class="skills">${list.map(skillRowHtml).join("")}</div>`;
+}
+/* 角色详情的「特技」段：该角色的装备牌所附特技，按所属卡分组。
+   数据来源是构建期推导的 rel.relatedCharacterId（与天赋牌同一条关联链路）——
+   玛拉妮的鲨鲨冲浪板、玛薇卡的驰轮车三件套因此与角色自带的隐藏技能呈现统一：
+   角色详情永远同时看得到「角色技能」与「装备牌特技」两半。 */
+function equipSkillsHtml(charId: number): string {
+  const cards = (cardRecords().filter(r =>
+    r.rel.relatedCharacterId === charId && skillsOfCard(Number(r.key.slice(5))).length));
+  if (!cards.length) return "";
+  return cards.map(c => {
+    const cid = Number(c.key.slice(5));
+    return `<div class="sk-sec">特技 · <button class="blchip" data-goto="${cid}" title="查看「${esc(c.name)}」详情">${esc(c.name)}</button></div>
+      <div class="skills">${skillsOfCard(cid).map(skillRowHtml).join("")}</div>`;
+  }).join("");
 }
 
 /* 技能页：与概念页同一套弹层外壳，但信息更全（费用 / 充能 / 准备 / 所属角色） */
@@ -140,13 +147,16 @@ function renderSkillView(v) {
     <div class="dtext">${linkify(esc(s.effect || "（该技能没有文字说明）"))}</div>
     ${alt}${owner}${state}${backlinkHtml(s.name)}</div>`;
 }
-function showSkill(key) {
+function showSkill(key, fromHistory = false) {
   if (!skillOf(key)) return;
   if (!overlayOpen()) state.overlayStack = [];
   const top = topView();
   if (top && top.kind === "skill" && top.key === key) return;
   state.overlayStack.push({ kind: "skill", key });
+  const nt = topView();
+  const h = overlayHashOf(nt);
+  if (!fromHistory && h) { overlayHashPush(h); nt!.hpushed = true; }   /* 写入历史：后退键逐层回退 */
   renderOverlay();
 }
 
-export { SKILL_TAG_ZH, SKILL_TAG_ORDER, SKILLS, skillByKey, skillByName, skillsOfOwner, buildSkillIndex, skillsOf, skillsOfCard, skillOf, skillsNamed, skillCostText, skillRowHtml, skillsHtml, skillsHtmlCard, renderSkillView, showSkill };
+export { SKILL_TAG_ZH, SKILL_TAG_ORDER, SKILLS, skillByKey, skillByName, skillsOfOwner, buildSkillIndex, skillsOf, skillsOfCard, skillOf, skillsNamed, skillCostText, skillRowHtml, skillsHtml, skillsHtmlCard, equipSkillsHtml, renderSkillView, showSkill };

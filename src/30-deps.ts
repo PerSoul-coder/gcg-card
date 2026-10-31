@@ -17,8 +17,9 @@ function costHtml(playCost: CostEntry[] | undefined): string {
   return `<span class="cost">` + playCost.map(pc => {
     const t = (pc.type || "").replace("GCG_COST_DICE_", "").replace("GCG_COST_", "");
     const zh = COST_ZH[t] || t;
-    const col = ELE_COLOR[t] || (t === "VOID" ? "#8b93a1" : t === "ENERGY" ? "#d3bc8e" : t === "LEGEND" ? "#c8a24b" : "#8b93a1");
-    const bg = t === "ENERGY" ? "linear-gradient(180deg,#f2ddb0,#b99a5f)" : col;
+    /* 颜色一律走 CSS 变量：主题（浅色）整体换档，这里不写死色值 */
+    const col = ELE_COLOR[t] || (t === "ENERGY" ? "var(--gold)" : t === "LEGEND" ? "var(--dice-legend)" : "var(--dim)");
+    const bg = t === "ENERGY" ? "linear-gradient(180deg, var(--dice-en-a), var(--dice-en-b))" : col;
     const label = t === "ENERGY" ? `${ENERGY_ICON}<b>${pc.count}</b>` : pc.count;
     return `<span class="die${t === "ENERGY" ? " en" : ""}" style="background:${bg}" title="${esc(zh)}×${pc.count}">${label}</span>`;
   }).join("") + `</span>`;
@@ -90,8 +91,8 @@ const allReqs = (x: { deckReqs?: ReqBadge[]; restrictions?: ReqBadge[] }): ReqBa
 /* 徽标取色：牌组限制金/紫（构筑门槛），打出限制沿用既有色；
    deckEl 按元素取色（2×冰 徽标即冰蓝），一眼对上共鸣牌元素 */
 const R_STYLE: Record<string, string> = {
-  legend: "var(--gold)", talent: "var(--electro)", weapon: "var(--hydro)", once: "#e07a7a",
-  deckChar: "#e0c068", deckTag: "#b48ce0",
+  legend: "var(--gold)", talent: "var(--electro)", weapon: "var(--hydro)", once: "var(--err)",
+  deckChar: "var(--warn)", deckTag: "var(--rl-decktag)",
 };
 const R_ZH: Record<string, string> = {
   legend: "秘传", talent: "天赋·须在场", weapon: "武器限定", once: "限打张数",

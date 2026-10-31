@@ -96,7 +96,10 @@ return (async () => {
   const st = cardArtHtml(100, { kind: "tile" });
   assert(st.includes('data-kind="state"') && st.includes("noart-tile"), "状态牌：卡壳 + state 类型");
   assert(st.includes("noart-disc") && st.includes("/image/100"), "状态牌：请求 128×128 状态图标");
-  assert(st.includes('class="noart-icon"') && st.includes('onerror="artIconFail(this)"'), "图标失败可降级");
+  /* 图标的 load/error 由 document 捕获监听处理（P4 去全局化后，内联
+     onload/onerror 引用的全局函数不存在，会抛 ReferenceError 兜底失效）——
+     守住模板不再回到内联全局引用。 */
+  assert(st.includes('class="noart-icon"') && !/on(error|load)="art(Icon|Fallback)/.test(st), "图标失败可降级（走捕获监听，不用内联全局引用）");
   assert(!/class="noart[^"]*hasicon/.test(st), "初始不预设 hasicon（等图标真正到达）");
   assert(st.includes('width="128"') && st.includes('height="128"'), "图标写死 128×128，避免撑开卡壳");
   /* 类型 → 卡壳配色键：四类对局实体各自可辨 */

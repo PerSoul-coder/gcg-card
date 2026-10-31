@@ -11,6 +11,7 @@ import "./main"; /* 先执行应用启动（等价于浏览器里的加载顺序
 export * from "./core/dom";
 export * from "./core/resources";
 export * from "./core/layers";
+export * from "./core/history";
 export * from "./data/model";
 export * from "./data/state";
 export * from "./data/records";

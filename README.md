@@ -1,6 +1,6 @@
 # 七圣召唤 · 卡牌与牌组浏览器
 
-纯前端单页应用：牌组分享码解析与生成、卡库浏览与多维筛选、卡库内检索（中文 / 拼音 / 描述，先筛选后检索的两阶段流程）、概念词典与逐层下钻、角色技能（含被动与准备技能、元素骰 + 充能费用）、牌间依赖与构筑校验、多牌组管理、多卡横向对比与两套牌组的差异分析、相似卡替换建议、抽牌概率与费用曲线。
+纯前端单页应用：牌组分享码解析与生成、卡库浏览与多维筛选、卡库内检索（中文 / 拼音 / 描述，先筛选后检索的两阶段流程）、概念词典与逐层下钻、角色技能（含被动与准备技能、元素骰 + 充能费用）、牌间依赖与构筑校验、多牌组管理、多卡横向对比与两套牌组的差异分析、相似卡替换建议、抽牌概率与费用曲线、收藏星标、深浅双主题。
 
 无运行时框架、无打包器依赖；Node 仅用于构建数据与跑回归测试。
 
@@ -9,7 +9,6 @@
 | 方式 | 入口 | 说明 |
 | --- | --- | --- |
 | 离线单文件（推荐分享） | `dist/七圣召唤-卡牌与牌组浏览器.html` | 约 0.94 MB，样式 / 脚本 / 统一数据包（`dataset.gz`）全部内联，双击即开、断网可用 |
-| 轻量单文件 | `dist/七圣召唤-卡牌与牌组浏览器-轻量.html` | 约 0.41 MB，不内嵌数据包，首次打开联网拉取 `gi-data/dataset.gz` |
 | 多文件开发版 | 根目录 `deck-viewer.html` | 加载构建产物 `dist/app.js`（TypeScript 源码经 esbuild 打包），便于调试 |
 
 开发版需先构建一次脚本（源码已迁到 TypeScript，浏览器不能直接执行 `.ts`）：
@@ -35,6 +34,9 @@ python -m http.server 8080
 - **页头只放全局动作**：刷新数据 / 数据信息 / 快捷键说明放在右上「更多」，与牌组无关，任何视图都在；历史 / 牌组对比 / 抽牌概率属于牌组，收在牌组操作条的「牌组工具」里。
 - **首屏不替用户做决定**：不再自动解析示例牌组（那样会往历史里塞一条记录）。示例改为按需——页头「更多 → 加载示例牌组」，点了才载入并跳到卡面视图。
 - **外部分享链接仍直达牌组**：`#<分享码>` 解析成功后直接切到卡面视图，因为打开链接的人要的就是那副牌。
+- **弹层接入浏览器历史**：详情 / 概念 / 技能页打开时写入地址栏（`#card=` / `#t=` / `#s=`），浏览器返回键逐层关弹层、前进键重开——深链与筛选视图（`#b=...`，含检索词与收藏过滤）都可以直接分享。
+- **双主题**：页头「☀ / ☾」切换深浅主题，首次跟随系统，选择记在本地；全套界面取值走设计令牌（`deck-viewer.css` 的 `:root`），浅色主题只覆盖变量。
+- **收藏**：卡块右上角与详情页都能星标，筛选栏「★ 收藏」一键只看收藏；数据更新后失效 id 自动清理。
 
 ## 移动端
 
@@ -119,7 +121,6 @@ python -m http.server 8080
 │  ├─ keywords.json          官方规则术语原始数据（仅构建期输入）
 │  ├─ concepts-extra.json    补充概念库（genshin-db 构建，仅构建期输入）
 │  ├─ concepts-extra.js      同上，ESM 形式供构建脚本读取（不再进入运行时）
-│  ├─ pinyin.js              拼音索引（构建期生成）
 │  └─ element-icons.js       七元素官方矢量图标（构建期生成）
 ├─ scripts/                  构建脚本
 ├─ tests/                    Node 端回归测试
@@ -136,7 +137,6 @@ python -m http.server 8080
 ```powershell
 # 单文件版（输出到 dist/）
 node scripts/build-single.mjs
-node scripts/build-single.mjs --lite
 node scripts/build-single.mjs --out=dist/自定义名称.html
 ```
 
@@ -149,17 +149,12 @@ node scripts/build-icons.mjs
 # 补充概念库：vendor/genshin-db-data → gi-data/concepts-extra.{json,js}
 node scripts/build-concepts.mjs
 
-# 拼音索引：gi-data/*.json → gi-data/pinyin.js
-# 仅构建期需要 pinyin-pro，安装到 .build-tools，不进入产物
-npm install --prefix .build-tools pinyin-pro
-node scripts/build-pinyin.mjs
-
 # 统一数据集：四份来源 → gi-data/dataset.{json,br,meta.json}
-# 判定（影子 / 镜像 / 可构筑 / 可链接 / 出边）全部在构建期一次算好
+# 判定（影子 / 镜像 / 可构筑 / 可链接 / 出边）与拼音（pinyin-pro，写进记录别名）全部在构建期一次算好
 node scripts/build-dataset.mjs
 ```
 
-依赖顺序：`build-concepts` → `build-pinyin`（读取 concepts-extra）→ `build-icons` → `build-dataset` → `build-single`。
+依赖顺序：`build-concepts` → `build-icons` → `build-dataset` → `build-single`。
 
 ## 发布为在线链接
 
@@ -172,7 +167,7 @@ node scripts/build-single.mjs --out=site/index.html
 
 改动后要同步线上：重跑上面这条命令，再对 `D:/Administrator/桌面/data/site` 重新发布即可，不需要改任何发布参数。
 
-为什么发布的是「内置数据包」版而不是轻量版：单文件版把构建期归一化的 `dataset.gz` 内嵌进 HTML，打开即用、不依赖任何接口；线上只多一个卡面图的 HTTPS 依赖（`static-data.piovium.org`），没有后端、没有数据库，静态托管就够。轻量版留给「想随时拿到最新数据、且接受首次联网 400KB」的场景。
+为什么发布的是内置数据包版：单文件版把构建期归一化的 `dataset.gz` 内嵌进 HTML，打开即用、不依赖任何接口；线上只多一个卡面图的 HTTPS 依赖（`static-data.piovium.org`），没有后端、没有数据库，静态托管就够。曾有「不内嵌数据、联网取包」的轻量版——数据归一化后单文件已降到 1MB 以内，它没有存在意义，已移除。
 
 卡池要更新时（官方发新卡）：重跑 `npm run build:dataset` 把最新原始数据归一化为 `gi-data/dataset.*`，再按上面这条命令重新生成发布目录——数据加工在构建期，不是每个访客打开页面时各算一遍。
 
@@ -231,6 +226,13 @@ node tests/test-search.mjs
 - 技能名进入概念索引（kind = `skill`），卡文里的「准备技能：踏潮」点击即到技能页；同名时卡牌/角色身份优先，规则术语先于技能并列；
 - 同一角色下的同名技能只出一条（取描述最完整的一条），阶段数记在 `altCount`。
 
+**特技与技能是两类东西**：装备牌赋予的技能（`rel.ownerKind = "card"`）在游戏原文里就叫「特技」（卡面：「特技：X」「角色最多装备1个「特技」」），构建期统一把它们的 `typeZh` 写为「特技」——技能码（`GCG_SKILL_TAG_VEHICLE`）只是数据源的内部标记，不作为分类依据。配套的一致化：
+
+- **角色详情 =「技能」+「特技」两段**：技能段列角色自带技能（含隐藏），特技段列出该角色装备牌所附特技并按所属卡分组——凡有关联特技的角色统一聚合（玛拉妮 → 咬咬鲨鱼·鲨鲨冲浪板；玛薇卡 → 驰轮车三件套；闲云 → 竹星·仙力助推；卡齐娜 → 冲天转转·转转冲击……）。关联来自构建期两级推导（源数据只给天赋牌标注 `relatedCharacterId`，特技牌缺省时补齐）：①出边点名唯一角色（「（仅X可用）」/ 正文点名）；②id 结构——角色专属卡的 id 就是 `1 + 角色id(4位) + 序号`（112142→1214、122051→2205）。两者冲突信出边；浪船 / 龙系等通用装备两路都落空，不硬凑。元素推导与天赋牌走同一条回退链；
+- **检索单列「技能」组**：技能命中不再混进「概念」组渲染成无脸文字块，瓦片带所属牌面与类型标签（特技/元素战技…），分类筛选 chips 同步；
+- **拼音全覆盖**：`pinyin-pro` 在构建期给每条记录算好拼音写进 `aliases.pinyin`（空格分隔音节、无声调），技能名一并覆盖——「称名之刻」这类技能可按拼音检索；运行时全拼与首字母都从这一份派生，不再有独立的拼音索引文件；
+- 牌面 load/error 的分发统一在 `90-detail` 的 document 捕获监听（`load`/`error` 不冒泡但捕获可达），模板不再使用引用全局函数的内联 `onload`/`onerror`（生产 IIFE 无全局，内联引用只会抛 `ReferenceError` 让兜底失效）。
+
 **展示去重**：
 
 - 卡池按 id 全列（含历史版本变体），不可构筑的区分「实体」与「变体」；
@@ -245,7 +247,7 @@ node tests/test-search.mjs
 - 源码是标准 ESM：模块之间靠 `import` / `export` 连接，没有全局变量、没有加载顺序清单。新增模块直接 import，不需要在别处登记。
 - `src/main.ts` 只负责按既定次序引入模块，用来固定顶层副作用（事件注册、索引构建）的相对顺序；它不承载依赖关系。
 - 浏览器产物由 `scripts/build-app.mjs` 打成单个 IIFE（`dist/app.js`），因为 `<script type="module">` 在 `file://` 下受 CORS 限制、也无法内联进单 HTML。打包格式不影响源码形态。
-- 拼音索引 / 补充概念库 / 元素图标都是 ESM 模块（由 `scripts/build-*.mjs` 生成 `export const`），随应用包一起内联，不再单独用 `<script>` 加载。
+- 补充概念库 / 元素图标是 ESM 模块（由 `scripts/build-*.mjs` 生成 `export const`），随应用包一起内联，不再单独用 `<script>` 加载；拼音则写进数据集记录本身，没有独立模块。
 - 七元素图标由官方矢量归一化而来：去掉硬编码宽高、填充色统一替换为 `currentColor`，界面按元素色着色，亮 / 暗上下文自动适配。
 - 资源更新后统一调整 `deck-viewer.html` 里的 `?v=` 版本戳，强制浏览器重新拉取。
 
@@ -253,7 +255,7 @@ node tests/test-search.mjs
 
 - 卡牌数据：piovium 官方静态数据服务 `https://static-data.piovium.org/api/v5`。原始三份 JSON 只在构建期读取（`npm run build:dataset`），归一化为 `gi-data/dataset.{json,gz,br}`；运行时不再下载原始 JSON，也不再有本地 24 小时缓存。
 - 规则与术语释义：theBowja/genshin-db 中文快照（`vendor/genshin-db-data`）。
-- 拼音索引：`pinyin-pro` 构建期生成，运行时零依赖。
+- 拼音：`pinyin-pro` 构建期写入记录别名（`aliases.pinyin`），运行时零依赖。
 - 七元素矢量图标：`assets/原神元素图标-矢量`。
 
 ## 归档说明

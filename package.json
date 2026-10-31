@@ -7,7 +7,7 @@
   "scripts": {
     "check": "tsc --noEmit",
     "build:dataset": "node scripts/build-dataset.mjs",
-    "build:assets": "node scripts/build-concepts.mjs && node scripts/build-pinyin.mjs && node scripts/build-icons.mjs",
+    "build:assets": "node scripts/build-concepts.mjs && node scripts/build-icons.mjs",
     "build:app": "node scripts/build-app.mjs",
     "build": "npm run build:app && node scripts/build-single.mjs",
     "test": "node tests/run-all.mjs"

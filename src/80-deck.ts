@@ -7,7 +7,7 @@ import { syncTileQty } from "./85-views";
 import { pool } from "./45-pool";
 import { state } from "./data/state";
 import type { Deck, Draft } from "./types";
-import { STORAGE_KEYS, imgFull, eleIcon } from "./core/resources";
+import { STORAGE_KEYS, imgFull, eleIcon, ICON_X, ICON_PLUS } from "./core/resources";
 import { esc, toast } from "./core/dom";
 import { registerLayer, syncScrollLock } from "./core/layers";
 import { TYPE_ZH } from "./data/model";
@@ -241,7 +241,7 @@ function renderDraftPanel() {
     if (!c) return `<div class="dslot empty"><span>失效角色</span></div>`;
     const el = (c ? c.stats.element : "");
     return `<div class="dslot"><img src="${imgFull(id)}" loading="lazy" decoding="async" alt="">
-      <b>${el ? eleIcon(el) : ""}${esc(c.name)}</b><button data-rmc="${id}" title="移除">✕</button></div>`;
+      <b>${el ? eleIcon(el) : ""}${esc(c.name)}</b><button data-rmc="${id}" title="移除">${ICON_X}</button></div>`;
   };
   /* 牌组列表：点击切换活动牌组；重命名/复制/删除逐项操作 */
   const deckList = decks.map(d => {
@@ -259,7 +259,7 @@ function renderDraftPanel() {
       <span class="dk-acts">
         <button data-dkren="${d.id}" title="重命名">✎</button>
         <button data-dkcpy="${d.id}" title="复制为新牌组">⧉</button>
-        <button data-dkdel="${d.id}" title="删除"${decks.length <= 1 ? " disabled" : ""}>✕</button>
+        <button data-dkdel="${d.id}" title="删除"${decks.length <= 1 ? " disabled" : ""}>${ICON_X}</button>
       </span></div>`;
   }).join("");
   const byType = {};
@@ -274,7 +274,7 @@ function renderDraftPanel() {
   $("draftPanel").innerHTML = `
     <div class="dp-head"><b>牌组管理</b>
       <span class="dp-acts">
-        <button id="draftNew">＋ 新建牌组</button>
+        <button id="draftNew">${ICON_PLUS} 新建牌组</button>
         <button id="draftLoad">载入当前牌组</button>
         <button id="draftClose">收起</button></span></div>
     <div class="dk-list">${deckList}</div>
@@ -283,8 +283,8 @@ function renderDraftPanel() {
     <div class="dp-chars">${[0, 1, 2].map(slot).join("")}</div>
     ${order.map(t => `<div class="dp-type">${t}</div>` + byType[t].map(x => `
       <div class="dp-row"><span class="dp-name">${x.el ? eleIcon(x.el) : ""}${esc(x.name)}</span><span class="dp-cost">${esc(x.cost || "—")}</span>
-        <span class="dp-cnt"><button data-dec="${x.id}" title="减少一张">−</button><b>×${x.count}</b><button data-inc="${x.id}"${x.count >= copyLimit(x.id) ? " disabled" : ""} title="${x.count >= copyLimit(x.id) ? (copyLimit(x.id) === 1 ? "秘传牌整套限 1 张" : "同名卡上限 " + copyLimit(x.id) + " 张") : "再加一张"}">＋</button></span>
-        <button class="dp-rm" data-rm="${x.id}" title="移除">✕</button></div>`).join("")).join("") || `<div style="color:var(--dim);padding:10px 4px">行动牌为空——在卡库或检索中点击「＋」加入</div>`}
+        <span class="dp-cnt"><button data-dec="${x.id}" title="减少一张">−</button><b>×${x.count}</b><button data-inc="${x.id}"${x.count >= copyLimit(x.id) ? " disabled" : ""} title="${x.count >= copyLimit(x.id) ? (copyLimit(x.id) === 1 ? "秘传牌整套限 1 张" : "同名卡上限 " + copyLimit(x.id) + " 张") : "再加一张"}">${ICON_PLUS}</button></span>
+        <button class="dp-rm" data-rm="${x.id}" title="移除">${ICON_X}</button></div>`).join("")).join("") || `<div style="color:var(--dim);padding:10px 4px">行动牌为空——在卡库或检索中点击「＋」加入</div>`}
     <div class="dk-val${problems.length ? " err" : " ok"}">${problems.length ? "⚠ " + problems.map(esc).join("；") : "✓ 符合构筑规则，可生成分享码"}</div>`;
 }
 /* 重命名提交：Enter / 失焦均提交，Esc 取消 */

@@ -1,10 +1,5 @@
 /* src/ 应用源码 · 卡牌检索 / 牌组草稿 / 分享码生成逻辑验证（DOM stub + 缓存数据） */
-import fs from "node:fs";
-import path from "node:path";
-import { createTest, ROOT } from "./_env.mjs";
-
-const pinyinData = JSON.parse(fs.readFileSync(path.join(ROOT, "gi-data/pinyin.js"), "utf8")
-  .replace(/^export const PINYIN_DATA = /, "").replace(/;\s*$/, ""));
+import { createTest } from "./_env.mjs";
 
 const t = createTest();
 const { assert } = t;
@@ -123,6 +118,13 @@ const harness = `
   browseState.el = "";
   assert(searchCards("芙宁娜").length > 0, "清除筛选：恢复全库检索");
 
+  /* ===== 2d. 技能命中：单列「技能」分类，拼音可达 ===== */
+  const rSkill = searchCards("鲨鲨冲浪板");
+  assert(rSkill.some(x => x.kind === "concept" && x.ckind === "skill"), "特技命中：concept 行携带 ckind=skill");
+  assert(resultTypeLabel(rSkill.find(x => x.ckind === "skill")) === "技能", "技能命中分类为「技能」（不再笼统归概念）");
+  const rSkillPy = searchCards("chengmingzhike", { scope: { title: true, pinyin: true, desc: false } });
+  assert(rSkillPy.some(x => x.name === "称名之刻"), "拼音检索覆盖技能名（chengmingzhike → 称名之刻）");
+
   /* ===== 3. 草稿 → 生成分享码（与原码逐字节一致） ===== */
   draftClear();
   for (const c of state.current.chars) draftAdd(c.id);
@@ -213,5 +215,5 @@ const harness = `
 })();
 `;
 
-await t.run(harness, { PINYIN_DATA: pinyinData });
+await t.run(harness);
 t.finish();
