@@ -555,6 +555,14 @@ return (async () => {
   deleteDeckById(tiStat.id);
   resetTextImportIndex();
 
+  /* ===== 22. 资源缓存（49-cache：可用性探测 / URL 全集去重 / 无 Cache API 降级） ===== */
+  assert(cacheAvailable() === false, "资源缓存：stub 无 Cache API 时不可用（直连降级）");
+  const arts = artUrls();
+  assert(arts.length > 100 && new Set(arts).size === arts.length, "资源缓存：卡面 URL 全集去重（" + arts.length + " 张）");
+  assert(await cacheGet(arts[0]) === null, "资源缓存：不可用时读取返回 null（回落直连）");
+  await cacheArt(arts[0]);   /* 不可用时应静默 no-op，不抛错 */
+  assert(typeof cachedArtCount === "function" && typeof clearArtCache === "function" && typeof showCacheManager === "function" && typeof renderCacheView === "function" && typeof cacheAllArt === "function", "资源缓存：管理面 API 齐备");
+
 })();
 `;
 

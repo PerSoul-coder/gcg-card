@@ -36,5 +36,6 @@ export * from "./95-export";
 export * from "./96-share";
 export * from "./97-qr";
 export * from "./98-textimport";
+export * from "./49-cache";
 export * from "./46-recent";
 export * from "./99-main";

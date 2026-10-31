@@ -7,6 +7,7 @@ import { renderSkillView, showSkill, skillOf } from "./47-skills";
 import { compareState, renderCompareView, renderDeckDiffView } from "./88-compare";
 import { renderQrView } from "./97-qr";
 import { renderTextImportView } from "./98-textimport";
+import { renderCacheView } from "./49-cache";
 import { R_STYLE, reqElement } from "./30-deps";
 import { pushRecentCard, refreshRecentStrip } from "./46-recent";
 import { termEntries } from "./40-concepts";
@@ -169,6 +170,7 @@ const OVERLAY_RENDER: Record<string, (v: OverlayEntry) => void> = {
   deckdiff: renderDeckDiffView,
   qr: renderQrView,
   textimport: renderTextImportView,
+  cache: renderCacheView,
   detail: renderDetailView,
 };
 function renderOverlay(resetScroll = false) {

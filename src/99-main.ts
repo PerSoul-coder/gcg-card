@@ -13,10 +13,11 @@ import { beginRenameDeck, closeDraftPanel, deleteDeckById, draftClear, draftEnco
 import { overlayOpen, showDetail, showHelp, showTermModal, syncOverlayToHash, lightboxOpen, lightboxStep, closeLightbox, renderOverlay } from "./90-detail";
 import { state } from "./data/state";
 import { recordOfId } from "./data/records";
-import { ICON_AUTO, ICON_HELP, ICON_MOON, ICON_RANDOM, ICON_SUN, SAMPLE, STORAGE_KEYS } from "./core/resources";
+import { ICON_AUTO, ICON_DB, ICON_HELP, ICON_MOON, ICON_RANDOM, ICON_SUN, SAMPLE, STORAGE_KEYS } from "./core/resources";
 import { closeTopLayer } from "./core/layers";
 import { closeMenus } from "./95-export";
 import { showTextImport } from "./98-textimport";
+import { showCacheManager } from "./49-cache";
 import { setStatus, toast, copyText } from "./core/dom";
 import { dataReady } from "./20-data";
 import { backlinks } from "./50-backlinks";
@@ -45,6 +46,7 @@ $("btnSample").addEventListener("click", () => {
 });
 /* 文本牌表回流导入（98-textimport：解析 → 确认弹页 → 载入为新牌组） */
 $("btnTextImport").addEventListener("click", () => { closeMenus(); showTextImport(); });
+$("btnCache").addEventListener("click", () => { closeTopLayer(); showCacheManager(); });
 /* ---------- 主题：auto / light / dark 三态 ----------
    初始解析由 deck-viewer.html 头部内联脚本在样式表之前完成（防 FOUC）。
    auto = 跟随系统（matchMedia 实时监听，系统切换即时生效）；按钮循环三态，
@@ -85,6 +87,7 @@ if (themeMq && typeof (themeMq as unknown as { addEventListener?: unknown }).add
 }
 /* 页头图标按钮：HTML 里是空钮，图标单点来自 resources（悬浮 title 在 HTML 上） */
 $("btnRandom").innerHTML = ICON_RANDOM;
+$("btnCache").innerHTML = ICON_DB;
 $("btnHelp").innerHTML = ICON_HELP;
 syncThemeUI();
 $("btnHistory").addEventListener("click", () => { renderHistory(); toggleHistoryPanel(); });
