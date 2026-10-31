@@ -439,6 +439,30 @@ return (async () => {
   const L2 = shareImageLayout(state.current, { note: "起手要素：先找 X" });
   assert(L2.height === L.height + 30, "分享图布局：备注行抬高画布");
 
+  /* ===== 16. 牌组备注与核心牌（Deck v2 字段 + 活动牌组匹配导出） ===== */
+  /* normalizeDeck：note/core 透传、损坏字段清洗 */
+  const nd = normalizeDeck({ id: 5, name: "N", chars: [1], cards: [[2, 2]], updatedAt: 7, note: " 先找 X ", core: ["9", 3, "x"] });
+  assert(nd && nd.v === 2 && nd.note === " 先找 X " && nd.core.length === 2 && nd.core.includes(9) && nd.core.includes(3), "normalizeDeck：v2 + note/core 透传与清洗");
+  const nd2 = normalizeDeck({ id: 6, chars: [], cards: [] });
+  assert(nd2 && nd2.note === undefined && nd2.core === undefined, "normalizeDeck：旧数据无 note/core 也可缺省");
+  /* toggleCore / isCore：活动牌组内切换并持久化 */
+  if (!state.current) await decodeAndRender(SAMPLE, { noHash: true });
+  draftLoadCurrent();
+  const someCard = state.current.cardIds[0];
+  const on0 = toggleCore(someCard);
+  assert(on0 === true && isCore(someCard), "核心牌：标记后 isCore 为真");
+  assert((activeDeck().core || []).includes(someCard), "核心牌：写入活动牌组");
+  assert(toggleCore(someCard) === false && !isCore(someCard), "核心牌：再点取消");
+  /* 导出匹配：备注/核心只在活动牌组与当前解析一致时携带 */
+  activeDeck().note = "起手先找解牌";
+  toggleCore(state.current.cardIds[0]);
+  const ex2 = buildExport();
+  assert(ex2.note === "起手先找解牌" && Array.isArray(ex2.coreCardIds) && ex2.coreCardIds.length === 1, "导出：note 与 coreCardIds 携带");
+  assert(deckText().includes("【备注】起手先找解牌"), "文本牌表：含备注行");
+  delete activeDeck().note;
+  activeDeck().core = [];
+  saveDecks();
+
 })();
 `;
 

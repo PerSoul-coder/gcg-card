@@ -7,7 +7,7 @@ import { CAT_ORDER, clearBrowseFilters, corpusKey, hlText, loadRecent, nearNames
 import { termEntries } from "./40-concepts";
 import { MECHS, mechLabel, mechMaskOf } from "./44-mechs";
 import { POOL_TYPE_ORDER, pool, poolStats, poolVersion, verCmp } from "./45-pool";
-import { copyLimit, draft, draftAdd } from "./80-deck";
+import { activeDeck, copyLimit, draft, draftAdd, isCore, toggleCore } from "./80-deck";
 import { dataReady } from "./20-data";
 import { openTermName, showDetail } from "./90-detail";
 import { state } from "./data/state";
@@ -53,15 +53,34 @@ function renderSummary() {
   const reqChips = (label, counts, total) => total
     ? `<span>${label}：<b>${total}</b> 张（${Object.entries(counts).map(([k, v]) => `<a class="rl" data-filter="${R_ZH[k]}" title="在列表视图中筛出这些卡">${R_ZH[k]} ${v}</a>`).join(" / ")}）</span>` : "";
   const rChips = reqChips("牌组限制", dCount, dCards) + reqChips("打出限制", rCount, rCards);
+  /* 核心牌清单：活动牌组的 core 标记 → 有几张、几张仅 1 张（确定性提醒，非概率） */
+  const coreIds = activeDeck()?.core || [];
+  const coreN = coreIds.length;
+  const coreSingles = coreIds.filter(id => (draft.cards.get(id) || 0) <= 1)
+    .slice(0, 3).map(id => recordOfId(id)?.name || `#${id}`);
+  const coreChip = coreN
+    ? `<span>核心牌：<b>${coreN}</b> 张${coreSingles.length ? `（仅 1 张：${coreSingles.map(esc).join("、")}${coreIds.filter(id => (draft.cards.get(id) || 0) <= 1).length > 3 ? "…" : ""}）` : "（均已 2 张）"}</span>`
+    : "";
 
   $("summary").innerHTML = `
     <div class="sum-chars">${state.current!.chars.map(c => `
       <span class="chip"><span class="edot" style="--ec:${ELE_COLOR[c.element || ""] || "var(--faint)"}">${ELE_ICONS[c.element || ""] || ""}</span>${esc(c.name)}<small class="chip-en">${enPips(c.energy || 0)}</small></span>`).join("")}
     </div>
     <div class="sum-types"><span>元素构成：<b>${elesHtml}</b></span><span>${typeCounts}</span><span>版本跨度：<b>${esc(vers.join(" ~ "))}</b></span></div>
-    <div class="sum-extra">${energyChip}${rChips}</div>
+    <div class="sum-extra">${energyChip}${rChips}${coreChip}</div>
     ${curve}`;
 }
+/* 核心牌标记：捕获阶段拦截，stopPropagation 让 90-detail 的行点击（bubble）不触发 */
+document.addEventListener("click", ev => {
+  const b = (ev.target as HTMLElement).closest("[data-core]") as HTMLElement | null;
+  if (!b) return;
+  ev.stopPropagation();
+  ev.preventDefault();
+  const on = toggleCore(Number(b.dataset.core));
+  b.classList.toggle("on", on);
+  b.title = on ? "取消核心牌（概览条列出「仅 1 张」提醒，随导出携带）" : "标记为核心牌（概览条列出「仅 1 张」提醒，随导出携带）";
+  renderSummary();
+}, true);
 /* 点击概览中的限制统计 → 跳到列表视图并过滤 */
 $("summary").addEventListener("click", ev => {
   const a = (ev.target as HTMLElement).closest("[data-filter]");
@@ -134,7 +153,7 @@ function renderList() {
     .sort((a, b) => listSort.dir * (sortVal[listSort.key](a) < sortVal[listSort.key](b) ? -1 : sortVal[listSort.key](a) > sortVal[listSort.key](b) ? 1 : nameCmp(a.name, b.name)))
     .map(x => `<tr data-id="${x.id}">
     <td class="cnt">${x.count > 1 ? "×" + x.count : "1"}</td>
-    <td>${x.element ? eleIcon(x.element, "inline-el") : ""}${esc(x.name)}</td><td>${costHtml(x.playCost)}</td>
+    <td>${x.element ? eleIcon(x.element, "inline-el") : ""}${esc(x.name)}<button class="corebtn${isCore(x.id) ? " on" : ""}" data-core="${x.id}" title="${isCore(x.id) ? "取消核心牌" : "标记为核心牌（概览条列出「仅 1 张」提醒，随导出携带）"}">核</button></td><td>${costHtml(x.playCost)}</td>
     <td>${allReqs(x).map(reqPill).join("") || '<span style="color:var(--faint)">—</span>'}</td>
     <td>${esc(x.related || "—")}</td><td>${esc(x.since || "—")}</td>
     <td class="desc">${linkify(esc(x.effect))}</td></tr>`).join("");
@@ -581,7 +600,7 @@ function browseTile(x, inGroup) {
   return `<div class="tile stile btile" data-id="${x.id}" tabindex="0" title="点击查看详情">
     <div class="imgbox"${elCol ? ` style="border-left-color:${elCol}"` : ""}>
       ${cardArtHtml(x.id, { kind: "tile", alt: x.name })}
-      <div class="badges">${badges}</div>${add}<button class="favbtn${isFav(x.id) ? " on" : ""}" data-fav="${x.id}" aria-pressed="${isFav(x.id)}" title="${isFav(x.id) ? "取消收藏" : "收藏"}">${ICON_STAR}</button>${qtyBadge}${cmpBtnHtml(x.id)}</div>
+      <div class="badges">${badges}</div>${add}<button class="favbtn${isFav(x.id) ? " on" : ""}" data-fav="${x.id}" aria-pressed="${isFav(x.id)}" title="${isFav(x.id) ? "取消收藏" : "收藏"}">${ICON_STAR}</button>${qtyBadge}${cmpBtnHtml(x.id)}${isCore(x.id) ? '<span class="core-badge" title="当前牌组的核心牌">核</span>' : ""}</div>
     <div class="tname">${esc(x.name)}${warn}</div>
     <div class="tmeta">${meta}${x.ver ? " · " + esc(x.ver) : ""}</div></div>`;
 }

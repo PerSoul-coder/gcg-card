@@ -20,6 +20,7 @@ const draft: Draft = { chars: [], cards: new Map() };  /* chars: id[]；cards: i
 let decks: Deck[] = [];
 let activeDeckId: number | null = null;
 let deckRenameId: number | null = null;
+let deckNoteId: number | null = null;
 /* 存储结构单点消毒：loadDecks 的逐条体检与 newDeck/duplicateDeck 的构造都走这里，
    字段增补（note/core…）只改这一个函数。不合格的条目整条丢弃（对齐 favs/recent 口径）。 */
 function normalizeDeck(raw: unknown): Deck | null {
@@ -280,11 +281,15 @@ function renderDraftPanel() {
     const name = deckRenameId === d.id
       ? `<input class="dk-rename" data-dkren-input="${d.id}" value="${esc(d.name)}" maxlength="24">`
       : `<span class="dk-name">${esc(d.name)}</span>`;
+    const noteLine = deckNoteId === d.id
+      ? `<input class="dk-note" data-dknote-input="${d.id}" value="${esc(d.note || "")}" maxlength="120" placeholder="备注：对局思路 / 起手要素…">`
+      : (d.note ? `<small class="dk-note-prev" title="${esc(d.note)}">${esc(d.note)}</small>` : "");
     return `<div class="dk-item${d.id === activeDeckId ? " active" : ""}" data-deck="${d.id}">
       <span class="dk-dot"></span>${avatars}
-      <span class="dk-meta">${name}<small>${d.chars.length} 角色 · ${n} 行动牌 · ${new Date(d.updatedAt).toLocaleString("zh-CN", { month: "numeric", day: "numeric", hour: "numeric", minute: "numeric" })}</small></span>
+      <span class="dk-meta">${name}<small>${d.chars.length} 角色 · ${n} 行动牌 · ${new Date(d.updatedAt).toLocaleString("zh-CN", { month: "numeric", day: "numeric", hour: "numeric", minute: "numeric" })}</small>${noteLine}</span>
       <span class="dk-acts">
         <button data-dkren="${d.id}" title="重命名">✎</button>
+        <button data-dknote="${d.id}" title="备注（对局思路 / 起手要素）">备注</button>
         <button data-dkcpy="${d.id}" title="复制为新牌组">⧉</button>
         <button data-dkdel="${d.id}" title="删除"${decks.length <= 1 ? " disabled" : ""}>${ICON_X}</button>
       </span></div>`;
@@ -323,7 +328,29 @@ function commitDeckRename(inp) {
   deckRenameId = null;
   saveDecks(); renderDraft(); renderDraftPanel();
 }
+/** 进入备注编辑态并聚焦输入框（交互契约与重命名完全同构）。 */
+export function beginEditNote(id) {
+  deckNoteId = id;
+  renderDraftPanel();
+  const inp = $("draftPanel").querySelector(".dk-note") as HTMLInputElement | null;
+  if (inp) { inp.focus(); inp.select(); }
+}
+/** 备注提交：清空 = 删除备注字段（不落空串）。 */
+function commitDeckNote(inp) {
+  const id = Number(inp.dataset.dknoteInput);
+  const d = decks.find(x => x.id === id);
+  const v = (inp.value || "").trim();
+  if (d) { if (v) d.note = v.slice(0, 120); else delete d.note; }
+  deckNoteId = null;
+  saveDecks(); renderDraft(); renderDraftPanel();
+}
 $("draftPanel").addEventListener("keydown", ev => {
+  const noteInp = (ev.target as HTMLElement).closest("[data-dknote-input]") as HTMLInputElement | null;
+  if (noteInp) {
+    if (ev.key === "Enter") { commitDeckNote(noteInp); noteInp.blur(); }
+    else if (ev.key === "Escape") { deckNoteId = null; renderDraftPanel(); ev.stopPropagation(); }
+    return;
+  }
   const inp = (ev.target as HTMLElement).closest("[data-dkren-input]") as HTMLInputElement | null;
   if (!inp) return;
   if (ev.key === "Enter") { commitDeckRename(inp); inp.blur(); }
@@ -333,8 +360,33 @@ $("draftPanel").addEventListener("keydown", ev => {
   }
 });
 $("draftPanel").addEventListener("focusout", ev => {
-  const inp = (ev.target as HTMLElement).closest("[data-dkren-input]");
+  const t = ev.target as HTMLElement;
+  const noteInp = t.closest ? t.closest("[data-dknote-input]") : null;
+  if (noteInp) { commitDeckNote(noteInp); return; }
+  const inp = t.closest ? t.closest("[data-dkren-input]") : null;
   if (inp) commitDeckRename(inp);
+});
+
+/* ---------- 核心牌标记（属于活动牌组的构筑事实） ----------
+   核心牌 = 这套牌的构筑依赖（少张数的解牌 / 唯一装备…），概览条列出
+   「仅 1 张」提醒，导出与分享图随之携带。 */
+export function toggleCore(id) {
+  const d = activeDeck();
+  if (!d) return false;
+  const core = d.core ? [...d.core] : [];
+  const i = core.indexOf(id);
+  if (i >= 0) core.splice(i, 1); else core.push(id);
+  if (core.length) d.core = core; else delete d.core;
+  saveDecks();
+  return i < 0;
+}
+export const isCore = (id) => !!activeDeck()?.core?.includes(id);
+/* 备注按钮 → 编辑态（含阻止冒泡：不触发牌组切换） */
+$("draftPanel").addEventListener("click", ev => {
+  const b = (ev.target as HTMLElement).closest("[data-dknote]") as HTMLElement | null;
+  if (!b) return;
+  ev.stopPropagation();
+  beginEditNote(Number(b.dataset.dknote));
 });
 /* 点击牌组项切换活动牌组（点在按钮/输入框上不切换） */
 document.addEventListener("click", ev => {
@@ -363,4 +415,4 @@ export function toggleDraftPanel(): void {
    open/close 里的 setModalLayer 以同一 spec 幂等覆盖，二者不冲突。 */
 registerLayer({ id: "draftPanel", isOpen: draftPanelOpen, close: closeDraftPanel, order: 46, modal: true });
 
-export { draft, decks, activeDeckId, deckRenameId, loadDecks, saveDecks, activeDeck, deckSeq, newDeck, normalizeDeck, syncFromActive, saveDraft, loadDraft, pruneDraft, draftTotal, COPY_LIMIT, LEGEND_COPY_LIMIT, copyLimit, draftAdd, draftRemoveChar, draftRemoveCard, draftSetCount, draftClear, draftLoadCurrent, deckProblems, draftEncode, renderDraft, renderDraftPanel, commitDeckRename };
+export { draft, decks, activeDeckId, deckRenameId, deckNoteId, loadDecks, saveDecks, activeDeck, deckSeq, newDeck, normalizeDeck, syncFromActive, saveDraft, loadDraft, pruneDraft, draftTotal, COPY_LIMIT, LEGEND_COPY_LIMIT, copyLimit, draftAdd, draftRemoveChar, draftRemoveCard, draftSetCount, draftClear, draftLoadCurrent, deckProblems, draftEncode, renderDraft, renderDraftPanel, commitDeckRename };

@@ -1070,6 +1070,15 @@ body.cmp-on .wrap { padding-bottom: 180px; }
 .tile .qcnt.max { background: var(--gold); color: var(--on-accent); border-color: var(--gold); font-weight: bold; }
 .dp-cnt button:disabled { color: var(--disabled); cursor: default; }
 
+/* ===== 核心牌标记：列表行按钮 + 卡面瓦片徽标 + 管理面板备注 ===== */
+.corebtn { margin-left: 6px; font-size: var(--fs-11); line-height: 1; padding: 2px 6px; border-radius: 8px; border: 1px solid var(--line); background: none; color: var(--faint); cursor: pointer; vertical-align: 1px; transition: color var(--t-fast), border-color var(--t-fast), background var(--t-fast); }
+.corebtn:hover { color: var(--gold); border-color: var(--gold-dim); }
+.corebtn.on { color: var(--on-accent); background: var(--gold); border-color: var(--gold); font-weight: bold; }
+.tile .core-badge { position: absolute; right: 7px; bottom: 7px; z-index: 2; background: rgba(10,12,16,.92); color: var(--gold); border: 1px solid var(--gold-dim); font-size: var(--fs-11); padding: 1px 7px; border-radius: 9px; }
+.dk-note { width: 100%; margin-top: 4px; background: var(--bg2); border: 1px solid var(--gold-dim); border-radius: 6px; color: var(--text); font-size: var(--fs-12); padding: 4px 8px; }
+.dk-note:focus { outline: none; border-color: var(--gold); }
+.dk-note-prev { display: block; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
 /* ===== 小屏手机（≤420px）：压缩弹层留白，把空间让给内容 ===== */
 @media (max-width: 420px) {
   #overlay { padding: 8px; }

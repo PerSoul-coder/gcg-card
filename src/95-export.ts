@@ -5,7 +5,7 @@ import { $, copyText } from "./core/dom";
 import { skillsOf } from "./47-skills";
 import { showDeckDiff } from "./88-compare";
 import { renderShareCanvas } from "./96-share";
-import { activeDeck } from "./80-deck";
+import { activeDeck, draft } from "./80-deck";
 import { showHelp } from "./90-detail";
 import { decodeRaw, encodeRaw } from "./10-codec";
 import { state } from "./data/state";
@@ -23,8 +23,23 @@ function download(name, content: string | Blob, mime) {
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 4000);
 }
+/* 当前解析的牌组与活动牌组是否同一副：按内容集合匹配（角色集合 + 行动牌多重集）。
+   两种形态的编码顺序可能不同（解析按分享码序、草稿按加入序），比码串会误判。
+   同一副 → 导出 / 分享图携带活动牌组的备注与核心牌；不是（如刚解析别人的码）→ 不带。 */
+function activeDeckMeta(): { name: string | null; note: string | null; core: number[] } {
+  if (!state.current) return { name: null, note: null, core: [] };
+  const d = activeDeck();
+  if (!d) return { name: null, note: null, core: [] };
+  const norm = (arr: number[]) => arr.slice().sort((a, b) => a - b).join(",");
+  const cards = [...draft.cards].flatMap(([id, c]) => Array(c).fill(id) as number[]);
+  if (norm(d.chars) !== norm(state.current.charIds) || norm(cards) !== norm(state.current.cardIds))
+    return { name: null, note: null, core: [] };
+  return { name: d.name || null, note: d.note || null, core: d.core ? [...d.core] : [] };
+}
 function deckText() {
+  const meta = activeDeckMeta();
   const L = [`【角色】` + state.current!.chars.map(c => c.name).join(" / ")];
+  if (meta.note) L.splice(1, 0, `【备注】${meta.note}`);
   for (const t of state.current!.order) {
     L.push(`【${t}】`);
     for (const x of state.current!.groups[t]) {
@@ -114,6 +129,8 @@ function buildExport() {
   }
   return {
     format: "gi-deck-export", version: 1,
+    ...(activeDeckMeta().note ? { note: activeDeckMeta().note } : {}),
+    ...(activeDeckMeta().core.length ? { coreCardIds: activeDeckMeta().core } : {}),
     exportedAt: new Date().toISOString(),
     source: `${API}/data/latest/${LANG}/{characters|entities}`,
     shareCode: state.current!.code,
@@ -201,7 +218,8 @@ const EXPORT_ACTIONS: Array<{ id: string; label: string; hint?: string; run: () 
       if (!state.current) { toast("请先解析一个牌组", true); return; }
       toast("正在生成分享图…");
       void (async () => {
-        const canvas = await renderShareCanvas(state.current!, { name: activeDeck()?.name || null, note: activeDeck()?.note || null });
+        const meta = activeDeckMeta();
+        const canvas = await renderShareCanvas(state.current!, { name: meta.name, note: meta.note });
         const blob = await new Promise<Blob | null>(r => canvas.toBlob(r, "image/png"));
         if (!blob) throw new Error("canvas 导出失败");
         download(`${fileStamp()}.png`, blob, "image/png");
