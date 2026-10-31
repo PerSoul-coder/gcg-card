@@ -5,6 +5,7 @@ import { $ } from "./core/dom";
 import { safeReplaceState } from "./core/history";
 import { CAT_ORDER, clearBrowseFilters, corpusKey, hlText, loadRecent, nearNames, resultTypeLabel, searchCards, searchState, toggleSearchScope } from "./70-search";
 import { termEntries } from "./40-concepts";
+import { MECHS, mechLabel, mechMaskOf } from "./44-mechs";
 import { POOL_TYPE_ORDER, pool, poolStats, poolVersion, verCmp } from "./45-pool";
 import { copyLimit, draft, draftAdd } from "./80-deck";
 import { dataReady } from "./20-data";
@@ -271,11 +272,12 @@ function browseSearchResultsHtml() {
 }
 
 /* ---------- 卡库浏览：多维筛选 / 排序 / 分片渲染 ----------
-   筛选维度：类别 / 元素（角色及其天赋）/ 骰子费用 / 充能 / 标签 / 版本。
-   计数为 facet 计数：每个可选值按"其余维度全部生效"统计，点进去不会把人带向空结果。 */
+   筛选维度由下方 FILTER_DIMS 注册表驱动（类别 / 元素 / 骰子费用 / 充能 / 标签 /
+   机制 / 版本）。计数为 facet 计数：每个可选值按"其余维度全部生效"统计，
+   点进去不会把人带向空结果。 */
 /** 卡库筛选状态：筛选维度 + 排序。u（是否显示不可构筑）是全局开关，不在这里。 */
-type FilterKey = "type" | "el" | "cost" | "energy" | "tag" | "ver";
-interface BrowseState { type: string; el: string; cost: string; energy: string; tag: string; ver: string; sort: string; dir: number }
+type FilterKey = "type" | "el" | "cost" | "energy" | "tag" | "mech" | "ver";
+interface BrowseState { type: string; el: string; cost: string; energy: string; tag: string; mech: string; ver: string; sort: string; dir: number }
 /* ---------- 筛选维度注册表 ----------
    每个维度的全部行为都由这张表驱动：取值、放行判定、分面计数、hash 编解码、
    展开态行渲染、已激活 chips 标签。新增维度 = 表里加一条 + BrowseState 加一个键，
@@ -336,13 +338,25 @@ const FILTER_DIMS: FilterDim[] = [
     vals: f => Object.entries(f.tag).sort((a, b) => b[1].n - a[1].n).map(([t]) => t),
   },
   {
+    key: "mech", letter: "m", label: "机制", double: true,
+    /* 机制是多值维度：一张卡可同时命中多个机制；角色无效果文本，恒不命中
+       （机制激活时角色牌整体不出现在结果里） */
+    values: x => {
+      const mask = mechMaskOf(x.id);
+      return MECHS.filter((_, i) => mask & (1 << i)).map(m => m.key);
+    },
+    vals: f => MECHS.filter(m => fcn(f.mech, m.key)).map(m => m.key),
+    chipLabel: v => mechLabel(v),
+    allTitle: "按效果文本归类的高频机制（curated 正则；角色牌不参与此维度）",
+  },
+  {
     key: "ver", letter: "v", label: "版本", row: (st, facets) => verRow(st),
     value: x => x.ver || null,
   },
 ];
 /* 清空全部筛选维度（不动排序方向）。检索「范围」按钮与重置按钮共用。 */
 function emptyBrowseFilters(): Pick<BrowseState, FilterKey> {
-  return { type: "", el: "", cost: "", energy: "", tag: "", ver: "" };
+  return { type: "", el: "", cost: "", energy: "", tag: "", mech: "", ver: "" };
 }
 const browseState: BrowseState = { ...emptyBrowseFilters(), sort: "name", dir: 1 };
 const BROWSE_DIMS: FacetDim[] = FILTER_DIMS.map(d => d.key) as FacetDim[];   /* 兼容旧名（键数组视图） */
@@ -397,7 +411,7 @@ function browseCmp(a, b, key, dir) {
 /* 按「筛选状态 + 卡池版本」记忆结果：翻页/重渲染时不必重算 1480 条。
    data 的具体形状随用途不同（分面计数 / 可构筑拆分），因此用 unknown 并在取用处收窄。 */
 type FacetCell = { b: number; o: number; n: number };
-type FacetDim = "type" | "el" | "cost" | "energy" | "tag" | "ver";
+type FacetDim = "type" | "el" | "cost" | "energy" | "tag" | "mech" | "ver";
 type Facets = Record<FacetDim, Record<string, FacetCell>>;
 interface BrowseSplit { all: PoolEntry[]; build: PoolEntry[]; other: PoolEntry[] }
 const _browseMemo: {
@@ -468,7 +482,7 @@ function otherGroupHtml(list, open) {
 function facetCounts(st = browseState): Facets {
   const key = browseStateKey(st);
   if (_browseMemo.facets.key === key) return _browseMemo.facets.data!;
-  const out: Facets = { type: {}, el: {}, cost: {}, energy: {}, tag: {}, ver: {} };
+  const out: Facets = { type: {}, el: {}, cost: {}, energy: {}, tag: {}, mech: {}, ver: {} };
   const bump = (dim: FacetDim, k: string, build: boolean) => {
     const cell = out[dim][k] || (out[dim][k] = { b: 0, o: 0, n: 0 });
     if (build) cell.b++; else cell.o++;
@@ -496,7 +510,8 @@ function browseHash(st = browseState) {
   const p: string[] = [];
   for (const d of FILTER_DIMS) {
     const v = st[d.key];
-    if (v !== "") p.push(d.letter + "=" + (d.key === "tag" ? encodeURIComponent(v) : v));
+    /* if (v) 而非 !== ""：容忍测试传入的缺维度部分状态（undefined 不入 hash） */
+    if (v) p.push(d.letter + "=" + (d.key === "tag" ? encodeURIComponent(v) : v));
   }
   if (st.sort !== "name") p.push("s=" + st.sort);
   if (st.dir !== 1) p.push("d=-1");

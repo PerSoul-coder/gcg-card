@@ -22,6 +22,7 @@ export * from "./10-codec";
 export * from "./20-data";
 export * from "./30-deps";
 export * from "./40-concepts";
+export * from "./44-mechs";
 export * from "./45-pool";
 export * from "./47-skills";
 export * from "./50-backlinks";

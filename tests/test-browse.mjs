@@ -395,6 +395,28 @@ return (async () => {
   pruneFavs();
   assert(!favs.has(999999999), "pruneFavs：失效 id 被清除");
 
+  /* ===== 14. 机制筛选（44-mechs：curated 正则 → 位掩码 → 注册表维度） ===== */
+  /* 覆盖数区间：防退化（措辞变化导致 0 命中或全命中都要立刻暴露） */
+  const effCards = cards().filter(r => r.desc && r.desc.effect);
+  for (const m of MECHS) {
+    const n = effCards.filter(r => m.re.test(r.desc.effect)).length;
+    assert(n > 0 && n < 800, "机制覆盖区间：" + m.label + " 命中 " + n + " 张");
+  }
+  /* 位掩码管道与直接正则一致：任取一张效果命中「抽牌」的卡，mask 必有 draw 位 */
+  const drawCard = effCards.find(r => MECHS[0].re.test(r.desc.effect));
+  assert(drawCard && mechHas(mechMaskOf(Number(drawCard.key.split(":")[1])), "draw"),
+    "机制掩码：效果文本命中抽牌的卡（" + drawCard.name + "）在掩码里有 draw 位");
+  /* 注册表维度：筛选结果全是行动牌且都命中机制；facet 有计数；hash 往返 */
+  browseState.mech = "draw";
+  const mechList = browseFilter();
+  assert(mechList.length > 0 && mechList.every(x => x.kind !== "char" && mechHas(mechMaskOf(x.id), "draw")), "机制筛选：结果全为命中抽牌的行动牌");
+  assert(facetCounts().mech.draw.n > 0, "机制分面：draw 有计数");
+  const hm = browseHash();
+  assert(hm.includes("m=draw"), "机制维度编进链接（m=draw）：" + hm);
+  assert(parseBrowseHash(hm).mech === "draw", "机制维度 hash 往返");
+  browseState.mech = "";
+  assert(browseHash() === "", "机制清空后 hash 复位");
+
 })();
 `;
 
