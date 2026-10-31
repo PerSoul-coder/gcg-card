@@ -281,12 +281,12 @@ html.layer-lock, html.layer-lock body { overflow: hidden; }
 .detail .dnote { margin: 10px 0 12px; padding: 8px 12px; font-size: var(--fs-12); color: var(--text-3); background: rgba(255,255,255,.03); border: 1px dashed var(--line); border-radius: 8px; }
 /* ---------- 技能区（角色详情） ---------- */
 .detail .skills { margin-top: 4px; }
-.detail .skill { margin-bottom: 10px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); border-left: 3px solid var(--gold-55); background: rgba(255,255,255,.02); cursor: pointer; transition: border-color var(--t-fast), background var(--t-fast); }
-.detail .skill:hover { border-color: var(--gold-55); border-left-color: var(--gold); background: var(--gold-6); }
+.detail .skill, #view-skills .skill { margin-bottom: 10px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); border-left: 3px solid var(--gold-55); background: rgba(255,255,255,.02); cursor: pointer; transition: border-color var(--t-fast), background var(--t-fast); }
+.detail .skill:hover, #view-skills .skill:hover { border-color: var(--gold-55); border-left-color: var(--gold); background: var(--gold-6); }
 .detail .skhead { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 4px; }
-.detail .skill b { color: var(--gold); font-size: var(--fs-14); }
-.detail .skdesc { color: var(--text-2); font-size: var(--fs-14); line-height: 1.85; white-space: pre-wrap; }
-.detail .skcost { margin-left: auto; display: inline-flex; }
+.detail .skhead > b, #view-skills .skhead > b { color: var(--gold); font-size: var(--fs-14); }
+.detail .skdesc, #view-skills .skdesc { color: var(--text-2); font-size: var(--fs-14); line-height: 1.85; white-space: pre-wrap; }
+.detail .skcost, #view-skills .skcost { margin-left: auto; display: inline-flex; }
 .sk-tag { font-size: var(--fs-11); padding: 1px 7px; border-radius: 9px; background: rgba(255,255,255,.05); border: 1px solid var(--line); color: var(--text-3); }
 .sk-tag.prep { color: var(--warn); border-color: rgba(211,188,142,.45); background: rgba(211,188,142,.1); }
 .sk-tag.passive { color: var(--info); border-color: color-mix(in srgb, var(--info) 35%, transparent); background: color-mix(in srgb, var(--info) 9%, transparent); }
@@ -1144,10 +1144,10 @@ body.cmp-on .wrap { padding-bottom: 180px; }
   .detail .navbtns .lbtn { padding: 6px 6px; font-size: var(--fs-12); }
   .detail .navbtns .jbtn { padding: 6px 10px; }
   /* 技能行在窄屏上收紧内边距；费用单独成行，避免和名字挤在一行换行错位 */
-  .detail .skill { padding: 9px 10px; }
+  .detail .skill, #view-skills .skill { padding: 9px 10px; }
   .detail .skhead { gap: 5px; }
-  .detail .skcost { margin-left: 0; width: 100%; }
-  .detail .skdesc { font-size: var(--fs-13); }
+  .detail .skcost, #view-skills .skcost { margin-left: 0; width: 100%; }
+  .detail .skdesc, #view-skills .skdesc { font-size: var(--fs-13); }
   .cmp-table { grid-template-columns: 70px repeat(var(--n), minmax(136px, 1fr)); }
   .cmp-hcell img { width: 52px; }
   .cmp-hcell .noart-cmp { width: 42px; }
@@ -1166,6 +1166,9 @@ body.cmp-on .wrap { padding-bottom: 180px; }
 
 /* ===== 技能图鉴（独立主页签，快捷键 4）：静态视图 ===== */
 .skillidx-view { width: 100%; min-width: 0; }
+/* 静态主页签：正文约束在与详情面板同量级的宽度上，行卡片不再拉伸到整屏 */
+#view-skills .skillidx-view { max-width: 920px; margin: 0 auto; }
+#view-skills .cmp-title { padding-right: 0; }
 .skillidx-bar { margin-top: 12px; }
 .skillidx-bar input { width: 100%; background: var(--bg2); border: 1px solid var(--line); color: var(--text); border-radius: var(--r-md); padding: 9px 13px; font-size: var(--fs-14); transition: border-color var(--t-fast), box-shadow var(--t-fast); }
 .skillidx-bar input:focus { outline: none; border-color: var(--gold-dim); box-shadow: var(--ring); }

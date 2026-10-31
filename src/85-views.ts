@@ -92,7 +92,7 @@ function tileHtml(x) {
 }
 function renderGrid() {
   if (!state.current) {
-    $("view-grid").innerHTML = `<div class="empty-hint">尚未解析牌组<br><small>粘贴分享码后自动解析；也可以先回「卡库浏览」筛选检索，或用页头「更多 → 加载示例牌组」</small></div>`;
+    $("view-grid").innerHTML = `<div class="empty-hint">尚未解析牌组<br><small>粘贴分享码后自动解析；也可以先回「卡库浏览」筛选检索，或用「牌组工具 → 加载示例牌组」</small></div>`;
     return;
   }
   $("view-grid").innerHTML = `<div class="sec-title">角色牌</div>
