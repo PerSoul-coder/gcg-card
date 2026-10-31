@@ -101,13 +101,13 @@ $("summary").addEventListener("click", ev => {
       : []);
     const match = (d: number) => (b === 5 ? d >= 5 : d === b);
     let first: HTMLElement | null = null;
-    document.querySelectorAll("#view-grid .tile").forEach(el => {
+    for (const el of document.querySelectorAll("#view-grid .tile")) {
       const d = diceOf.get(Number((el as HTMLElement).dataset.id));
       if (d != null && match(d)) {
-        (el as HTMLElement).classList.add("cost-hit");
+        el.classList.add("cost-hit");
         if (!first) first = el as HTMLElement;
       }
-    });
+    }
     first?.scrollIntoView({ behavior: "smooth", block: "center" });
     return;
   }
