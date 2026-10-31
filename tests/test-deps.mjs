@@ -100,25 +100,27 @@ return (async () => {
   draftClear();
   draftAdd(1101); draftAdd(1102); draftAdd(1301);
   draftAdd(331101);
-  assert(!deckProblems().some(m => m.includes("冰元素")), "校验：2 冰角色满足冰共鸣，无缺口");
+  assert(!deckProblems().some(m => m.text.includes("冰元素")), "校验：2 冰角色满足冰共鸣，无缺口");
   draftRemoveChar(1102);
   const p1 = deckProblems();
-  assert(p1.some(m => m.includes("冰元素角色") && m.includes("当前 1")), "校验：移走一名冰角色后报出共鸣缺口（当前 1）");
-  assert(p1.filter(m => m.includes("冰元素")).length === 1, "缺口归并：同类缺口只报一条");
+  assert(p1.some(m => m.text.includes("冰元素角色") && m.text.includes("当前 1")), "校验：移走一名冰角色后报出共鸣缺口（当前 1）");
+  assert(p1.filter(m => m.text.includes("冰元素")).length === 1, "缺口归并：同类缺口只报一条");
 
   draftClear();
   draftAdd(1101); draftAdd(1102); draftAdd(1301);
   draftAdd(211011);
   draftRemoveChar(1101);
-  assert(deckProblems().some(m => m.includes("甘雨")), "校验：移走关联角色后报出天赋牌缺口（需甘雨）");
+  assert(deckProblems().some(m => m.text.includes("甘雨")), "校验：移走关联角色后报出天赋牌缺口（需甘雨）");
 
   /* 绕过加入门槛直接构造（模拟换角色后的既有牌组）：两张冰共鸣并成一条提示 */
   draftClear();
   draftAdd(1101); draftAdd(1301); draftAdd(1302);
   draft.cards.set(331101, 1); draft.cards.set(331102, 1);
-  const merged = deckProblems().filter(m => m.includes("冰元素"));
-  assert(merged.length === 1 && merged[0].includes("交织之冰") && merged[0].includes("粉碎之冰"),
+  const merged = deckProblems().filter(m => m.text.includes("冰元素"));
+  assert(merged.length === 1 && merged[0].text.includes("交织之冰") && merged[0].text.includes("粉碎之冰"),
     "缺口归并：两张冰共鸣牌共用一条缺口提示");
+  const gap = deckProblems().find(m => m.text.includes("冰元素"));
+  assert(gap && gap.ids.includes(331101) && gap.ids.includes(331102), "校验可定位：缺口条目携带关联卡 id");
 
   /* ===== 5. 测试卡过滤 ===== */
   const testNames = ["（Test）隐藏-费用不变", "（test）绿皮隐藏", "（test）PVEbuff", "（test）测试用", "火与战争（test）"];

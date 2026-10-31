@@ -202,15 +202,18 @@ function draftLoadCurrent() {
   draft.cards = new Map(state.current!.order.flatMap(t => state.current!.groups[t].map(x => [x.id, x.count])));
   saveDraft(); renderDraft(); renderDraftPanel(); toast("已载入当前牌组");
 }
-/* 构筑规则校验：生成分享码的硬性检查，也是管理面板里的实时提示 */
-function deckProblems() {
-  const errs: string[] = [];
-  if (draft.chars.length !== 3) errs.push(`需要 3 名角色（当前 ${draft.chars.length}）`);
-  if (draftTotal() !== 30) errs.push(`需要 30 张行动牌（当前 ${draftTotal()}）`);
-  const legendCount = [...draft.cards].filter(([id]) => copyLimit(id) === 1).reduce((a, [, c]) => a + c, 0);
-  if (legendCount > 1) errs.push(`秘传牌整套限 1 张（当前 ${legendCount}）`);
+/* 构筑规则校验：生成分享码的硬性检查，也是管理面板里的实时提示。
+   返回结构化条目：text 给人读；ids 是关联卡，供「点击违规定位到卡」用
+   （全局计数类问题没有单卡可指，ids 为空 → 界面上不可点）。 */
+function deckProblems(): Array<{ text: string; ids: number[] }> {
+  const errs: Array<{ text: string; ids: number[] }> = [];
+  if (draft.chars.length !== 3) errs.push({ text: `需要 3 名角色（当前 ${draft.chars.length}）`, ids: [] });
+  if (draftTotal() !== 30) errs.push({ text: `需要 30 张行动牌（当前 ${draftTotal()}）`, ids: [] });
+  const legend = [...draft.cards].filter(([id]) => copyLimit(id) === 1);
+  const legendCount = legend.reduce((a, [, c]) => a + c, 0);
+  if (legendCount > 1) errs.push({ text: `秘传牌整套限 1 张（当前 ${legendCount}）`, ids: legend.map(([id]) => id) });
   const over = [...draft.cards].filter(([id, c]) => c > copyLimit(id));
-  if (over.length) errs.push(`${over.length} 种卡牌超过同名上限（${over.map(([id]) => recordOfId(id)?.name || id).join("、")}）`);
+  if (over.length) errs.push({ text: `${over.length} 种卡牌超过同名上限（${over.map(([id]) => recordOfId(id)?.name || id).join("、")}）`, ids: over.map(([id]) => id) });
   /* 牌组限制（才能加入牌组的门槛）：当前 3 名角色是否满足每张卡的构筑依赖。
      同一缺口归并成一条，避免整齐的共鸣套刷出十几行重复提示。 */
   const byReq = new Map();
@@ -220,18 +223,20 @@ function deckProblems() {
     for (const r of (e ? e.reqs.deck : [])) {
       if (deckReqMet(r, draft.chars)) continue;
       const k = r.code + "|" + (r.tag || r.name || "");
-      if (!byReq.has(k)) byReq.set(k, { req: r, cards: [] });
-      byReq.get(k).cards.push(e.name);
+      if (!byReq.has(k)) byReq.set(k, { req: r, names: [], ids: [] });
+      const g = byReq.get(k);
+      g.names.push(e.name);
+      if (!g.ids.includes(id)) g.ids.push(id);
     }
   }
-  for (const { req, cards } of byReq.values())
-    errs.push(`${reqGapText(req, draft.chars)}——${cards.join("、")}`);
+  for (const { req, names, ids } of byReq.values())
+    errs.push({ text: `${reqGapText(req, draft.chars)}——${names.join("、")}`, ids });
   return errs;
 }
 /* 生成分享码：格式硬校验（3 角色 + 30 张 + 秘传限 1 + 同名上限）→ 编码 → 解码自校验 */
 function draftEncode() {
   const errs = deckProblems();
-  if (errs.length) throw new Error(errs[0]);
+  if (errs.length) throw new Error(errs[0].text);
   const ids = [...draft.chars, ...[...draft.cards].flatMap(([id, c]) => Array(c).fill(id))];
   const shareIds = ids.map(id => {
     const s = shareOfId(id);
@@ -317,7 +322,9 @@ function renderDraftPanel() {
       <div class="dp-row"><span class="dp-name">${x.el ? eleIcon(x.el) : ""}${esc(x.name)}</span><span class="dp-cost">${esc(x.cost || "—")}</span>
         <span class="dp-cnt"><button data-dec="${x.id}" title="减少一张">−</button><b>×${x.count}</b><button data-inc="${x.id}"${x.count >= copyLimit(x.id) ? " disabled" : ""} title="${x.count >= copyLimit(x.id) ? (copyLimit(x.id) === 1 ? "秘传牌整套限 1 张" : "同名卡上限 " + copyLimit(x.id) + " 张") : "再加一张"}">${ICON_PLUS}</button></span>
         <button class="dp-rm" data-rm="${x.id}" title="移除">${ICON_X}</button></div>`).join("")).join("") || `<div style="color:var(--dim);padding:10px 4px">行动牌为空——在卡库或检索中点击「＋」加入</div>`}
-    <div class="dk-val${problems.length ? " err" : " ok"}">${problems.length ? "⚠ " + problems.map(esc).join("；") : "✓ 符合构筑规则，可生成分享码"}</div>`;
+    <div class="dk-val${problems.length ? " err" : " ok"}">${problems.length
+      ? problems.map(p => `<button class="val-item" data-vgoto="${p.ids.join(",")}"${p.ids.length ? ` title="点击定位（打开关联卡）"` : " disabled"}>⚠ ${esc(p.text)}</button>`).join("")
+      : "✓ 符合构筑规则，可生成分享码"}</div>`;
 }
 /* 重命名提交：Enter / 失焦均提交，Esc 取消 */
 function commitDeckRename(inp) {

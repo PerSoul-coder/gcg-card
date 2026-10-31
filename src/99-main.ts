@@ -240,6 +240,11 @@ document.addEventListener("click", ev => {
   else if (b.dataset.rm != null) draftRemoveCard(Number(b.dataset.rm));
   else if (b.dataset.inc != null) draftSetCount(Number(b.dataset.inc), 1);
   else if (b.dataset.dec != null) draftSetCount(Number(b.dataset.dec), -1);
+  /* 校验违规可定位：违规条目（80-deck 给出关联卡 ids）点击打开首张关联卡详情 */
+  else if (b.dataset.vgoto != null) {
+    const id = Number(b.dataset.vgoto.split(",")[0]);
+    if (Number.isFinite(id) && id > 0) showDetail(id);
+  }
 });
 
 /* 全局快捷键：1/2/3 切视图，/ 聚焦卡库检索框，Esc 关闭最上层浮层（输入框聚焦时不触发）。
