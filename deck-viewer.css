@@ -428,8 +428,11 @@ footer { margin-top: 46px; color: var(--faint); font-size: var(--fs-12); text-al
 .rgroup .blchip { padding: 0 8px; font-size: var(--fs-12); }
 
 /* ===== 充能标记 ===== */
+/* 充能骰是「画在金色渐变上的深棕」——渐变双主题恒定，文字也必须自持色：
+   .detail .skill b 这类祖先 <b> 上色规则会直接命中骰内的计数 <b>（直接声明
+   胜过继承），深色 --gold 与金底几乎同色，数字就糊了。 */
 .die.en { min-width: 34px; gap: 2px; color: #241c0c; }
-.die.en b { font-size: var(--fs-11); font-weight: 800; }
+.die.en b { color: #241c0c; font-size: var(--fs-11); font-weight: 800; }
 .die.en .ico { width: 12px; height: 12px; color: #3a2a10; filter: none; }
 .die.en .core { fill: #fff3d0; }
 .en-mark { display: inline-flex; align-items: center; gap: 2px; color: var(--gold); font-size: var(--fs-11); margin-left: 4px; }
@@ -760,7 +763,7 @@ body.cmp-on #draftPanel { bottom: 136px; }
 .eico.sug-el { width: 16px; height: 16px; }
 .blchip .eico, .dp-name .eico, .dslot b .eico { margin-right: 3px; }
 .enpips { display: inline-flex; align-items: center; gap: 1px; }
-.enpips .ico { width: .92em; height: .92em; }
+.enpips .ico { width: .92em; height: .92em; color: var(--gold); }   /* 充能语义金色（同 .en-mark/.die.en）：继承 tagpill 的灰蓝在深色下发闷 */
 .en-inline { display: inline-flex; align-items: center; gap: 3px; }
 .chip .edot { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: 50%; color: var(--ec, var(--gold)); background: rgba(255,255,255,.05); box-shadow: inset 0 0 0 1px currentColor, 0 0 10px -4px currentColor; }
 .chip .edot svg { width: 12px; height: 12px; }
