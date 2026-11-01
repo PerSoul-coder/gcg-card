@@ -122,19 +122,13 @@ return (async () => {
   const gap = deckProblems().find(m => m.text.includes("冰元素"));
   assert(gap && gap.ids.includes(331101) && gap.ids.includes(331102), "校验可定位：缺口条目携带关联卡 id");
 
-  /* ===== 5. 测试卡过滤 ===== */
+  /* ===== 5. 测试卡：构建期即不入数据 ===== */
   const testNames = ["（Test）隐藏-费用不变", "（test）绿皮隐藏", "（test）PVEbuff", "（test）测试用", "火与战争（test）"];
-  assert(poolStats.testFiltered === 5, "识别 5 张测试卡（实际 " + poolStats.testFiltered + "）");
-  assert(testNames.every(n => !pool.some(x => x.name === n)), "测试卡全部不进卡池");
-  assert(!searchCards("test").some(r => r.kind === "card" && testNames.includes(r.name)), "检索 test 不出测试卡");
-  assert(!searchCards("测试").some(r => r.kind === "card" && r.name.includes("测试")), "检索「测试」不出测试卡");
-  assert(testNames.every(n => cardRecords().some(e => e.name === n)), "测试卡仍在数据集里（详情深链可查）");
-  const testId = idOf(cardRecords().find(e => e.name === "（test）测试用"));
-  showDetail(testId);
-  assert(String($("detail").innerHTML).includes("测试用"), "测试卡详情深链仍可渲染");
-  draftClear();
-  draftAdd(testId);
-  assert(!draft.cards.has(testId), "测试卡不可加入构筑（shareId=null）");
+  assert(poolStats.testFiltered === 0, "运行时过滤零命中（测试卡已在构建期剔除，实际 " + poolStats.testFiltered + "）");
+  assert(testNames.every(n => !pool.some(x => x.name === n)), "测试卡不进卡池");
+  assert(testNames.every(n => !cardRecords().some(e => e.name === n)), "测试卡已从数据集剔除（详情深链不可达）");
+  assert(!searchCards("test").some(r => testNames.includes(r.name)), "检索 test 无测试卡");
+  assert(!searchCards("测试").some(r => r.kind === "card" && r.name.includes("测试")), "检索「测试」无测试卡");
 
   /* ===== 6. 统一呈现：徽标 / 详情双组 / 视图 / 导出 ===== */
   const talentPool = pool.find(x => x.id === 211011);

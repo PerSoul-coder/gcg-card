@@ -564,7 +564,7 @@ for (const [name, info] of Object.entries(EXTRA)) {
     r.drop = true;
   }
 }
-const kept = records.filter(r => !r.drop);
+const kept = records.filter(r => !r.drop && !r.flags.test);   /* 测试牌不入数据（flags.test 由 7.2 的 isTestCard 标定） */
 records.length = 0;
 for (const r of kept) { delete r.drop; byKey.set(r.key, r); records.push(r); }
 
@@ -754,7 +754,7 @@ const stats = {
 };
 const problems = [];
 if (stats.chars !== CHAR.length) problems.push(`角色数不一致：记录 ${stats.chars} / 源 ${CHAR.length}`);
-if (stats.cards !== ENT.filter(e => e.name).length) problems.push(`卡牌记录数不一致：记录 ${stats.cards} / 源 ${ENT.filter(e => e.name).length}`);
+if (stats.cards !== ENT.filter(e => e.name && !isTestCard(e)).length) problems.push(`卡牌记录数不一致：记录 ${stats.cards} / 源（扣除测试牌） ${ENT.filter(e => e.name && !isTestCard(e)).length}`);
 for (const r of records) {
   if (r.kind === "skill" && !r.rel.ownerKey) problems.push(`技能缺少所属：${r.key}`);
   /* 特技 = 装备牌赋予的技能（游戏概念），与技能码无关：这条一旦破，

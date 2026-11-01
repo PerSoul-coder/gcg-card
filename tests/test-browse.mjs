@@ -30,7 +30,7 @@ return (async () => {
   assert(pool.length === chars().length + buildEnts.length, "卡池收录全部角色牌与实体卡（" + pool.length + " 条，已排除测试卡与准备状态）");
   assert(poolStats.shadowFiltered === cards().filter(r => r.flags.shadow && !r.flags.test).length && poolStats.shadowFiltered > 0,
     "准备状态并入技能页计数（" + poolStats.shadowFiltered + " 个不进卡池）");
-  assert(poolStats.testFiltered === cards().filter(r => r.flags.test).length && poolStats.testFiltered === 5, "测试卡过滤计数（" + poolStats.testFiltered + " 张不进卡池）");
+  assert(poolStats.testFiltered === cards().filter(r => r.flags.test).length && poolStats.testFiltered === 0, "测试卡过滤零命中（已在构建期剔除，" + poolStats.testFiltered + " 张）");
   assert(poolStats.buildable === cards().filter(r => r.share != null).length + chars().filter(r => r.share != null).length,
     "可构筑计数 = 有 shareId 的角色 + 实体卡（" + poolStats.buildable + "）");
   const ganyu = pool.find(x => x.id === 1101);

@@ -12,7 +12,10 @@ import { state } from "./data/state";
 import { renderOverlay, setOverlayOpen } from "./90-detail";
 import { overlayHashClear } from "./core/history";
 
-export const CACHE_NAME = "gi-card-art-v1";
+/* v2：一次性作废 v1 的全部旧图——CDN 素材更新后 Cache Storage 命中优先的旧条目
+   永不刷新（cache.add 对已有 key 秒过），用户端因此残留过时的旧比例牌面。
+   升版即全员重新拉取（看过的卡被动回填 + 可重新全量预缓存）。 */
+export const CACHE_NAME = "gi-card-art-v2";
 
 export function cacheAvailable(): boolean {
   let ok = false;
