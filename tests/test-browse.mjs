@@ -570,7 +570,7 @@ return (async () => {
   assert(cardRec23, "单卡图：找到长效果卡样例");
   const LC = cardShareLayout(cardRec23, { measure: fakeMeasure, link: "https://x.test/p.html#card=1" });
   assert(LC.width === 720 && LC.art.w === 260 && LC.art.h === Math.round(260 * 720 / 420), "单卡图：画幅与卡面区几何");
-  assert(LC.effectBlocks.filter(b => !b.dim).length === 1 && LC.effectBlocks[0].lines.every(l => fakeMeasure(l, "14px sans-serif") <= colW23), "单卡图：效果文本入右栏，逐行不越界（story 另计暗色块）");
+  assert(LC.effectBlocks.filter(b => !b.dim && b.head === null).length === 1 && LC.effectBlocks[0].lines.every(l => fakeMeasure(l, "14px sans-serif") <= colW23), "单卡图：效果文本入右栏，逐行不越界（分节/被引用另计）");
   assert(LC.sideBlocks.every(b => b.lines.every(l => fakeMeasure(l, "14px sans-serif") <= colW23)), "单卡图：右栏信息块逐行不越界");
   assert(LC.effectBlocks[0].lines.length >= 2 && LC.link === "https://x.test/p.html#card=1", "单卡图：长文本换行 + 深链透传");
   const charRec23 = charRecords()[0];
@@ -591,6 +591,25 @@ return (async () => {
   assert(cardArtSize({ naturalWidth: 420, naturalHeight: 720 }).h === Math.round(260 * 720 / 420)
     && cardArtSize(null).h === Math.round(260 * 720 / 420),
     "单卡图：cardArtSize 420:720 与无图回落均 446（默认几何兼容）");
+  /* 无牌面实体（队伍状态等）：框回落卡壳比例（imgFull 返回的是圆盘图标，不撑框）；
+     右栏与详情一致——field 域带「对局实体」说明，被引用块随反链索引出现 */
+  const ent23 = cardRecords().find(r => r.domain === "field" && !r.art.hasFace);
+  assert(ent23, "单卡图：找到 field 域无牌面实体样例");
+  const LE = cardShareLayout(ent23, { measure: fakeMeasure, link: null });
+  assert(LE.art.h === Math.round(260 * 720 / 420), "单卡图：无牌面实体回落卡壳比例（图标不撑框）");
+  assert(LE.sideBlocks.some(b => b.dim && b.lines.join("").includes("对局实体")),
+    "单卡图：实体说明入右栏（与详情 dnote 同文）");
+  const blRec23 = [...cardRecords(), ...charRecords()]
+    .find(r => cardShareLayout(r, { measure: fakeMeasure, link: null }).effectBlocks.some(b => b.head === "被引用"));
+  assert(blRec23, "单卡图：被引用分节随反链索引出现（有引用者才渲染，收尾于正文后）");
+  /* 分节顺序与详情一致：角色 story 在技能分节之前；限制分组带提示 */
+  const iStory = LT.effectBlocks.findIndex(b => b.dim);
+  const iSkill = LT.effectBlocks.findIndex(b => !!b.head);
+  assert(iStory >= 0 && iSkill >= 0 && iStory < iSkill, "单卡图：角色 story 先于技能分节（详情同序）");
+  const reqRec23 = cardRecords().find(r => r.reqs.deck.length);
+  assert(reqRec23 && cardShareLayout(reqRec23, { measure: fakeMeasure, link: null })
+    .sideBlocks.some(b => b.label === "牌组限制" && b.hint === "加入牌组需满足"),
+    "单卡图：限制分组带提示（详情 rgroup 同义）");
 
 })();
 `;

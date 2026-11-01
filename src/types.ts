@@ -45,7 +45,9 @@ export interface Art {
   hasFace: boolean;
   /** 卡面接口用的 id（角色/卡牌/技能所属角色）；null 表示无牌面。 */
   ref: number | null;
-  kind: "char" | "card" | "none";
+  /** char/card = 有真牌面；none = 非实体无牌面（历史变体等）；
+      state/summon/team/attach = 对局实体卡壳配色类（与 .noart[data-kind] 同名）。 */
+  kind: "char" | "card" | "none" | "state" | "summon" | "team" | "attach";
 }
 
 export interface Stats {

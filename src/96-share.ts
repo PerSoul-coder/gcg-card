@@ -12,7 +12,8 @@
    （生产传 ctx.measureText，测试传伪等宽），换行在布局层算好、绘制层只画。 */
 import { imgFull } from "./core/resources";
 import { loadImages } from "./core/image";
-import { keyIdOf } from "./data/records";
+import { keyIdOf, recordOfId } from "./data/records";
+import { backlinks } from "./50-backlinks";
 import { costText } from "./30-deps";
 import { skillsOf } from "./47-skills";
 import qrcode from "../vendor/qrcode/qrcode.js";
@@ -110,6 +111,92 @@ function drawShell(ctx: CanvasRenderingContext2D, x: number, y: number, w: numbe
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.fillText("◈", x + w / 2, y + h / 2);
+}
+/* ---------- 对局实体卡壳：与详情 .noart-detail 同一套视觉 ----------
+   渐变底（158deg）+ 顶部光晕 + 45° 斜纹 + 虚线内框 + 顶部色条与类型字 +
+   圆盘图标（imgFull(id) 对无牌面实体返回的就是图标图）。四类配色与
+   .noart[data-kind] 的 CSS 变量同源；kind 缺省（历史变体等）走中性灰。 */
+const NOART_PALETTE: Record<string, { c: string; cl: string; cg: string; b: string; b2: string }> = {
+  state:  { c: "#9c8cf0", cl: "rgba(156,140,240,.4)", cg: "rgba(156,140,240,.2)",  b: "#272141", b2: "#151225" },
+  summon: { c: "#e0b26a", cl: "rgba(224,178,106,.4)", cg: "rgba(224,178,106,.19)", b: "#322819", b2: "#1c1710" },
+  team:   { c: "#7bb0ea", cl: "rgba(123,176,234,.4)", cg: "rgba(123,176,234,.19)", b: "#1c2b40", b2: "#111a25" },
+  attach: { c: "#63cdb5", cl: "rgba(99,205,181,.4)",  cg: "rgba(99,205,181,.19)",  b: "#17302c", b2: "#101e1c" },
+};
+const NOART_DEFAULT = { c: C.dim, cl: "rgba(139,149,165,.4)", cg: "rgba(139,149,165,.2)", b: "#1a2029", b2: "#141920" };
+function drawNoArtShell(ctx: CanvasRenderingContext2D, box: ShareBox, rec: GcgRecord, icon: HTMLImageElement | null): void {
+  const k = NOART_PALETTE[rec.art.kind] || NOART_DEFAULT;
+  const { x, y, w, h } = box;
+  ctx.save();
+  roundRect(ctx, x, y, w, h, 12);
+  ctx.clip();
+  /* 底色渐变 + 光晕（radial 115% 55% at 50% 42%）+ 45° 斜纹 */
+  const bg = ctx.createLinearGradient(x, y, x + w * 0.4, y + h);
+  bg.addColorStop(0, k.b);
+  bg.addColorStop(1, k.b2);
+  ctx.fillStyle = bg;
+  ctx.fillRect(x, y, w, h);
+  ctx.save();
+  ctx.translate(x + w / 2, y + h * 0.42);
+  ctx.scale(w * 1.15, h * 0.55);
+  const glow = ctx.createRadialGradient(0, 0, 0, 0, 0, 1);
+  glow.addColorStop(0, k.cg);
+  glow.addColorStop(0.72, "rgba(0,0,0,0)");
+  glow.addColorStop(1, "rgba(0,0,0,0)");
+  ctx.fillStyle = glow;
+  ctx.fillRect(-1, -1, 2, 2);
+  ctx.restore();
+  ctx.save();
+  ctx.translate(x + w / 2, y + h / 2);
+  ctx.rotate(Math.PI / 4);
+  ctx.fillStyle = "rgba(255,255,255,.025)";
+  const diag = Math.sqrt(w * w + h * h);
+  for (let off = -diag / 2; off < diag / 2; off += 18) ctx.fillRect(off, -diag / 2, 9, diag);
+  ctx.restore();
+  /* 虚线内框（模具感）+ 顶部色条 + 类型字 + ◈（无图标时） */
+  ctx.setLineDash([5, 4]);
+  ctx.strokeStyle = k.cl;
+  ctx.lineWidth = 1;
+  roundRect(ctx, x + 8, y + 8, w - 16, h - 16, 8);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  const rib = ctx.createLinearGradient(x, y, x + w, y);
+  rib.addColorStop(0.06, "rgba(0,0,0,0)");
+  rib.addColorStop(0.18, k.c);
+  rib.addColorStop(0.82, k.c);
+  rib.addColorStop(0.94, "rgba(0,0,0,0)");
+  ctx.fillStyle = rib;
+  ctx.fillRect(x, y, w, 4);
+  ctx.textAlign = "center";
+  ctx.textBaseline = "alphabetic";
+  const lc = ctx as CanvasRenderingContext2D & { letterSpacing?: string };
+  try { lc.letterSpacing = "2px"; } catch (e) { /* 旧引擎无此属性 */ }
+  ctx.fillStyle = k.c;
+  ctx.font = "12px sans-serif";
+  ctx.fillText(rec.typeZh, x + w / 2, y + h * 0.065 + 12);
+  try { lc.letterSpacing = "0px"; } catch (e) { /* 同上 */ }
+  if (!icon) {
+    ctx.globalAlpha = 0.38;
+    ctx.font = "26px sans-serif";
+    ctx.fillText("◈", x + w / 2, y + h * 0.3 + 22);
+    ctx.globalAlpha = 1;
+  }
+  ctx.restore();
+  /* 圆盘图标：64% 宽 @ 中心，图标 contain 82%（CSS .noart-detail 同参数） */
+  if (icon) {
+    const side = w * 0.64 * 0.82;
+    const s = Math.min(side / icon.naturalWidth, side / icon.naturalHeight);
+    const dw = icon.naturalWidth * s, dh = icon.naturalHeight * s;
+    ctx.save();
+    ctx.shadowColor = "rgba(0,0,0,.6)";
+    ctx.shadowBlur = 12;
+    ctx.shadowOffsetY = 4;
+    ctx.drawImage(icon, x + w / 2 - dw / 2, y + h / 2 - dh / 2, dw, dh);
+    ctx.restore();
+  }
+  roundRect(ctx, x, y, w, h, 12);
+  ctx.strokeStyle = "rgba(211,188,142,.45)";
+  ctx.lineWidth = 1;
+  ctx.stroke();
 }
 function drawCellImage(ctx: CanvasRenderingContext2D, img: HTMLImageElement | null, c: ShareCell) {
   if (!img) return drawShell(ctx, c.x, c.y, c.w, c.h);
@@ -235,8 +322,8 @@ export async function renderShareCanvas(cur: ParsedDeck, opts: { name?: string |
 
 /* ---------- 单卡分享图 ----------
    「这张牌什么效果？」的 IM 直接载体。排版 v2：整幅就是「卡面（左）+ 右栏」
-   两栏——费用/属性/依赖、英文卡名、效果全文（角色按技能分节，story 暗色收尾）
-   全部流进右栏，右栏内容短时深链二维码对齐卡面底边补位，不再出现大面积空白。
+   两栏，右栏分节顺序与详情弹层一致（meta → 英文名 → 实体说明 → 限制 →
+   正文/特技 → 被引用），右栏内容短时深链二维码对齐卡面底边补位。
    高度取决于文本量：测量函数作为参数注入布局纯函数（生产 ctx.measureText，
    测试伪等宽），换行在布局层算好、绘制层只画。 */
 export type Measure = (text: string, font: string) => number;
@@ -255,7 +342,7 @@ export function wrapText(text: string, font: string, maxWidth: number, measure: 
   }
   return out;
 }
-export interface CardSideBlock { label: string; lines: string[]; y: number; dim?: boolean }
+export interface CardSideBlock { label: string; lines: string[]; y: number; dim?: boolean; hint?: string }
 export interface CardEffectBlock { head: string | null; lines: string[]; y: number; dim?: boolean }
 /** 卡面框高度随图片天然比例（与详情 .dimg 的 height:auto 同语义——应用里所有
     「看牌」场景都不拉伸）；无图 / 尺寸异常回落 420:720 卡壳比例（.noart 同语义）。 */
@@ -273,7 +360,7 @@ export interface CardShareLayout {
   art: ShareBox;
   sideX: number;
   sideBlocks: CardSideBlock[];        /* 右栏信息块（英文卡名 = dim 无标签块） */
-  effectBlocks: CardEffectBlock[];    /* 右栏续：卡=效果；角色=技能分节；story 暗色 */
+  effectBlocks: CardEffectBlock[];    /* 右栏续：正文与技能/特技分节、story（角色）、被引用 */
   qr: ShareBox | null;                /* 卡面深链二维码（右栏底部补位） */
   link: string | null;
   headLineY: number;
@@ -293,39 +380,62 @@ export function cardShareLayout(
   const art: ShareBox = { x: M, y: 82, w: artW, h: artH };
   const sideX = M + artW + GAP;
   const sideW = W - M - sideX;
-  /* 右栏统一流：费用 → 属性（角色）→ 依赖 → 打出 → 英文名（dim）→ 效果/story → 二维码 */
+  /* 右栏统一流，分节顺序与详情一致：费用/属性（meta）→ 英文名 → 实体说明 →
+     限制（分组带提示）→ 正文/技能（角色 story 在技能前；卡牌 effect → 特技）→ 被引用 */
   let sy = art.y + 2;
   const sideBlocks: CardSideBlock[] = [];
-  const pushSide = (label: string, text: string, font: string, dim = false) => {
+  const pushSide = (label: string, text: string, font: string, dim = false, hint?: string) => {
     const lines = wrapText(text, font, sideW, measure);
     if (!lines.length) return;
-    sideBlocks.push({ label, lines, y: sy, dim });
+    sideBlocks.push({ label, lines, y: sy, dim, hint });
     sy += (label ? 36 : 20) + lines.length * (dim ? 18 : 22) + 6;
   };
   const costStr = costText(rec.stats.cost);
   if (costStr) pushSide("费用", costStr, F.body);
   if (rec.stats.hp != null) pushSide("属性", `生命 ${rec.stats.hp} · 充能 ${rec.stats.maxEnergy ?? 0}`, F.body);
-  if (rec.reqs.deck.length) pushSide("牌组限制", rec.reqs.deck.map(r => r.short || r.label).join(" / "), F.body);
-  if (rec.reqs.play.length) pushSide("打出限制", rec.reqs.play.map(r => r.short || r.label).join(" / "), F.body);
   if (rec.englishName && rec.englishName !== rec.name) pushSide("", rec.englishName, F.small, true);
+  /* 与详情一致：field 域实体给「对局实体」说明（详情 dnote 同文） */
+  if (rec.domain === "field") pushSide("", "对局实体：由技能或卡牌效果在对局中生成，不可加入牌组。", F.small, true);
+  if (rec.reqs.deck.length) pushSide("牌组限制", rec.reqs.deck.map(r => r.short || r.label).join(" / "), F.body, false, "加入牌组需满足");
+  if (rec.reqs.play.length) pushSide("打出限制", rec.reqs.play.map(r => r.short || r.label).join(" / "), F.body, false, "对局中生效");
   const effectBlocks: CardEffectBlock[] = [];
   sy += 4;
-  if (rec.kind === "char") {
+  const pushSkillSeks = () => {
     for (const sk of skillsOf(keyIdOf(rec.key))) {
       const head = sk.name + (costText(sk.cost) ? `　${costText(sk.cost)}` : "");
       const lines = wrapText(sk.effect || "", F.body, sideW, measure);
       effectBlocks.push({ head, lines, y: sy });
       sy += (head ? 36 : 22) + lines.length * 22 + 8;
     }
-  } else if (rec.desc.effect.trim()) {
-    const lines = wrapText(rec.desc.effect, F.body, sideW, measure);
-    effectBlocks.push({ head: null, lines, y: sy });
-    sy += 22 + lines.length * 22 + 8;
+  };
+  if (rec.kind === "char") {
+    /* 详情：角色的 story（语音）位于技能分节之前 */
+    if (rec.desc.story.trim()) {
+      const lines = wrapText(`「${rec.desc.story.trim()}」`, F.small, sideW, measure);
+      effectBlocks.push({ head: null, lines, y: sy, dim: true });
+      sy += 20 + lines.length * 20 + 4;
+    }
+    pushSkillSeks();
+  } else {
+    /* 详情卡牌分支：效果 → 特技（装备牌；事件/支援无分节）。flavor 详情不展示，导出同 */
+    if (rec.desc.effect.trim()) {
+      const lines = wrapText(rec.desc.effect, F.body, sideW, measure);
+      effectBlocks.push({ head: null, lines, y: sy });
+      sy += 22 + lines.length * 22 + 8;
+    }
+    pushSkillSeks();
   }
-  if (rec.desc.story.trim()) {
-    const lines = wrapText(`「${rec.desc.story.trim()}」`, F.small, sideW, measure);
-    effectBlocks.push({ head: null, lines, y: sy, dim: true });
-    sy += 20 + lines.length * 20 + 4;
+  /* 被引用（反链）：详情里排在正文最后，这里同位收尾 */
+  const blNames = [...new Set(
+    [...(backlinks.get(rec.name) || [])]
+      .filter(id => id !== keyIdOf(rec.key))
+      .map(id => recordOfId(id)?.name)
+      .filter((n): n is string => !!n),
+  )];
+  if (blNames.length) {
+    const lines = wrapText(blNames.join(" / "), F.body, sideW, measure);
+    effectBlocks.push({ head: "被引用", lines, y: sy });
+    sy += 36 + lines.length * 22 + 8;
   }
   /* 深链二维码：右栏短时对齐卡面底边（设计感），长则顺排 */
   let qr: ShareBox | null = null;
@@ -373,9 +483,11 @@ export async function renderCardShareCanvas(rec: GcgRecord, opts: { href?: strin
   const measure: Measure = (t, f) => { probe.font = f; return probe.measureText(t).width; };
   const id = keyIdOf(rec.key);
   const link = opts.href ? opts.href.split("#")[0] + "#card=" + id : null;
-  /* 先取图再布局：卡面框高度由图片天然比例决定（详情同语义，杜绝拉伸） */
+  /* 先取图再布局：有真牌面时框高随图片天然比例（详情同语义，杜绝拉伸）；
+     无牌面实体 imgFull(id) 返回的是圆盘图标——框回落 420:720 卡壳比例 */
+  const hasFace = rec.art.hasFace;
   const [img] = await loadImages([imgFull(id)]);
-  const L = cardShareLayout(rec, { measure, link, artH: cardArtSize(img).h });
+  const L = cardShareLayout(rec, { measure, link, artH: hasFace ? cardArtSize(img).h : undefined });
   const canvas = document.createElement("canvas");
   canvas.width = L.width * SCALE;
   canvas.height = L.height * SCALE;
@@ -395,9 +507,12 @@ export async function renderCardShareCanvas(rec: GcgRecord, opts: { href?: strin
   ctx.fillText(L.meta, L.width - 36, 44);
   ctx.fillStyle = C.line;
   ctx.fillRect(36, L.headLineY, L.width - 72, 1);
-  /* 卡面：与详情 .dimg 同一套呈现语义——天然比例原样绘制（框=天然比例，零裁切
-     零拉伸）、圆角 12、--gold-30 同色细边；取图失败画卡壳（框回落 420:720） */
-  if (img) {
+  /* 卡面：与详情同一套呈现语义——有牌面 = .dimg（天然比例原样绘制，零裁切
+     零拉伸 + 圆角 12 + gold-30 细边）；无牌面 = .noart-detail 卡壳（四类配色
+     渐变底/虚线内框/顶部色条与类型字/圆盘图标，取图失败只剩 ◈） */
+  if (!hasFace) {
+    drawNoArtShell(ctx, L.art, rec, img);
+  } else if (img) {
     ctx.save();
     roundRect(ctx, L.art.x, L.art.y, L.art.w, L.art.h, 12);
     ctx.clip();
@@ -422,6 +537,12 @@ export async function renderCardShareCanvas(rec: GcgRecord, opts: { href?: strin
     ctx.fillStyle = C.gold;
     ctx.font = "bold 12px sans-serif";
     ctx.fillText(b.label, L.sideX, b.y + 14);
+    if (b.hint) {
+      const lw = ctx.measureText(b.label).width;
+      ctx.fillStyle = C.dim;
+      ctx.font = "11px sans-serif";
+      ctx.fillText(b.hint, L.sideX + lw + 10, b.y + 14);
+    }
     ctx.fillStyle = C.text;
     ctx.font = "14px sans-serif";
     b.lines.forEach((ln, i) => ctx.fillText(ln, L.sideX, b.y + 36 + i * 22));
