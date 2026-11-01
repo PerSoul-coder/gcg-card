@@ -581,6 +581,16 @@ return (async () => {
   /* 文本越换越多 → 画布高度单调不减（防溢出断言的对偶） */
   const LT2 = cardShareLayout(charRec23, { measure: (t, f) => t.length * 30, link: null });
   assert(LT2.height >= LT.height, "单卡图：测量越宽画布越高");
+  /* 卡面框随图片天然比例（详情 height:auto 同语义，1:1 牌面不再被拉进 420:720）；
+     默认（无图 / 未传 artH）回落 420:720 卡壳比例，既有几何不变 */
+  const LS23 = cardShareLayout(cardRec23, { measure: fakeMeasure, link: null, artH: 260 });
+  assert(LS23.art.h === 260 && LS23.art.w === 260 && LS23.height <= LC.height,
+    "单卡图：artH 驱动卡面框高度，画布不高于默认框");
+  assert(cardArtSize({ naturalWidth: 420, naturalHeight: 420 }).h === 260,
+    "单卡图：cardArtSize 1:1 图 → 260×260（随天然比例）");
+  assert(cardArtSize({ naturalWidth: 420, naturalHeight: 720 }).h === Math.round(260 * 720 / 420)
+    && cardArtSize(null).h === Math.round(260 * 720 / 420),
+    "单卡图：cardArtSize 420:720 与无图回落均 446（默认几何兼容）");
 
 })();
 `;

@@ -116,7 +116,15 @@ function drawCellImage(ctx: CanvasRenderingContext2D, img: HTMLImageElement | nu
   ctx.save();
   roundRect(ctx, c.x, c.y, c.w, c.h, 8);
   ctx.clip();
-  ctx.drawImage(img, c.x, c.y, c.w, c.h);
+  /* object-fit: cover（与卡库瓦片同语义）：按较大的缩放比取源图中心区域，
+     任何比例的源图都不会被拉伸——曾经 1:1 牌面被直拉进 420:720 框就是这么来的 */
+  const cover = Math.max(c.w / img.naturalWidth, c.h / img.naturalHeight);
+  const sw = c.w / cover, sh = c.h / cover;
+  ctx.drawImage(
+    img,
+    (img.naturalWidth - sw) / 2, (img.naturalHeight - sh) / 2, sw, sh,
+    c.x, c.y, c.w, c.h,
+  );
   ctx.restore();
   /* 核心牌描金（B3 的分享图收尾）：边框加粗换金色，×n 徽标之外的第二层信息 */
   ctx.strokeStyle = c.core ? C.gold : C.line;
@@ -249,6 +257,14 @@ export function wrapText(text: string, font: string, maxWidth: number, measure: 
 }
 export interface CardSideBlock { label: string; lines: string[]; y: number; dim?: boolean }
 export interface CardEffectBlock { head: string | null; lines: string[]; y: number; dim?: boolean }
+/** 卡面框高度随图片天然比例（与详情 .dimg 的 height:auto 同语义——应用里所有
+    「看牌」场景都不拉伸）；无图 / 尺寸异常回落 420:720 卡壳比例（.noart 同语义）。 */
+export function cardArtSize(img: { naturalWidth: number; naturalHeight: number } | null, w = 260): { w: number; h: number } {
+  if (img && img.naturalWidth > 0 && img.naturalHeight > 0) {
+    return { w, h: Math.max(1, Math.round(w * img.naturalHeight / img.naturalWidth)) };
+  }
+  return { w, h: Math.round(w * 720 / 420) };
+}
 export interface CardShareLayout {
   width: number;
   height: number;
@@ -265,13 +281,15 @@ export interface CardShareLayout {
 }
 export function cardShareLayout(
   rec: GcgRecord,
-  opts: { measure: Measure; link?: string | null },
+  opts: { measure: Measure; link?: string | null; artH?: number },
 ): CardShareLayout {
   const measure = opts.measure;
   const W = 720, M = 36, GAP = 20;
   const F = { body: "14px sans-serif", small: "13px sans-serif" };
   const headLineY = 64;
-  const artW = 260, artH = Math.round(artW * 720 / 420);
+  /* 卡面宽固定 260（右栏位置不随图变），高随图片天然比例（详情 .dimg height:auto
+     同语义，opts.artH 由绘制层传图片实测尺寸）；无图回落 420:720 卡壳比例 */
+  const artW = 260, artH = opts.artH ?? Math.round(artW * 720 / 420);
   const art: ShareBox = { x: M, y: 82, w: artW, h: artH };
   const sideX = M + artW + GAP;
   const sideW = W - M - sideX;
@@ -355,7 +373,9 @@ export async function renderCardShareCanvas(rec: GcgRecord, opts: { href?: strin
   const measure: Measure = (t, f) => { probe.font = f; return probe.measureText(t).width; };
   const id = keyIdOf(rec.key);
   const link = opts.href ? opts.href.split("#")[0] + "#card=" + id : null;
-  const L = cardShareLayout(rec, { measure, link });
+  /* 先取图再布局：卡面框高度由图片天然比例决定（详情同语义，杜绝拉伸） */
+  const [img] = await loadImages([imgFull(id)]);
+  const L = cardShareLayout(rec, { measure, link, artH: cardArtSize(img).h });
   const canvas = document.createElement("canvas");
   canvas.width = L.width * SCALE;
   canvas.height = L.height * SCALE;
@@ -375,9 +395,21 @@ export async function renderCardShareCanvas(rec: GcgRecord, opts: { href?: strin
   ctx.fillText(L.meta, L.width - 36, 44);
   ctx.fillStyle = C.line;
   ctx.fillRect(36, L.headLineY, L.width - 72, 1);
-  /* 卡面（失败画卡壳） */
-  const [img] = await loadImages([imgFull(id)]);
-  drawCellImage(ctx, img, { id, count: 1, x: L.art.x, y: L.art.y, w: L.art.w, h: L.art.h });
+  /* 卡面：与详情 .dimg 同一套呈现语义——天然比例原样绘制（框=天然比例，零裁切
+     零拉伸）、圆角 12、--gold-30 同色细边；取图失败画卡壳（框回落 420:720） */
+  if (img) {
+    ctx.save();
+    roundRect(ctx, L.art.x, L.art.y, L.art.w, L.art.h, 12);
+    ctx.clip();
+    ctx.drawImage(img, L.art.x, L.art.y, L.art.w, L.art.h);
+    ctx.restore();
+    roundRect(ctx, L.art.x, L.art.y, L.art.w, L.art.h, 12);
+    ctx.strokeStyle = "rgba(211,188,142,.45)";
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  } else {
+    drawShell(ctx, L.art.x, L.art.y, L.art.w, L.art.h);
+  }
   /* 右栏：信息块 → 效果/技能分节 → story → 二维码 */
   ctx.textAlign = "left";
   for (const b of L.sideBlocks) {
