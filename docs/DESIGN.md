@@ -588,10 +588,11 @@ TermEntry desc/story 下沉后，同构哑弹与散落约定的清除：
   同步对齐详情：field 域加「对局实体」说明（dnote 同文）、正文后收尾「被引用」
   反链分节（backlinks 表 → 引用者名去重）。可用次数本就在 effect 文本内。
 - **导出分节与详情全面对齐**：右栏顺序改为详情同构——meta（费用/属性）→
-  英文名 → 实体说明 → 限制分组（头部带 dim 提示「加入牌组需满足 / 对局中生
-  效」，rgroup rghint 同义）→ 正文 → 被引用收尾。角色 story（语音）移到技能
-  分节之前（详情 dstory 位）；卡牌不再展示 flavor（详情卡牌分支本就无 story）；
-  装备牌特技分节补齐（详情 skillsHtmlCard 同源，skillsOf 按所属 id 取）。
+  英文名 → story → 实体说明 → 限制分组（头部带 dim 提示「加入牌组需满足 / 对局
+  中生效」，rgroup rghint 同义）→ 正文 → 被引用收尾。story（语音/flavor）统一
+  为 meta 后的 dim 引文（详情 dstory 同位，无「」包裹）：详情卡牌分支原本不
+  展示 flavor，应用户要求补上 dstory、导出同位保留；装备牌特技分节补齐
+  （详情 skillsHtmlCard 同源，skillsOf 按所属 id 取）。
 
 ### 16.3 坑
 

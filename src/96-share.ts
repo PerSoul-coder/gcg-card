@@ -394,6 +394,8 @@ export function cardShareLayout(
   if (costStr) pushSide("费用", costStr, F.body);
   if (rec.stats.hp != null) pushSide("属性", `生命 ${rec.stats.hp} · 充能 ${rec.stats.maxEnergy ?? 0}`, F.body);
   if (rec.englishName && rec.englishName !== rec.name) pushSide("", rec.englishName, F.small, true);
+  /* story（语音/flavor）：详情 dstory 位（meta 之后）——导出同为 dim 引文紧跟身份行 */
+  if (rec.desc.story.trim()) pushSide("", rec.desc.story.trim(), F.small, true);
   /* 与详情一致：field 域实体给「对局实体」说明（详情 dnote 同文） */
   if (rec.domain === "field") pushSide("", "对局实体：由技能或卡牌效果在对局中生成，不可加入牌组。", F.small, true);
   if (rec.reqs.deck.length) pushSide("牌组限制", rec.reqs.deck.map(r => r.short || r.label).join(" / "), F.body, false, "加入牌组需满足");
@@ -409,12 +411,6 @@ export function cardShareLayout(
     }
   };
   if (rec.kind === "char") {
-    /* 详情：角色的 story（语音）位于技能分节之前 */
-    if (rec.desc.story.trim()) {
-      const lines = wrapText(`「${rec.desc.story.trim()}」`, F.small, sideW, measure);
-      effectBlocks.push({ head: null, lines, y: sy, dim: true });
-      sy += 20 + lines.length * 20 + 4;
-    }
     pushSkillSeks();
   } else {
     /* 详情卡牌分支：效果 → 特技（装备牌；事件/支援无分节） */
@@ -424,12 +420,6 @@ export function cardShareLayout(
       sy += 22 + lines.length * 22 + 8;
     }
     pushSkillSeks();
-    /* flavor 台词：详情卡牌分支不展示，导出按用户要求保留作风味收尾 */
-    if (rec.desc.story.trim()) {
-      const lines = wrapText(`「${rec.desc.story.trim()}」`, F.small, sideW, measure);
-      effectBlocks.push({ head: null, lines, y: sy, dim: true });
-      sy += 20 + lines.length * 20 + 4;
-    }
   }
   /* 被引用（反链）：详情里排在正文最后，这里同位收尾 */
   const blNames = [...new Set(

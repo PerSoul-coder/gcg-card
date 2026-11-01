@@ -602,19 +602,20 @@ return (async () => {
   const blRec23 = [...cardRecords(), ...charRecords()]
     .find(r => cardShareLayout(r, { measure: fakeMeasure, link: null }).effectBlocks.some(b => b.head === "被引用"));
   assert(blRec23, "单卡图：被引用分节随反链索引出现（有引用者才渲染，收尾于正文后）");
-  /* 分节顺序与详情一致：角色 story 在技能分节之前；限制分组带提示 */
-  const iStory = LT.effectBlocks.findIndex(b => b.dim);
-  const iSkill = LT.effectBlocks.findIndex(b => !!b.head);
-  assert(iStory >= 0 && iSkill >= 0 && iStory < iSkill, "单卡图：角色 story 先于技能分节（详情同序）");
+  /* 分节位置与详情一致：story（语音/flavor）是 meta 后的 dim 身份行（紧跟英文名）；
+     限制分组带提示 */
+  assert(LT.sideBlocks.filter(b => b.dim).length >= 2
+    && LT.sideBlocks.some(b => b.dim && b.lines.join("").includes(charRec23.desc.story.trim().slice(0, 5))),
+    "单卡图：角色 story 为 meta 后 dim 引文（详情 dstory 同位）");
   const reqRec23 = cardRecords().find(r => r.reqs.deck.length);
   assert(reqRec23 && cardShareLayout(reqRec23, { measure: fakeMeasure, link: null })
     .sideBlocks.some(b => b.label === "牌组限制" && b.hint === "加入牌组需满足"),
     "单卡图：限制分组带提示（详情 rgroup 同义）");
-  /* flavor 台词保留（用户确认）：有 flavor 的卡在正文/特技之后给 dim 引文块 */
+  /* flavor 台词保留（用户确认），详情卡牌分支也已补 dstory——两侧同位 */
   const flav23 = cardRecords().find(r => r.share != null && r.desc.story && r.desc.story.trim());
   assert(flav23 && cardShareLayout(flav23, { measure: fakeMeasure, link: null })
-    .effectBlocks.some(b => b.dim && b.head === null && b.lines.join("").includes("「")),
-    "单卡图：卡牌 flavor 以 dim 引文保留（详情没有，导出特有收尾）");
+    .sideBlocks.some(b => b.dim && b.lines.join("").includes(flav23.desc.story.trim().slice(0, 5))),
+    "单卡图：卡牌 flavor 为 meta 后 dim 引文（与详情 dstory 同位）");
 
 })();
 `;

@@ -363,6 +363,7 @@ function renderDetailView(v) {
     html = `${nav}<div class="dimg" data-lb="${id}" title="点击查看大图">${cardArtHtml(id, { kind: "detail", alt: e.name })}</div>
       <div class="dinfo"><h2>${esc(e.name)}</h2>
       <div class="meta"><span class="tagpill">${esc(e.typeZh)}</span>${eEl ? `<span class="tagpill">${eleIcon(eEl)}${esc(ELE_ZH[eEl] || eEl)}</span>` : ""}${costHtml(e.stats.cost)}${tags.map(t => `<span class="tagpill">${esc(t)}</span>`).join("")}${e.rel.relatedCharacterId ? `<span class="tagpill">关联：${esc(nameOfId(e.rel.relatedCharacterId))}</span>` : ""}<span class="tagpill">${esc(e.version || "")}</span></div>
+      ${e.desc.story ? `<div class="dtext dstory">${esc(e.desc.story)}</div>` : ""}
       ${e.domain === "field" ? `<div class="dnote">对局实体：由技能或卡牌效果在对局中生成，不可加入牌组。</div>` : ""}
       ${reqBlock}
       <div class="dtext">${linkify(esc(e.desc.effect.trim()))}</div>
