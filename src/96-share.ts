@@ -417,13 +417,19 @@ export function cardShareLayout(
     }
     pushSkillSeks();
   } else {
-    /* 详情卡牌分支：效果 → 特技（装备牌；事件/支援无分节）。flavor 详情不展示，导出同 */
+    /* 详情卡牌分支：效果 → 特技（装备牌；事件/支援无分节） */
     if (rec.desc.effect.trim()) {
       const lines = wrapText(rec.desc.effect, F.body, sideW, measure);
       effectBlocks.push({ head: null, lines, y: sy });
       sy += 22 + lines.length * 22 + 8;
     }
     pushSkillSeks();
+    /* flavor 台词：详情卡牌分支不展示，导出按用户要求保留作风味收尾 */
+    if (rec.desc.story.trim()) {
+      const lines = wrapText(`「${rec.desc.story.trim()}」`, F.small, sideW, measure);
+      effectBlocks.push({ head: null, lines, y: sy, dim: true });
+      sy += 20 + lines.length * 20 + 4;
+    }
   }
   /* 被引用（反链）：详情里排在正文最后，这里同位收尾 */
   const blNames = [...new Set(

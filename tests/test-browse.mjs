@@ -610,6 +610,11 @@ return (async () => {
   assert(reqRec23 && cardShareLayout(reqRec23, { measure: fakeMeasure, link: null })
     .sideBlocks.some(b => b.label === "牌组限制" && b.hint === "加入牌组需满足"),
     "单卡图：限制分组带提示（详情 rgroup 同义）");
+  /* flavor 台词保留（用户确认）：有 flavor 的卡在正文/特技之后给 dim 引文块 */
+  const flav23 = cardRecords().find(r => r.share != null && r.desc.story && r.desc.story.trim());
+  assert(flav23 && cardShareLayout(flav23, { measure: fakeMeasure, link: null })
+    .effectBlocks.some(b => b.dim && b.head === null && b.lines.join("").includes("「")),
+    "单卡图：卡牌 flavor 以 dim 引文保留（详情没有，导出特有收尾）");
 
 })();
 `;
