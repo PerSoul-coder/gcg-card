@@ -25,30 +25,30 @@
 
 | 来源 | 文件 | 规模（实测） | 角色 |
 | --- | --- | --- | --- |
-| piovium characters | `gi-data/characters.json` | 155 角色，626 技能（hidden 80） | 身份层：角色、技能、卡面 id |
-| piovium entities | `gi-data/entities.json` | 1347 条 | 身份层：卡牌、状态、召唤物、附件 |
-| piovium keywords | `gi-data/keywords.json` | 149 条（全部负 id） | 释义层：规则术语 |
-| genshin-db concepts | `gi-data/concepts-extra.json` | 432 条 | 释义层：补充规则/历史卡 |
+| piovium characters | `gi-data/characters.json` | 156 角色，631 技能（hidden 82） | 身份层：角色、技能、卡面 id |
+| piovium entities | `gi-data/entities.json` | 1381 条 | 身份层：卡牌、状态、召唤物、附件 |
+| piovium keywords | `gi-data/keywords.json` | 153 条（全部负 id） | 释义层：规则术语 |
+| genshin-db concepts | `gi-data/concepts-extra.json` | 433 条 | 释义层：补充规则/历史卡 |
 
 entities 的类型分布（实测）：
 
 | 原始 type | 数量 | 域 | 可构筑 | 有牌面 |
 | --- | ---: | --- | --- | ---: |
-| GCG_CARD_STATE | 385 | field | 否 | 否 |
-| GCG_CARD_MODIFY | 289 | card | 是（有 shareId 时） | 是 |
-| GCG_CARD_ONSTAGE | 235 | field | 否 | 否 |
-| GCG_CARD_EVENT | 197 | card | 是 | 是 |
-| GCG_CARD_ASSIST | 121 | card | 是 | 是 |
+| GCG_CARD_STATE | 394 | field | 否 | 否 |
+| GCG_CARD_MODIFY | 293 | card | 是（有 shareId 时） | 是 |
+| GCG_CARD_ONSTAGE | 244 | field | 否 | 否 |
+| GCG_CARD_EVENT | 204 | card | 是 | 是 |
+| GCG_CARD_ASSIST | 126 | card | 是 | 是 |
 | GCG_CARD_SUMMON | 113 | field | 否 | 是 |
 | GCG_CARD_ATTACHMENT | 7 | field | 否 | 否 |
 
 关键事实：
 
-- 625 / 1347 条没有 `cardFace`，只能渲染同比例「卡壳」；
-- 865 / 1347 条没有 `shareId`，不可构筑；
+- 643 / 1381 条没有 `cardFace`，只能渲染同比例「卡壳」；
+- 892 / 1381 条没有 `shareId`，不可构筑；
 - **22 张装备牌（GCG_CARD_MODIFY）自带 `skills`，共 24 个技能名**，例如「跃升」「鲨鲨冲浪板」「转转冲击」「仙力助推」「昂扬状态」。这些名字在卡文中以「特技：X」出现，但当前技能索引只遍历角色，全部漏收。
 
-补充库 kind 分布：card 234、status 78、enemy 59、rule 52、rule-term 6、keyword 2、summon 1。
+补充库 kind 分布：card 234、status 79、enemy 59、rule 52、rule-term 6、keyword 2、summon 1。
 
 ### 1.2 类型体系
 
@@ -593,6 +593,16 @@ TermEntry desc/story 下沉后，同构哑弹与散落约定的清除：
   为 meta 后的 dim 引文（详情 dstory 同位，无「」包裹）：详情卡牌分支原本不
   展示 flavor，应用户要求补上 dstory、导出同位保留；装备牌特技分节补齐
   （详情 skillsHtmlCard 同源，skillsOf 按所属 id 取）。
+- **数据同步 v7.2（官方更新）**：piovium 三份原始 JSON 重抓（+1 角色 法尔伽 /
+  +34 实体 / +4 关键词，9 条修改——黑蛇骑士 HP 10→12、冰草/超载祝佑文案等；
+  玛薇卡/克洛琳德仅 keyMap 清理无文本变化）；genshin-db 上游「7.2 actual」
+  对全量文件重排版但 JSON 内容不变，只最小同步 43 新 + 6 改文件进 vendor，
+  避免 2604 个文件的排版噪声。concepts-extra 432→433；数据集 2694→2739
+  （156 角色 / 1376 卡牌 / 606 技能 / 601 术语，有牌面 1520，测试 0）。
+  新机制「藏品」（3 个可收集召唤物）与「燃烧祝佑/元素幻变」全部随既有管线
+  自动落位：详情（v7.2.0 徽标、flavor、技能、反链）、卡库（可构筑/卡壳）、
+  概念索引、单卡导出零代码改动。test-deps 覆盖计数断言 154→157（+3 需角色：
+  升华赞歌→杜林、法尔伽两张天赋）。上游 API：`/api/v5/data/latest/CHS/{category}`。
 
 ### 16.3 坑
 

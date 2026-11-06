@@ -40,7 +40,7 @@ return (async () => {
     "占位符卡：从 relatedCharacterId 还原角色名（梦迹一风 → 流浪者）");
   assert(!/[#{]|REALNAME/.test(r5[0].label + r5[0].short), "占位符卡：说明与徽标不泄漏 #{REALNAME 残渣");
 
-  /* 全库卫生 + 覆盖计数（154 需角色 / 14 需元素 / 11 需地区阵营） */
+  /* 全库卫生 + 覆盖计数（157 需角色 / 14 需元素 / 11 需地区阵营；v7.2 增 3：升华赞歌→杜林、法尔伽两张天赋） */
   let leaked = 0, nChar = 0, nEl = 0, nTag = 0;
   for (const e of cardRecords()) for (const r of e.reqs.deck) {
     if (/[#{]|REALNAME/.test(r.label + r.short)) leaked++;
@@ -49,7 +49,7 @@ return (async () => {
     else if (r.code === "deckTag") nTag++;
   }
   assert(leaked === 0, "全库牌组限制文案无占位符泄漏（0 处）");
-  assert(nChar === 154 && nEl === 14 && nTag === 11,
+  assert(nChar === 157 && nEl === 14 && nTag === 11,
     "覆盖计数：" + nChar + " 张需角色 / " + nEl + " 张需元素 / " + nTag + " 张需地区阵营");
 
   const plain = cardRecords().find(e => e.share != null && ["GCG_CARD_MODIFY", "GCG_CARD_EVENT"].includes(e.typeRaw) && e.reqs.deck.length === 0);
