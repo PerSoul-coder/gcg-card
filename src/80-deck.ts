@@ -399,9 +399,14 @@ $("draftPanel").addEventListener("click", ev => {
 document.addEventListener("click", ev => {
   const item = (ev.target as HTMLElement).closest("[data-deck]");
   if (!item || (ev.target as HTMLElement).closest("button") || (ev.target as HTMLElement).closest("input")) return;
-  activeDeckId = Number(item.dataset.deck);
-  syncFromActive(); renderDraft(); renderDraftPanel();
+  setActiveDeckById(Number(item.dataset.deck));
 });
+/** 设为当前牌组：点击行与上下文菜单（93-contextmenu）共用的唯一入口。 */
+export function setActiveDeckById(id: number): void {
+  if (!decks.some(x => x.id === id) || id === activeDeckId) return;
+  activeDeckId = id;
+  syncFromActive(); renderDraft(); renderDraftPanel();
+}
 
 /* ---------- 牌组管理面板：开合集中在这里 ----------
    面板是可滚动的 60dvh 浮层，打开期间必须锁住文档滚动，否则在面板里滑到底

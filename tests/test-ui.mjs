@@ -101,5 +101,25 @@ assert(/restoreView\(\)/.test(emptyHashBranch), "首屏按上次停留的视图�
 assert(/decodeAndRender\(h\);\s*switchView\("grid"\)/.test(mainSrc), "分享码链接解析后直接进卡面视图");
 assert(/decodeAndRender\(SAMPLE\)\.then\(\(\) => switchView\("grid"\)\)/.test(mainSrc), "「加载示例牌组」后直接进卡面视图");
 
+
+/* ===== 7. 上下文菜单（93-contextmenu）：长按/右键统一交互 ===== */
+const ctxSrc = fs.readFileSync(path.join(here, "src/93-contextmenu.ts"), "utf8");
+assert(fs.readFileSync(path.join(here, "src/main.ts"), "utf8").includes(String.raw`import "./93-contextmenu";`), "上下文菜单模块已挂进应用依赖图");
+assert(ctxSrc.includes("document.addEventListener(\"contextmenu\""), "右键事件接入了分发");
+assert(ctxSrc.includes("LONG_MS = 480") && ctxSrc.includes("pointerdown"), "触屏长按计时器（480ms）存在");
+assert(ctxSrc.includes("MOVE_PX") && ctxSrc.includes("pointermove"), "长按移动即取消（防误触滚动）");
+assert(ctxSrc.includes("showTipAt"), "概念链接长按/右键走悬浮预览（与 hover 同路）");
+assert(ctxSrc.includes("swallowUntil"), "长按后的合成 click 被吞掉一次");
+for (const label of ["查看详情", "加入牌组", "设为核心牌", "取消收藏", "复制该卡链接", "单卡分享图（PNG）"])
+  assert(ctxSrc.includes(label), "卡池条目菜单含「" + label + "」");
+for (const label of ["设为当前牌组", "重命名", "创建副本", "删除"])
+  assert(ctxSrc.includes(label), "牌组行菜单含「" + label + "」");
+assert(ctxSrc.includes("hashchange"), "路由变化收起菜单");
+assert(css.includes("#ctxmenu"), "上下文菜单样式已入库");
+assert(css.includes("-webkit-touch-callout"), "iOS 长按呼出已被压掉");
+assert(css.includes("--fscale") && css.includes(String.raw`html[data-fs="xl"]`), "字号缩放令牌与档位存在");
+assert(html.includes("btnFs") && html.includes("viewport-fit=cover"), "字号按钮与安全区 viewport 已入库");
+assert(css.includes("safe-area-inset-bottom"), "底部安全区补偿存在");
+
 console.log(fails ? "\n存在失败项" : "\n全部通过");
 process.exit(fails ? 1 : 0);

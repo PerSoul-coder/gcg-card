@@ -47,6 +47,27 @@ $("btnSample").addEventListener("click", () => {
 /* 文本牌表回流导入（98-textimport：解析 → 确认弹页 → 载入为新牌组） */
 $("btnTextImport").addEventListener("click", () => { closeMenus(); showTextImport(); });
 $("btnCache").addEventListener("click", () => { closeTopLayer(); showCacheManager(); });
+
+/* ---------- 字号缩放：标准 / 大 / 特大 三档循环 ----------
+   缩放走 --fscale 令牌：所有 --fs-* 字号统一乘它，版式不动、只放大文字。
+   与主题同款的交互（点击循环 + localStorage 持久化）；首帧由头部内联脚本
+   提前落 data-fs，避免大字号用户先看到标准字号再跳一下。 */
+const FS_MODES = ["", "l", "xl"] as const;
+const FS_ZH = ["标准", "大", "特大"];
+let fsIdx = Math.max(0, FS_MODES.indexOf((() => {
+  try { const v = localStorage.getItem(STORAGE_KEYS.fs); return v === "l" || v === "xl" ? v : ""; } catch (e) { return ""; }
+})()) as 0 | 1 | 2);
+function applyFs(): void {
+  const mode = FS_MODES[fsIdx];
+  if (mode) document.documentElement.dataset.fs = mode;
+  else delete document.documentElement.dataset.fs;
+  $("btnFs").title = `字号：${FS_ZH[fsIdx]} · 点击切换`;
+}
+$("btnFs").addEventListener("click", () => {
+  fsIdx = ((fsIdx + 1) % FS_MODES.length) as 0 | 1 | 2;
+  try { localStorage.setItem(STORAGE_KEYS.fs, FS_MODES[fsIdx]); } catch (e) {}
+  applyFs();
+});
 /* ---------- 主题：auto / light / dark 三态 ----------
    初始解析由 deck-viewer.html 头部内联脚本在样式表之前完成（防 FOUC）。
    auto = 跟随系统（matchMedia 实时监听，系统切换即时生效）；按钮循环三态，
@@ -90,6 +111,7 @@ $("btnRandom").innerHTML = ICON_RANDOM;
 $("btnCache").innerHTML = ICON_DB;
 $("btnHelp").innerHTML = ICON_HELP;
 syncThemeUI();
+applyFs();
 $("btnHistory").addEventListener("click", () => { renderHistory(); toggleHistoryPanel(); });
 $("histPanel").addEventListener("click", ev => {
   const item = (ev.target as HTMLElement).closest("[data-code]");

@@ -647,18 +647,12 @@ function clampTip(): void {
   for (const w of [60, 44, 0]) if (attempt(w)) return;
   /* 牌面隐藏、描述段裁完仍装不下（极端小窗）：接受原生裁剪 */
 }
-document.addEventListener("mousemove", ev => {
-  /* 触摸设备没有悬停：不显示预览（触屏的"预览"由点击后的概念页承担）。
-     弹层内不在此禁用——卡文里的术语在详情弹层里同样需要悬浮预览，
-     真正要处理的是"弹层打开那一刻的残留"，由 setOverlayOpen 负责收起。 */
-  if (!canHover()) { hideTip(); return; }
-  const el = (ev.target as HTMLElement).closest ? (ev.target as HTMLElement).closest(".term") : null;
-  if (!el) { hideTip(); return; }
-  const termName = el.dataset.term;
-  if (!termName) { hideTip(); return; }
+/* 在指定坐标展示概念预览。悬浮（mousemove）与触屏长按 / 右键（93-contextmenu）
+   共用这同一条路：内容构建、按需截断、四边钳制都只有这一份。 */
+export function showTipAt(termName: string, clientX: number, clientY: number): void {
   const entries = termEntries(termName);
   if (!entries.length) { hideTip(); return; }
-  /* mousemove 会连续触发：只有换了术语才重建内容，避免每次移动都重写 DOM */
+  /* 连续触发（mousemove 逐帧 / 同名重复长按）只有换了术语才重建 DOM */
   if (tipTerm !== termName) {
     tipTerm = termName;
     tip.innerHTML = `<div class="tip-kind">${entries.map(e => KIND_ZH[e.kind] || e.kind).join(" / ")}</div>${termHtml(entries)}`;
@@ -669,12 +663,23 @@ document.addEventListener("mousemove", ev => {
      预览框左半截跑到视口外，看起来像"被截断的第二个框"。 */
   const r = tip.getBoundingClientRect();
   const pad = 8;
-  let x = ev.clientX + 16, y = ev.clientY + 18;
-  if (x + r.width > innerWidth - pad) x = ev.clientX - r.width - 12;
-  if (y + r.height > innerHeight - pad) y = ev.clientY - r.height - 12;
+  let x = clientX + 16, y = clientY + 18;
+  if (x + r.width > innerWidth - pad) x = clientX - r.width - 12;
+  if (y + r.height > innerHeight - pad) y = clientY - r.height - 12;
   x = Math.max(pad, Math.min(x, innerWidth - r.width - pad));
   y = Math.max(pad, Math.min(y, innerHeight - r.height - pad));
   tip.style.left = x + "px"; tip.style.top = y + "px";
+}
+document.addEventListener("mousemove", ev => {
+  /* 触摸设备没有悬停：不显示预览（触屏的"预览"由长按与点击后的概念页承担）。
+     弹层内不在此禁用——卡文里的术语在详情弹层里同样需要悬浮预览，
+     真正要处理的是"弹层打开那一刻的残留"，由 setOverlayOpen 负责收起。 */
+  if (!canHover()) { hideTip(); return; }
+  const el = (ev.target as HTMLElement).closest ? (ev.target as HTMLElement).closest(".term") : null;
+  if (!el) { hideTip(); return; }
+  const termName = el.dataset.term;
+  if (!termName) { hideTip(); return; }
+  showTipAt(termName, ev.clientX, ev.clientY);
 });
 /* 指针离开 / 页面滚动 / 触摸开始 → 收起预览（触摸开始就收，避免它跟着手指残留在屏幕上） */
 document.addEventListener("touchstart", hideTip, { passive: true });

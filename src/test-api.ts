@@ -38,5 +38,6 @@ export * from "./97-qr";
 export * from "./98-textimport";
 export * from "./49-cache";
 export * from "./51-pwa";
+export * from "./93-contextmenu";
 export * from "./46-recent";
 export * from "./99-main";

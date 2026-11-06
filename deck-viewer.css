@@ -44,8 +44,11 @@
   --cryo:#9fd6e3; --hydro:#4cc2f1; --pyro:#ef7938; --electro:#b080ff;
   --anemo:#74c2a8; --geo:#f0b632; --dendro:#95d35b;
   /* 字号阶（半像素值已归档） */
-  --fs-10: 10px; --fs-11: 11px; --fs-12: 12px; --fs-13: 13px;
-  --fs-14: 14px; --fs-16: 16px; --fs-20: 20px; --fs-24: 24px;
+  /* 字号统一走 --fscale 档位（html[data-fs=l|xl] 提到 1.15/1.32）：
+     版式不重排、只放大文字；data-fs 由头部内联脚本提前落定防跳变 */
+  --fscale: 1;
+  --fs-10: calc(10px * var(--fscale)); --fs-11: calc(11px * var(--fscale)); --fs-12: calc(12px * var(--fscale)); --fs-13: calc(13px * var(--fscale));
+  --fs-14: calc(14px * var(--fscale)); --fs-16: calc(16px * var(--fscale)); --fs-20: calc(20px * var(--fscale)); --fs-24: calc(24px * var(--fscale));
   /* 圆角阶 */
   --r-sm: 6px; --r-md: 8px; --r-lg: 10px; --r-xl: 12px; --r-2xl: 16px;
   /* 动效（--t-panel 是弹层/灯箱这类大面积面板的进出节奏，介于 fast 与 slow 之间） */
@@ -69,6 +72,8 @@
 /* —— 浅色主题：只覆盖令牌，规则零改动。基调是暖羊皮纸 + 深金。
    卡面上的覆盖层（capbar / 计数角标 / 限制徽标 / 充能徽标）压在卡面图上，
    双主题都保持深底浅字，不随主题翻。 —— */
+html[data-fs="l"] { --fscale: 1.15; }
+html[data-fs="xl"] { --fscale: 1.32; }
 html[data-theme="light"] {
   color-scheme: light;
   --bg: #f3eee2; --bg2: #ebe4d3; --panel: #faf7ee; --panel2: #fffcf3; --line: #d8cdb2;
@@ -104,6 +109,17 @@ html[data-theme="light"] .noart[data-kind="summon"] { --shell-c: #a8741f; --shel
 html[data-theme="light"] .noart[data-kind="team"]   { --shell-c: #2f6da0; --shell-cl: rgba(47,109,160,.35); --shell-cg: rgba(47,109,160,.16); --shell-b: #e0eaf4; --shell-b2: #d2e0ee; }
 html[data-theme="light"] .noart[data-kind="attach"] { --shell-c: #1f7a68; --shell-cl: rgba(31,122,104,.35); --shell-cg: rgba(31,122,104,.16); --shell-b: #ddedea; --shell-b2: #cfe3de; }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: rgba(211,188,142,.16); }
+/* 长按目标（93-contextmenu）：压掉 iOS「存储图像」呼出与长按选区，保证 480ms 计时能走完 */
+.tile, .term, tr[data-id], [data-deck], [data-goto] { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+/* 上下文菜单：与 .menu 同族，但浮于任意层之上、由 JS 绝对定位 */
+#ctxmenu { position: fixed; display: flex; flex-direction: column; min-width: 210px; max-width: 320px; background: var(--panel2); border: 1px solid var(--gold-dim); border-radius: 10px; overflow: hidden; z-index: 9998; box-shadow: 0 14px 44px rgba(0,0,0,.6); animation: ctxin var(--t-fast) ease; }
+@keyframes ctxin { from { opacity: 0; transform: scale(.96); } to { opacity: 1; transform: none; } }
+#ctxmenu .ctx-title { padding: 9px 14px 8px; font-size: var(--fs-12); color: var(--gold); border-bottom: 1px solid var(--line-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#ctxmenu .ctx-sep { height: 1px; background: var(--line-soft); }
+#ctxmenu button { display: block; width: 100%; text-align: left; background: none; border: none; border-bottom: 1px solid var(--line-soft); border-radius: 0; padding: 10px 16px; font-size: var(--fs-13); color: var(--text); }
+#ctxmenu button:last-child { border-bottom: none; }
+#ctxmenu button:hover { background: var(--panel-hover); }
+#ctxmenu button.danger { color: var(--err); }
 html { scroll-behavior: smooth; }
 body {
   /* 不支持 color-mix 的老内核整条 background 会失效：先给 rgba 等价回退，
@@ -121,7 +137,10 @@ body {
   background-attachment: fixed;
   color: var(--text); font-family: "Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", "Source Han Sans SC", sans-serif; min-height: 100vh;
 }
+/* 刘海/手势条安全区：viewport-fit=cover 后由 env() 补偿；env 不可用时回退普通值。
+   底部 110px 本就是给 draftBar 预留的空间，env 加在其上 */
 .wrap { max-width: 1280px; margin: 0 auto; padding: 22px 16px 110px; }
+.wrap { padding: calc(22px + env(safe-area-inset-top)) calc(16px + env(safe-area-inset-right)) calc(110px + env(safe-area-inset-bottom)) calc(16px + env(safe-area-inset-left)); }
 
 header { position: relative; padding-bottom: 4px; }
 /* 页头右上角的全局动作（主题 / 刷新数据 / 说明）：与牌组无关，任何视图都在 */
@@ -625,13 +644,13 @@ th.sortable:hover { color: var(--gold); }
 
 
 /* ===== 牌组草稿（底部栏 + 管理面板） ===== */
-#draftBar { display: none; position: fixed; left: 50%; transform: translateX(-50%); bottom: 16px; z-index: var(--z-bar); align-items: center; gap: 14px; background: linear-gradient(180deg, var(--panel2), var(--panel)); border: 1px solid var(--gold-dim); border-radius: 14px; padding: 10px 18px; box-shadow: 0 12px 40px rgba(0,0,0,.6); }
+#draftBar { display: none; position: fixed; left: 50%; transform: translateX(-50%); bottom: 16px; bottom: calc(16px + env(safe-area-inset-bottom)); z-index: var(--z-bar); align-items: center; gap: 14px; background: linear-gradient(180deg, var(--panel2), var(--panel)); border: 1px solid var(--gold-dim); border-radius: 14px; padding: 10px 18px; box-shadow: 0 12px 40px rgba(0,0,0,.6); }
 #draftBar .dbar-title { color: var(--gold); font-size: var(--fs-13); letter-spacing: 2px; white-space: nowrap; }
 #draftBar .dbar-count { color: var(--dim); font-size: var(--fs-13); white-space: nowrap; }
 #draftBar .dbar-count b { color: var(--text); }
 #draftBar .dbar-acts { display: flex; gap: 8px; }
 #draftBar button { padding: 7px 13px; font-size: var(--fs-12); }
-#draftPanel { display: none; position: fixed; left: 50%; transform: translateX(-50%); bottom: 76px; z-index: var(--z-panel); width: min(680px, calc(100vw - 32px)); max-height: 60vh; max-height: 60dvh; overflow: auto; overscroll-behavior: contain; background: linear-gradient(180deg, var(--panel2), var(--panel)); border: 1px solid var(--gold-dim); border-radius: 14px; padding: 16px 18px; box-shadow: 0 16px 50px rgba(0,0,0,.65); }
+#draftPanel { display: none; position: fixed; left: 50%; transform: translateX(-50%); bottom: 76px; bottom: calc(76px + env(safe-area-inset-bottom)); z-index: var(--z-panel); width: min(680px, calc(100vw - 32px)); max-height: 60vh; max-height: 60dvh; overflow: auto; overscroll-behavior: contain; background: linear-gradient(180deg, var(--panel2), var(--panel)); border: 1px solid var(--gold-dim); border-radius: 14px; padding: 16px 18px; box-shadow: 0 16px 50px rgba(0,0,0,.65); }
 #draftPanel.show { display: block; }
 /* 对比栏常驻时把牌组面板抬到它上方：桌面端同样适用（平板宽度下两栏会重叠） */
 body.cmp-on #draftPanel { bottom: 136px; }
@@ -935,7 +954,7 @@ tbody tr:hover td:first-child { box-shadow: inset 2px 0 0 var(--gold-55); }
 .tile .cmpbtn.on { background: rgba(211,188,142,.2); border-color: var(--gold); color: var(--gold); }
 
 #compareBar {
-  display: none; position: fixed; left: 50%; transform: translateX(-50%); bottom: 78px; z-index: var(--z-bar);
+  display: none; position: fixed; left: 50%; transform: translateX(-50%); bottom: 78px; bottom: calc(78px + env(safe-area-inset-bottom)); z-index: var(--z-bar);
   align-items: center; gap: 10px; flex-wrap: wrap; max-width: calc(100vw - 32px);
   background: linear-gradient(180deg, var(--panel2), var(--panel));
   border: 1px solid var(--gold-dim); border-radius: 14px; padding: 8px 14px;
@@ -1067,7 +1086,7 @@ body.cmp-on .wrap { padding-bottom: 180px; }
 
 @media (max-width: 760px) {
   /* 对比栏贴边显示；卡名 chips 改为单行横向滑动，避免 4 张卡时把栏撑成三行 */
-  #compareBar { left: 10px; right: 10px; transform: none; bottom: 110px; max-width: none; justify-content: space-between; }
+  #compareBar { left: 10px; right: 10px; transform: none; bottom: 110px; bottom: calc(110px + env(safe-area-inset-bottom)); max-width: none; justify-content: space-between; }
   #compareBar .cmpbar-chips {
     order: 3; flex: 1 1 100%; flex-wrap: nowrap; overflow-x: auto;
     overscroll-behavior-x: contain; -webkit-overflow-scrolling: touch; scrollbar-width: none;

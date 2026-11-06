@@ -497,3 +497,16 @@ export interface TermEntry {
   ownerKind?: string;
   ckind?: string;
 }
+
+/* ---------- 上下文菜单（93-contextmenu） ----------
+   长按 / 右键共用的纯数据描述：注册表给什么，菜单画什么。sep 是分隔线占位。 */
+export interface CtxItem {
+  label: string;
+  run?: () => void;
+  danger?: boolean;
+  sep?: boolean;
+}
+export interface CtxMenu {
+  title?: string;
+  items: CtxItem[];
+}

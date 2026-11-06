@@ -24,6 +24,7 @@ import "./80-deck";
 import "./85-views";
 import "./88-compare";
 import "./90-detail";
+import "./93-contextmenu";
 import "./95-export";
 import "./96-share";
 import "./97-qr";

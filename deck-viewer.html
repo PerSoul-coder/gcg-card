@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <!-- color-scheme 让 UA 从首帧起就用主题底色画画布/滚动条/原生控件——
      没有它，暗色模式下部分内核的滚动条、select 下拉、overscroll 依然是亮色。
      CSS 侧 :root 的 color-scheme 随 data-theme 切换，这里管首帧之前的窗口期 -->
@@ -29,6 +29,8 @@ try {
   try { sysLight = matchMedia("(prefers-color-scheme: light)").matches; } catch (e) {}
   if (t === "light" || ((t === null || t === "auto") && sysLight))
     document.documentElement.dataset.theme = "light";
+  var f = localStorage.getItem("gi-viewer-fs");
+  if (f === "l" || f === "xl") document.documentElement.dataset.fs = f;
 } catch (e) {}
 /* 引导期错误横幅：应用全局监听注册于 99-main（模块依赖图末段），任一模块求值期
    抛错时它还不存在，页面只会白屏无下文。这里把消息写到 html 属性上，
@@ -56,6 +58,7 @@ window.addEventListener("error", function (ev) {
       <button id="btnTheme" title="主题"></button>
       <button id="btnRandom" title="随便看看：随机打开一张可构筑的卡牌"></button>
       <button id="btnCache" title="资源缓存：卡面离线缓存管理"></button>
+      <button id="btnFs" title="字号"></button>
       <button id="btnHelp" title="快捷键与说明（?）"></button>
     </div>
     <div class="sub">卡库筛选与检索 · 牌组分享码解析与生成 · 多卡对比与牌组差异 · 概念词典 · 构筑校验 · 多牌组 · 技能图鉴</div>

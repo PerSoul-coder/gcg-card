@@ -603,6 +603,23 @@ TermEntry desc/story 下沉后，同构哑弹与散落约定的清除：
   自动落位：详情（v7.2.0 徽标、flavor、技能、反链）、卡库（可构筑/卡壳）、
   概念索引、单卡导出零代码改动。test-deps 覆盖计数断言 154→157（+3 需角色：
   升华赞歌→杜林、法尔伽两张天赋）。上游 API：`/api/v5/data/latest/CHS/{category}`。
+- **交互增强批次（用户点单五项 + 右键/长按统一）**：
+  ① 93-contextmenu 统一上下文菜单——一个注册表（hitOf 认领目标给纯数据菜单）+
+  一个触发器（pointerdown 480ms 长按计时 / contextmenu 事件），两种指针汇入同一套
+  操作。卡池条目菜单：详情/对比/加牌组/核心/收藏/复制链接/单卡分享图；牌组行菜单：
+  设为当前/重命名/备注/副本/删除；[data-goto] 关联跳转同样命中。与原生生态相处：
+  Android 长按的原生 contextmenu 先到则取消计时器、计时器先到则 contextmenu 只压
+  原生；iOS<16 无 contextmenu 靠计时器（-webkit-touch-callout:none 压系统呼出）；
+  长按后 700ms 内合成 click 被吞；非托管目标不拦右键。Esc 捕获段抢在弹层返回前。
+  ② 概念链接长按=右键=hover 预览：90-detail 提取 showTipAt（内容/截断/钳制单份），
+  三种触发共用。③ 安全区：viewport-fit=cover + env() 四边补偿（env 不可用先给
+  普通值的回退行），.wrap 与三个 fixed 底部元素。④ 字号三档：--fscale 令牌
+  （所有 --fs-* 乘它，版式不动文字放大），html[data-fs=l|xl]=1.15/1.32，btnFs
+  循环 + 持久化 + 头部内联脚本防跳变。⑤ 分享图随主题：96-share 调色板拆
+  C_DARK/C_LIGHT（data-theme 即解析结果，读它即随主题），金色描边/费用柱/斜纹
+  入调色板键，无牌面卡壳补浅色四类（与 CSS light 同源）；卡面覆盖层与二维码
+  双主题保持深底浅字/白底深码（可扫性优先）。测试环境护栏：window 级监听与
+  视口尺寸全部走守卫 + 兜底（注入的 window 可能是空对象）。
 - **描述模板 token 清洗**：piovium 的 `description` 由上游按 keyMap 渲染，但隐藏
   变体技能 keyMap 缺值时 `$[D__KEY__DAMAGE]` 会原样残留（嘉明踏云献瑞/瓦雷莎夜虹
   逐跃/水形幻人汛波·洪啸），`$[A角色id]` 会渲染成残缺 REALNAME 占位（梦迹一风）。

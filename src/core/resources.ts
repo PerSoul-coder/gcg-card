@@ -19,6 +19,7 @@ export const STORAGE_KEYS = {
   browseUnbuildable: "gi-viewer-browse-ub",
   view: "gi-viewer-view",
   theme: "gi-viewer-theme",
+  fs: "gi-viewer-fs",
   favs: "gi-viewer-favs",
   recentCards: "gi-viewer-recent-cards",
 } as const;
@@ -123,6 +124,8 @@ export const ICON_SUN =
   `<svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="3" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.2v1.8M8 13v1.8M1.2 8H3M13 8h1.8M3.2 3.2l1.3 1.3M11.5 11.5l1.3 1.3M12.8 3.2l-1.3 1.3M4.5 11.5l-1.3 1.3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>`;
 export const ICON_MOON =
   `<svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><path d="M13.2 9.8A5.5 5.5 0 0 1 6.2 2.8a5.5 5.5 0 1 0 7 7Z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>`;
+export const ICON_FONT =
+  `<svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 13 6.2 4h1.6L11 13M4.3 10h5.4M11.6 13c.9 0 1.7-.9 1.7-2.4 0-1.1-.4-1.8-1-2.2.5-.3.8-.9.8-1.7 0-1.2-.7-2-1.7-2-.8 0-1.4.5-1.6 1.3" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" transform="translate(-1.2 0)"/></svg>`;
 export const ICON_AUTO =
   `<svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 2.5v11A5.5 5.5 0 0 0 8 2.5Z" fill="currentColor" stroke="none"/></svg>`;
 

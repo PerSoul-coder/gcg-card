@@ -19,11 +19,27 @@ import { skillsOf } from "./47-skills";
 import qrcode from "../vendor/qrcode/qrcode.js";
 import type { GcgRecord, ParsedDeck } from "./types";
 
-/* ---------- 画布配色（独立成图，不读 CSS 变量） ---------- */
-const C = {
+/* ---------- 画布配色（独立成图，不读 CSS 变量） ----------
+   深浅两套随 data-theme 切换（99-main 主题契约：data-theme 恒为「解析结果」，
+   读它即随当前主题）；金色描边/费用柱是浅金在深底的 alpha 家族，浅色主题换成
+   深金同一 alpha。卡面上的覆盖层（数量角标 / 二维码底）双主题都保持深底浅字，
+   与详情 UI 的卡面覆盖层同款契约，不随主题翻。 */
+const C_DARK = {
   bg: "#12161d", line: "#2e3949", gold: "#d3bc8e",
   text: "#e8e2d0", dim: "#8b95a5", shell: "#1a2029",
+  goldEdge: "rgba(211,188,142,.45)", goldBar: "rgba(211,188,142,.22)", stripe: "rgba(255,255,255,.025)",
 };
+const C_LIGHT = {
+  bg: "#f3eee2", line: "#d8cdb2", gold: "#8f6f28",
+  text: "#3a3325", dim: "#877e66", shell: "#ebe4d3",
+  goldEdge: "rgba(143,111,40,.45)", goldBar: "rgba(143,111,40,.22)", stripe: "rgba(0,0,0,.03)",
+};
+let C = C_DARK;
+function syncSharePalette(): void {
+  let light = false;
+  try { light = typeof document !== "undefined" && document.documentElement && document.documentElement.dataset && document.documentElement.dataset.theme === "light"; } catch (e) {}
+  C = light ? C_LIGHT : C_DARK;
+}
 
 export interface ShareCell { id: number; count: number; x: number; y: number; w: number; h: number; core?: boolean }
 export interface ShareBox { x: number; y: number; w: number; h: number }
@@ -122,9 +138,24 @@ const NOART_PALETTE: Record<string, { c: string; cl: string; cg: string; b: stri
   team:   { c: "#7bb0ea", cl: "rgba(123,176,234,.4)", cg: "rgba(123,176,234,.19)", b: "#1c2b40", b2: "#111a25" },
   attach: { c: "#63cdb5", cl: "rgba(99,205,181,.4)",  cg: "rgba(99,205,181,.19)",  b: "#17302c", b2: "#101e1c" },
 };
-const NOART_DEFAULT = { c: C.dim, cl: "rgba(139,149,165,.4)", cg: "rgba(139,149,165,.2)", b: "#1a2029", b2: "#141920" };
+/* 浅色主题的卡壳（与 CSS html[data-theme=light] .noart[data-kind] 同源）：
+   同样的四类 + 中性灰，只是亮度翻到羊皮纸一档 */
+const NOART_PALETTE_LIGHT: typeof NOART_PALETTE = {
+  state:  { c: "#7a66d8", cl: "rgba(122,102,216,.35)", cg: "rgba(122,102,216,.16)", b: "#e9e4f6", b2: "#ddd8ee" },
+  summon: { c: "#a8741f", cl: "rgba(168,116,31,.35)",  cg: "rgba(168,116,31,.16)",  b: "#f2e7d2", b2: "#e9dcc0" },
+  team:   { c: "#2f6da0", cl: "rgba(47,109,160,.35)",  cg: "rgba(47,109,160,.16)",  b: "#e0eaf4", b2: "#d2e0ee" },
+  attach: { c: "#1f7a68", cl: "rgba(31,122,104,.35)",  cg: "rgba(31,122,104,.16)",  b: "#ddedea", b2: "#cfe3de" },
+};
+const NOART_DEFAULT = { c: C_DARK.dim, cl: "rgba(139,149,165,.4)", cg: "rgba(139,149,165,.2)", b: "#1a2029", b2: "#141920" };
+function noartPaletteOf(kind: string): { c: string; cl: string; cg: string; b: string; b2: string } {
+  const light = C === C_LIGHT;
+  const tab = light ? NOART_PALETTE_LIGHT : NOART_PALETTE;
+  return tab[kind] || (light
+    ? { c: C.dim, cl: "rgba(135,126,102,.35)", cg: "rgba(135,126,102,.16)", b: "#e7e2d4", b2: "#dcd6c4" }
+    : NOART_DEFAULT);
+}
 function drawNoArtShell(ctx: CanvasRenderingContext2D, box: ShareBox, rec: GcgRecord, icon: HTMLImageElement | null): void {
-  const k = NOART_PALETTE[rec.art.kind] || NOART_DEFAULT;
+  const k = noartPaletteOf(rec.art.kind);
   const { x, y, w, h } = box;
   ctx.save();
   roundRect(ctx, x, y, w, h, 12);
@@ -148,7 +179,7 @@ function drawNoArtShell(ctx: CanvasRenderingContext2D, box: ShareBox, rec: GcgRe
   ctx.save();
   ctx.translate(x + w / 2, y + h / 2);
   ctx.rotate(Math.PI / 4);
-  ctx.fillStyle = "rgba(255,255,255,.025)";
+  ctx.fillStyle = C.stripe;
   const diag = Math.sqrt(w * w + h * h);
   for (let off = -diag / 2; off < diag / 2; off += 18) ctx.fillRect(off, -diag / 2, 9, diag);
   ctx.restore();
@@ -194,7 +225,7 @@ function drawNoArtShell(ctx: CanvasRenderingContext2D, box: ShareBox, rec: GcgRe
     ctx.restore();
   }
   roundRect(ctx, x, y, w, h, 12);
-  ctx.strokeStyle = "rgba(211,188,142,.45)";
+  ctx.strokeStyle = C.goldEdge;
   ctx.lineWidth = 1;
   ctx.stroke();
 }
@@ -251,7 +282,7 @@ function drawCurve(ctx: CanvasRenderingContext2D, buckets: number[], box: ShareB
     const cx = box.x + i * (bw + gap) + bw / 2;
     if (buckets[i]) {
       const bh = Math.max(3, Math.round(buckets[i] / max * (barBot - barTop)));
-      ctx.fillStyle = "rgba(211,188,142,.22)";
+      ctx.fillStyle = C.goldBar;
       ctx.fillRect(cx - bw / 2, barBot - bh, bw, bh);
       ctx.fillStyle = C.dim;
       ctx.fillText(String(buckets[i]), cx, barBot - bh - 6);
@@ -261,6 +292,7 @@ function drawCurve(ctx: CanvasRenderingContext2D, buckets: number[], box: ShareB
   }
 }
 export async function renderShareCanvas(cur: ParsedDeck, opts: { name?: string | null; note?: string | null; core?: number[] } = {}): Promise<HTMLCanvasElement> {
+  syncSharePalette();
   const L = shareImageLayout(cur, opts);
   const SCALE = 2;
   const canvas = document.createElement("canvas");
@@ -474,6 +506,7 @@ function drawQr(ctx: CanvasRenderingContext2D, text: string, x: number, y: numbe
 
 /** 单卡分享图绘制（薄层）：测量用离屏 ctx，卡面失败画卡壳。 */
 export async function renderCardShareCanvas(rec: GcgRecord, opts: { href?: string | null } = {}): Promise<HTMLCanvasElement> {
+  syncSharePalette();
   const SCALE = 2;
   const probe = document.createElement("canvas").getContext("2d")!;
   const measure: Measure = (t, f) => { probe.font = f; return probe.measureText(t).width; };
@@ -515,7 +548,7 @@ export async function renderCardShareCanvas(rec: GcgRecord, opts: { href?: strin
     ctx.drawImage(img, L.art.x, L.art.y, L.art.w, L.art.h);
     ctx.restore();
     roundRect(ctx, L.art.x, L.art.y, L.art.w, L.art.h, 12);
-    ctx.strokeStyle = "rgba(211,188,142,.45)";
+    ctx.strokeStyle = C.goldEdge;
     ctx.lineWidth = 1;
     ctx.stroke();
   } else {
