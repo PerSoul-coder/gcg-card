@@ -18,6 +18,16 @@ return (async () => {
   const recByName = n => cards().find(r => r.name === n) || chars().find(r => r.name === n);
   await ensureData();
 
+  /* ===== 0. 描述无上游模板 token 残留（D__KEY / REALNAME 曾随变体技能与占位卡入库） ===== */
+  const leaked = [...chars(), ...cards()].filter(r => /D__KEY|REALNAME/.test(r.desc.effect + r.desc.story + r.desc.rules));
+  assert(leaked.length === 0, "角色与卡牌描述无 D__KEY/REALNAME 模板残留（" + leaked.length + " 条；技能/术语侧由构建期断言兜底）");
+  const tanYun = skillsOf(1316).find(s => s.name === "踏云献瑞");
+  assert(!!tanYun && /造成[0-9]+点(火元素|物理)伤害/.test(tanYun.effect),
+    "踏云献瑞（嘉明变体技能）渲染出数值而非 D__KEY__DAMAGE：" + (tanYun ? tanYun.effect.slice(0, 20) : "缺失"));
+  const mengji = recByName("梦迹一风");
+  assert(!!mengji && !/REALNAME/.test(mengji.desc.effect) && /流浪者/.test(mengji.desc.effect),
+    "梦迹一风 REALNAME 占位还原为关联角色名（流浪者）");
+
   /* ===== 1. 装备牌特技进入技能索引 ===== */
   const yueSheng = skillsOfCard(113154).find(s => s.name === "跃升");
   assert(!!yueSheng, "驰轮车·跃升 的特技「跃升」进入技能索引");

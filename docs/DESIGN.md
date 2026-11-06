@@ -603,11 +603,24 @@ TermEntry desc/story 下沉后，同构哑弹与散落约定的清除：
   自动落位：详情（v7.2.0 徽标、flavor、技能、反链）、卡库（可构筑/卡壳）、
   概念索引、单卡导出零代码改动。test-deps 覆盖计数断言 154→157（+3 需角色：
   升华赞歌→杜林、法尔伽两张天赋）。上游 API：`/api/v5/data/latest/CHS/{category}`。
+- **描述模板 token 清洗**：piovium 的 `description` 由上游按 keyMap 渲染，但隐藏
+  变体技能 keyMap 缺值时 `$[D__KEY__DAMAGE]` 会原样残留（嘉明踏云献瑞/瓦雷莎夜虹
+  逐跃/水形幻人汛波·洪啸），`$[A角色id]` 会渲染成残缺 REALNAME 占位（梦迹一风）。
+  构建期新增 fixKeyTokens（本技能 keyMap 优先，缺项从同主同名兄弟技能补；
+  ELEMENT 按元素码渲染「X元素伤害」，PHYSIC→物理伤害）与 fixRealname（按
+  relatedCharacterId 还原角色名），应用于技能/卡牌描述与 searchText；构建末尾
+  断言全库无 D__KEY/REALNAME 残留。真正的放大器是 7.5 同名去重按「描述最长」
+  保留——泄漏文本恰好比正确文本长，破的变体反而挤掉了干净的兄弟技能；
+  清洗后文本变短，去重自动改选正确条目（踏云献瑞回落到官方文本「造成2点
+  火元素伤害」）。梦迹一风的 REALNAME 还原带来 4 条「流浪者」出边。
 
 ### 16.3 坑
 
 - build-app 缓存指纹只收集 src/gi-data——**vendor 改动不失效缓存**，产物陈旧
   却查不出原因；指纹补上 vendor。
+- 同名技能去重按「描述最长」保留：**上游渲染残缺的文本反而更长**（模板 token
+  未替换），会把干净条目挤掉——先清洗再比较，且残留 token 构建期断死。
+- 测试 harness 是外层模板字符串：正则写 `\d` 会被吃成 `d`，用 `[0-9]` 或 `\\d`。
 - qrcode-generator 自带 createImgTag 的 `<img src="` 模板会误触产物完整性检查
   「无本地图片引用」；摘除未使用的两个方法。
 - 多行 CSS 规则按行删会撕裂规则体（大括号失衡暴露）；删 CSS 按块删。

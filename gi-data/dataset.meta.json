@@ -1,6 +1,6 @@
 {
   "v": 1,
-  "builtAt": "2026-11-06T15:21:47.532Z",
+  "builtAt": "2026-11-06T15:46:01.911Z",
   "stats": {
     "total": 2739,
     "chars": 156,
@@ -14,7 +14,7 @@
     "shadow": 17,
     "mirror": 49,
     "test": 0,
-    "refs": 8530,
+    "refs": 8538,
     "conceptNames": 2450,
     "conceptEntries": 2464
   }

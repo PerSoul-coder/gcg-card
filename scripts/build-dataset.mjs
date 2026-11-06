@@ -157,6 +157,51 @@ const REQ_CHAR_RE = /牌组中包含([^，。]{2,12}?)，才能加入牌组/;
 const REQ_MIN_RE = /牌组包含至少(\d+)个[^，]*?角色，才能加入牌组/;
 const REQ_MIN_PARTS_RE = /牌组包含至少(\d+)个([^，]*?)(元素|)角色，才能加入牌组/;
 
+/* ---------- 6.3 描述清洗：上游渲染残留的模板 token ----------
+ * piovium 的 description 由上游按 keyMap 把 rawDescription 渲染而来，但隐藏变体
+ * 技能的 keyMap 可能缺值（空表或缺 DAMAGE 项），`$[D__KEY__DAMAGE]` 一类 token
+ * 会原样残留（嘉明/瓦雷莎/水形幻人的变体技能）；`$[A角色id]` 则可能渲染成
+ * 残缺的 REALNAME 占位（梦迹一风）。修复规则：
+ *   · D__KEY__*   —— 本技能 keyMap 优先，缺项从「同主同名兄弟技能」的 keyMap 补；
+ *     D__KEY__ELEMENT 按元素码渲染成「X元素伤害」（PHYSIC → 物理伤害）。
+ *   · REALNAME[ID(n)] —— 按卡的 relatedCharacterId 还原角色名。
+ * 残留断言在构建末尾统一执行，这类字符再次入库直接构建失败。 */
+const DKEY_DAMAGE_RE = /D__KEY__DAMAGE(_\d+)?/g;
+const DKEY_ELEMENT_RE = /D__KEY__ELEMENT/g;
+const DKEY_ANY_RE = /D__KEY__[A-Z_]+/g;
+const REALNAME_RE = /#?\{?REALNAME\[ID\(\d+\)\]?\}?/g;
+function elementPhraseOf(code) {
+  const c = String(code || "").replace("GCG_ELEMENT_", "");
+  if (c === "PHYSIC") return "物理伤害";
+  return T.ELE_ZH[c] ? T.ELE_ZH[c] + "元素伤害" : "";
+}
+function fixKeyTokens(desc, keyMap, sibKeyMaps) {
+  const merged = { ...(keyMap || {}) };
+  for (const m of sibKeyMaps || [])
+    for (const [k, v] of Object.entries(m || {})) if (merged[k] == null) merged[k] = v;
+  return String(desc || "")
+    .replace(DKEY_DAMAGE_RE, tok => {
+      const v = merged[tok] ?? merged["D__KEY__DAMAGE"];
+      return v == null ? "" : String(v);
+    })
+    .replace(DKEY_ELEMENT_RE, () => elementPhraseOf(merged["D__KEY__ELEMENT"]) || "伤害")
+    .replace(DKEY_ANY_RE, "");
+}
+function fixRealname(desc, relatedCharacterId) {
+  const name = relatedCharacterId != null ? charNameById.get(relatedCharacterId) : null;
+  if (!name) return String(desc || "");
+  return String(desc || "").replace(REALNAME_RE, name);
+}
+/* 同主同名兄弟技能的 keyMap 列表（非空表才算）：变体技能丢 keyMap 时从这里补 */
+function siblingKeyMapsOf(skills, self, name) {
+  const out = [];
+  for (const s of skills || []) {
+    if (!s || s === self || s.name !== name) continue;
+    if (s.keyMap && Object.keys(s.keyMap).length && out.every(m => m !== s.keyMap)) out.push(s.keyMap);
+  }
+  return out;
+}
+
 function deckReqsOf(e) {
   const R = [];
   /* 具体角色：结构化 id 优先；id 缺失（新卡暂无角色数据）时退回描述正则 */
@@ -298,7 +343,7 @@ for (const c of CHAR) {
     reqs: NO_REQS,
     searchText: corpusOf(c.name, c.englishName, [
       (c.storyText || "").trim(),
-      ...(c.skills || []).map(x => `${x.name || ""}${x.description || ""}`),
+      ...(c.skills || []).map(x => `${x.name || ""}${fixKeyTokens(x.description || "", x.keyMap, siblingKeyMapsOf(c.skills, x, x.name))}`),
     ]),
     version: c.sinceVersion || "",
     refs: [], source: "piovium",
@@ -308,7 +353,7 @@ for (const c of CHAR) {
     if (!s || !s.name) continue;
     const sk = "skill:char:" + c.id + ":" + s.id;
     if (byKey.has(sk)) continue;
-    const desc = String(s.description || s.rawDescription || "").trim();
+    const desc = fixKeyTokens(String(s.description || s.rawDescription || "").trim(), s.keyMap, siblingKeyMapsOf(c.skills, s, s.name));
     const effect = skillEffectText(desc);
     const shadow = shadowBySkill.get(T.nameKey(s.name));
     const turns = (PREPARE_TURNS_RE.exec(desc) || [])[1];
@@ -353,7 +398,7 @@ for (const e of ENT) {
     name: e.name, englishName: e.englishName || "",
     aliases: aliasOf(e.name),
     typeRaw: e.type || "", typeZh: T.typeZhOf(e),
-    desc: { effect: (e.description || "").trim(), story: (e.storyText || "").trim(), rules: "" },
+    desc: { effect: fixRealname((e.description || "").trim(), e.relatedCharacterId ?? null), story: (e.storyText || "").trim(), rules: "" },
     linkable: e.name.length >= 2 && !shadowIds.has(e.id),
     art: {
       hasFace: !!e.cardFace, ref: e.cardFace ? e.id : null,
@@ -381,8 +426,8 @@ for (const e of ENT) {
     share: e.shareId ?? null,
     reqs: { deck: deckReqsOf(e), play: playRestrictionsOf(e) },
     searchText: corpusOf(e.name, e.englishName, [
-      (e.description || "").trim(),
-      ...(e.skills || []).map(x => `${x.name || ""}${x.description || ""}`),
+      fixRealname((e.description || "").trim(), e.relatedCharacterId ?? null),
+      ...(e.skills || []).map(x => `${x.name || ""}${fixKeyTokens(x.description || "", x.keyMap, siblingKeyMapsOf(e.skills, x, x.name))}`),
     ]),
     version: e.sinceVersion || "",
     refs: [], source: "piovium",
@@ -392,7 +437,7 @@ for (const e of ENT) {
     if (!s || !s.name) continue;
     const sk = "skill:card:" + e.id + ":" + s.id;
     if (byKey.has(sk)) continue;
-    const desc = String(s.description || s.rawDescription || "").trim();
+    const desc = fixKeyTokens(String(s.description || s.rawDescription || "").trim(), s.keyMap, siblingKeyMapsOf(e.skills, s, s.name));
     const effect = skillEffectText(desc);
     push({
       key: sk, kind: "skill", domain: "skill",
@@ -775,6 +820,15 @@ if (dups.length) problems.push(`重复 key：${dups.slice(0, 5).join(", ")}`);
 const missingConcept = [];
 for (const t of terms) for (const e of t.entries) if (!byKey.has(e.key)) missingConcept.push(`${t.name} → ${e.key}`);
 if (missingConcept.length) problems.push(`概念索引指向不存在的记录：${missingConcept.slice(0, 5).join(" / ")}`);
+
+/* 描述不得残留上游模板 token：D__KEY__* / REALNAME 一类字符入库即是事故
+   （嘉明/瓦雷莎/水形幻人变体技能、梦迹一风曾各带一处），构建期断死 */
+const leakedTokens = [];
+for (const r of records) {
+  const text = r.desc.effect + "\n" + r.desc.story + "\n" + r.desc.rules;
+  if (/D__KEY|REALNAME/.test(text)) leakedTokens.push(r.key);
+}
+if (leakedTokens.length) problems.push(`描述残留模板 token：${leakedTokens.slice(0, 5).join(" / ")}`);
 
 if (problems.length) {
   console.error("数据集校验失败：");
