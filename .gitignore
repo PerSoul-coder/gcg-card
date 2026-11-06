@@ -13,3 +13,5 @@ Thumbs.db
 publish/
 .workbuddy/
 .wbapp_*.genie
+archive/
+vendor/genius-invokation/
