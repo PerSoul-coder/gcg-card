@@ -17,14 +17,22 @@
 import type { CtxItem, CtxMenu } from "../types";
 import { esc } from "./dom";
 
-let levels: Array<{ el: HTMLElement; items: CtxItem[] }> = [];   /* 0 = 根层 */
+interface LevelState { el: HTMLElement; items: CtxItem[]; pinned: boolean }
+let levels: LevelState[] = [];                                   /* 0 = 根层（恒 pinned） */
 let active: number[] = [];                                       /* 每层键盘/悬停焦点下标 */
 let closeHooks: Array<() => void> = [];
 let onCloseCb: (() => void) | null = null;
+/* 子级两种展开状态独立建模：
+   · auto（悬停展开）——暂态：指针离开菜单即收（带宽限），悬停别的行也收；
+   · pinned（点击/键盘展开）——钉住：指针离开不收，直到悬停别的行、
+     Esc 逐层、或再点一次父行（明确收起）。点击 auto 子级的父行 = 转钉住。 */
+let hoverTimer: number | undefined;      /* 自动展开防抖 */
+let leaveTimer: number | undefined;      /* 离开菜单的收起宽限 */
 
 export const menuOpen = (): boolean => levels.length > 0;
 
 export function closeMenu(): void {
+  cancelTimers();
   for (const fn of closeHooks) fn();
   closeHooks = [];
   for (const l of levels) l.el.remove();
@@ -35,6 +43,11 @@ export function closeMenu(): void {
   if (cb) cb();
 }
 
+function cancelTimers(): void {
+  if (hoverTimer !== undefined) { clearTimeout(hoverTimer); hoverTimer = undefined; }
+  if (leaveTimer !== undefined) { clearTimeout(leaveTimer); leaveTimer = undefined; }
+}
+
 /* ---------- 构建 ---------- */
 
 export function openMenuAt(x: number, y: number, spec: CtxMenu, onClose?: () => void): void {
@@ -42,7 +55,7 @@ export function openMenuAt(x: number, y: number, spec: CtxMenu, onClose?: () => 
   onCloseCb = onClose || null;
   const el = buildLevel(spec.items, spec.title || "");
   document.body.appendChild(el);
-  levels.push({ el, items: spec.items });
+  levels.push({ el, items: spec.items, pinned: true });   /* 根层恒钉住 */
   active.push(-1);
   placeAt(el, x, y);
   attachDismiss();
@@ -74,31 +87,37 @@ function buildLevel(items: CtxItem[], title: string): HTMLElement {
     const li = levels.findIndex(l => l.el === el);
     if (li >= 0) activate(li, Number(b.dataset.mi));
   });
-  /* 悬停展开子级：有指针设备的加速路径；触屏走点按。120ms 防抖防扫过即开 */
+  /* 悬停展开子级（auto 暂态）：有指针设备的加速路径；触屏走点按（pinned）。
+     进入面板先撤收起宽限；120ms 防抖防扫过即开 */
   el.addEventListener("mouseenter", ev => {
+    if (leaveTimer !== undefined) { clearTimeout(leaveTimer); leaveTimer = undefined; }
     const b = (ev.target as HTMLElement).closest("[data-mi]") as HTMLElement | null;
     if (!b) return;
-    const li = levels.length - 1;
+    const li = levels.findIndex(l => l.el === el);
     if (li < 0) return;
     const idx = Number(b.dataset.mi);
     setActive(li, idx, false);
     const it = levels[li].items[idx];
     if (it && it.children && it.children.length && !it.disabled) {
-      window.setTimeout(() => {
-        /* 悬停目标被键盘操作改变时不再自动展开 */
-        if (levels[li] && active[li] === idx && (!levels[li + 1] || openedFrom[li + 1] !== idx)) openChild(li, idx);
+      if (hoverTimer !== undefined) clearTimeout(hoverTimer);
+      hoverTimer = window.setTimeout(() => {
+        hoverTimer = undefined;
+        /* 悬停目标被键盘操作改变时不再自动展开；已开（钉住）不重开 */
+        if (levels[li] && active[li] === idx && (!levels[li + 1] || openedFrom[li + 1] !== idx)) openChild(li, idx, false);
       }, 120);
     } else {
-      trimTo(li);   /* 悬停到普通行：收起更深的子级 */
+      trimTo(li);   /* 悬停到普通行：更深的子级一律收（钉住也不跨行留存） */
     }
   }, true);
+  /* 指针离开面板：自动展开的子级宽限后收起；点击（钉住）的子级不受影响 */
+  el.addEventListener("mouseleave", () => { scheduleLeaveCollapse(); }, true);
   return el;
 }
 
 /* openedFrom[l] = 第 l 层是由第 l-1 层的哪个条目打开的（悬停防抖与修剪用） */
 const openedFrom: Array<number | undefined> = [];
 
-function openChild(levelIdx: number, itemIdx: number): void {
+function openChild(levelIdx: number, itemIdx: number, pinned: boolean): void {
   const parent = levels[levelIdx];
   if (!parent) return;
   const it = parent.items[itemIdx];
@@ -109,7 +128,7 @@ function openChild(levelIdx: number, itemIdx: number): void {
   const row = parent.el.querySelector(`[data-mi="${itemIdx}"]`) as HTMLElement | null;
   const el = buildLevel(it.children, "");
   document.body.appendChild(el);
-  levels.push({ el, items: it.children });
+  levels.push({ el, items: it.children, pinned });
   openedFrom[levelIdx + 1] = itemIdx;
   active.push(-1);
   const r = row ? row.getBoundingClientRect() : { right: 0, top: 0, left: 0 };
@@ -119,12 +138,26 @@ function openChild(levelIdx: number, itemIdx: number): void {
 
 /* 修剪到第 levelIdx 层（含）：更深的子级全部关闭 */
 function trimTo(levelIdx: number): void {
+  cancelTimers();
   while (levels.length > levelIdx + 1) {
     const l = levels.pop();
     if (l) l.el.remove();
     active.pop();
     openedFrom.pop();
   }
+}
+
+/* 指针离开菜单：宽限 280ms（跨面板间隙/斜向移动不闪收），到期从顶往下收掉
+   连续的 auto 子级——pinned 子级与其下的层级原样保留。挂起的 auto 展开一并撤销 */
+function scheduleLeaveCollapse(): void {
+  if (hoverTimer !== undefined) { clearTimeout(hoverTimer); hoverTimer = undefined; }
+  if (leaveTimer !== undefined) clearTimeout(leaveTimer);
+  leaveTimer = window.setTimeout(() => {
+    leaveTimer = undefined;
+    let top = levels.length - 1;
+    while (top > 0 && !levels[top].pinned) top--;
+    if (top < levels.length - 1) trimTo(top);
+  }, 280);
 }
 
 /* ---------- 定位：四边钳制 + 子级就近翻边 ---------- */
@@ -185,9 +218,15 @@ function activate(li: number, idx: number): void {
   const it = levels[li] && levels[li].items[idx];
   if (!it || it.sep || it.disabled) return;
   if (it.children && it.children.length) {
-    /* 触屏与键盘的子级展开口：悬停是另一条加速路径 */
-    if (levels[li + 1] && openedFrom[li + 1] === idx) trimTo(li);
-    else openChild(li, idx);
+    /* 点击/键盘 = 明确意图，与悬停的 auto 暂态分开：
+       · 子级未开 → 开成 pinned；
+       · 子级是 auto（悬停开的）→ 转为 pinned（不是收起）；
+       · 子级已 pinned → 再点 = 明确收起。 */
+    const existing = levels[li + 1] && openedFrom[li + 1] === idx ? levels[li + 1] : null;
+    if (existing) {
+      if (existing.pinned) trimTo(li);
+      else existing.pinned = true;
+    } else openChild(li, idx, true);
     return;
   }
   closeMenu();
@@ -225,7 +264,8 @@ function attachDismiss(): void {
       ev.preventDefault();
       const idx = active[li];
       const it = idx >= 0 ? levels[li].items[idx] : null;
-      if (it && it.children && it.children.length) openChild(li, idx);
+      /* 键盘开子级 = 明确意图 → pinned */
+      if (it && it.children && it.children.length) openChild(li, idx, true);
       return;
     }
     if (ev.key === "ArrowLeft") {

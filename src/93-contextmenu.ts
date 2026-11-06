@@ -98,9 +98,15 @@ function conceptTileMenu(name: string): CtxMenu | null {
   ] };
 }
 
+/* 开菜单前收掉可能残留的概念预览（tip 无指针事件，不会自己消失） */
+function openSpec(x: number, y: number, m: CtxMenu | null): void {
+  if (!m) return;
+  hideTip();
+  openMenuAt(x, y, m);
+}
+
 const openPoolMenu = (x: number, y: number, el: HTMLElement): void => {
-  const m = poolMenu(Number(el.dataset.id ?? el.dataset.goto));
-  if (m) openMenuAt(x, y, m);
+  openSpec(x, y, poolMenu(Number(el.dataset.id ?? el.dataset.goto)));
 };
 
 /* ---------- 注册（顺序即优先级：具体目标在前，先注册先赢） ---------- */
@@ -117,8 +123,8 @@ bindGestures(".term[data-term]", {
 
 /* 概念瓦片 */
 bindGestures(".tile.stile[data-term]", {
-  longpress: ctx => { const m = conceptTileMenu(String((ctx.el as HTMLElement).dataset.term)); if (m) openMenuAt(ctx.x, ctx.y, m); },
-  contextmenu: ctx => { const m = conceptTileMenu(String((ctx.el as HTMLElement).dataset.term)); if (m) openMenuAt(ctx.x, ctx.y, m); },
+  longpress: ctx => openSpec(ctx.x, ctx.y, conceptTileMenu(String((ctx.el as HTMLElement).dataset.term))),
+  contextmenu: ctx => openSpec(ctx.x, ctx.y, conceptTileMenu(String((ctx.el as HTMLElement).dataset.term))),
 });
 
 /* 牌组列表行（按钮/输入框上是行内操作，行身才是菜单目标） */
@@ -126,14 +132,12 @@ bindGestures("[data-deck]", {
   longpress: ctx => {
     const row = ctx.el.closest("[data-deck]") as HTMLElement | null;
     if (!row || (ctx.event.target as HTMLElement).closest("button,input")) return;
-    const m = deckRowMenu(Number(row.dataset.deck));
-    if (m) openMenuAt(ctx.x, ctx.y, m);
+    openSpec(ctx.x, ctx.y, deckRowMenu(Number(row.dataset.deck)));
   },
   contextmenu: ctx => {
     const row = ctx.el.closest("[data-deck]") as HTMLElement | null;
     if (!row || (ctx.event.target as HTMLElement).closest("button,input")) return;
-    const m = deckRowMenu(Number(row.dataset.deck));
-    if (m) openMenuAt(ctx.x, ctx.y, m);
+    openSpec(ctx.x, ctx.y, deckRowMenu(Number(row.dataset.deck)));
   },
 });
 

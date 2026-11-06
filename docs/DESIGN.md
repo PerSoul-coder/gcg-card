@@ -634,6 +634,13 @@ TermEntry desc/story 下沉后，同构哑弹与散落约定的清除：
   ③ 93-contextmenu 退成策略层：菜单规格（池条目根层 5 项，构筑/分享两族收
   子级；deck 行平铺 5 项，删除保持顶级危险色）+ 五个 bindGestures 注册。
   信息密度契约：勾选列固定宽度对齐标签、分隔线弱分区、hint/caret 靠右弱化。
+- **子级双状态（用户报：自动展开不收/点击误收）**：core/menu 把子级
+  展开拆成独立两态——auto（悬停展开，暂态：指针离开菜单 280ms 宽限后自动收、
+  悬停别的行也收）与 pinned（点击/键盘展开，钉住：离开不收，悬停别的行、
+  Esc、再点一次父行才收）；点击 auto 子级的父行 = 转钉住而不是收起。
+  离开收起用 scheduleLeaveCollapse（从顶往下收连续 auto 层），挂起的 auto
+  防抖一并撤销。同类排查修掉：菜单开启时残留的概念预览 tip——93 的开菜单
+  统一走 openSpec（先 hideTip 再 openMenuAt）。
 - **描述模板 token 清洗**：piovium 的 `description` 由上游按 keyMap 渲染，但隐藏
   变体技能 keyMap 缺值时 `$[D__KEY__DAMAGE]` 会原样残留（嘉明踏云献瑞/瓦雷莎夜虹
   逐跃/水形幻人汛波·洪啸），`$[A角色id]` 会渲染成残缺 REALNAME 占位（梦迹一风）。

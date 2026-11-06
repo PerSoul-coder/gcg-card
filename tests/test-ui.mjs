@@ -118,6 +118,9 @@ assert(ctxSrc.includes("bindGestures") && !ctxSrc.includes("addEventListener"), 
 assert(ctxSrc.includes("showTipAt"), "概念链接长按/右键/悬停走悬浮预览（与 hover 同路）");
 assert(menuSrc.includes("export function openMenuAt") && menuSrc.includes("export function closeMenu"), "菜单组件：openMenuAt/closeMenu 单实例收口");
 assert(menuSrc.includes("openChild") && menuSrc.includes("trimTo"), "菜单子级：飞出式展开与逐层修剪");
+assert(menuSrc.includes("pinned") && menuSrc.includes("existing.pinned = true"), "子级双状态：点击 auto 子级转钉住、再点已钉住的收起");
+assert(menuSrc.includes("scheduleLeaveCollapse") && menuSrc.includes("mouseleave"), "离开菜单：auto 子级宽限后自动收起（pinned 不受影响）");
+assert(menuSrc.includes("hideTip") === false && fs.readFileSync(path.join(here, "src/93-contextmenu.ts"), "utf8").includes("openSpec"), "开菜单统一走 openSpec（先收残留预览）");
 assert(menuSrc.includes("ArrowRight") && menuSrc.includes("ArrowLeft") && menuSrc.includes("Escape"), "菜单键盘导航（↑↓←→/Esc 逐层）");
 assert(menuSrc.includes("role=\"menuitem\"") && menuSrc.includes("aria-haspopup"), "菜单 ARIA（menuitem/haspopup）");
 assert(menuSrc.includes("hashchange"), "路由变化收起菜单（组件统一收口）");
