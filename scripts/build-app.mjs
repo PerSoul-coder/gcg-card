@@ -44,9 +44,13 @@ const inputs = [
   ...collect(path.join(ROOT, "gi-data"), [".js"]),
   ...collect(path.join(ROOT, "vendor"), [".js"]),
 ].sort();
+/* 指纹必须含构建脚本自身：只看输入文件时，改 target/minify 等打包参数
+   不会失效缓存，产物永远是旧参数的（DESIGN §16.3 同款坑） */
+const SELF = path.join(ROOT, "scripts", "build-app.mjs");
 const fingerprint = crypto
   .createHash("md5")
-  .update(inputs.map((p) => p + ":" + fs.statSync(p).mtimeMs).join("|"))
+  .update(inputs.map((p) => p + ":" + fs.statSync(p).mtimeMs).join("|") +
+    "|" + SELF + ":" + fs.statSync(SELF).mtimeMs)
   .digest("hex");
 const stampPath = path.join(CACHE_DIR, "stamp");
 
@@ -55,7 +59,10 @@ if (readIfExists(stampPath) !== fingerprint || !fs.existsSync(BUNDLE_OUT)) {
     entryPoints: [path.join(ROOT, APP_ENTRY)],
     bundle: true,
     format: "iife",
-    target: ["es2022"],
+    /* es2019 而非 es2022：class fields / ?. / ?? 会被向下转译，老 WebView
+       （解析器不支持 es2022 语法）至少还能整包求值；运行时 API 只用了
+       flatMap 一档（Chrome 69+/Safari 12+），无需 polyfill。 */
+    target: ["es2019"],
     charset: "utf8",
     minify: false,
     legalComments: "none",

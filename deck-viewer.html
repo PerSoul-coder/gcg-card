@@ -3,6 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- color-scheme 让 UA 从首帧起就用主题底色画画布/滚动条/原生控件——
+     没有它，暗色模式下部分内核的滚动条、select 下拉、overscroll 依然是亮色。
+     CSS 侧 :root 的 color-scheme 随 data-theme 切换，这里管首帧之前的窗口期 -->
+<meta name="color-scheme" content="dark light">
 <meta name="theme-color" content="#12161d">
 <meta name="description" content="七圣召唤卡牌与牌组浏览器：牌组分享码解析与生成、卡库多维筛选与机制检索、概念词典、构筑校验、多牌组管理、牌组分享图与二维码。纯前端，单文件离线可用。">
 <meta property="og:title" content="七圣召唤 · 卡牌与牌组浏览器">
@@ -39,7 +43,7 @@ window.addEventListener("error", function (ev) {
 });
 </script>
 <!-- ?v= 版本戳：JS/CSS 更新后强制浏览器重新拉取，避免旧缓存文件引发未定义错误 -->
-<link rel="stylesheet" href="deck-viewer.css?v=26">
+<link rel="stylesheet" href="deck-viewer.css?v=27">
 </head>
 <body>
 <div class="wrap">
@@ -117,7 +121,7 @@ window.addEventListener("error", function (ev) {
 <!-- app-sources:start（构建脚本会把这一段整体替换为内联的应用脚本） -->
 <!-- TypeScript 源由 scripts/build-app.mjs 打包为单文件 dist/app.js；
      开发时改完源码需重新构建（npm run build:app）。 -->
-<script src="dist/app.js?v=26"></script>
+<script src="dist/app.js?v=27"></script>
 <!-- app-sources:end -->
 </body>
 </html>

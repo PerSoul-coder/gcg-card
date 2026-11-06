@@ -2,6 +2,9 @@
 /* —— 设计令牌：整套界面的取值都从这里走。浅色主题（html[data-theme=light]）
    只覆盖变量，不改任何规则——硬编码颜色会让主题漏色，新增样式同理。 —— */
 :root {
+  /* color-scheme：UA 原生件（滚动条 / select / input / overscroll 底色）跟随主题。
+     缺了它，暗色模式下原生控件仍是亮色——「暗色模式不完全暗」的主因之一 */
+  color-scheme: dark;
   /* 表面与线 */
   --bg: #12161d; --bg2: #1a2029; --panel: #1f2733; --panel2: #242e3c; --line: #2e3949;
   --bg3: #141a22;            /* 更深一档的底（进度条槽） */
@@ -67,6 +70,7 @@
    卡面上的覆盖层（capbar / 计数角标 / 限制徽标 / 充能徽标）压在卡面图上，
    双主题都保持深底浅字，不随主题翻。 —— */
 html[data-theme="light"] {
+  color-scheme: light;
   --bg: #f3eee2; --bg2: #ebe4d3; --panel: #faf7ee; --panel2: #fffcf3; --line: #d8cdb2;
   --bg3: #e0d8c4; --on-accent: #fdf9ee;
   --panel3: #f2ecdc; --panel-deep: #e7e0cc; --panel-hover: #e9e1cc;
@@ -99,16 +103,23 @@ html[data-theme="light"] .noart[data-kind="state"]  { --shell-c: #7a66d8; --shel
 html[data-theme="light"] .noart[data-kind="summon"] { --shell-c: #a8741f; --shell-cl: rgba(168,116,31,.35); --shell-cg: rgba(168,116,31,.16); --shell-b: #f2e7d2; --shell-b2: #e9dcc0; }
 html[data-theme="light"] .noart[data-kind="team"]   { --shell-c: #2f6da0; --shell-cl: rgba(47,109,160,.35); --shell-cg: rgba(47,109,160,.16); --shell-b: #e0eaf4; --shell-b2: #d2e0ee; }
 html[data-theme="light"] .noart[data-kind="attach"] { --shell-c: #1f7a68; --shell-cl: rgba(31,122,104,.35); --shell-cg: rgba(31,122,104,.16); --shell-b: #ddedea; --shell-b2: #cfe3de; }
-* { box-sizing: border-box; margin: 0; padding: 0; }
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: rgba(211,188,142,.16); }
 html { scroll-behavior: smooth; }
 body {
+  /* 不支持 color-mix 的老内核整条 background 会失效：先给 rgba 等价回退，
+     再上 color-mix 版本（支持的浏览器后者胜出） */
+  background:
+    radial-gradient(900px 520px at 10% -12%, rgba(76,194,241,.1), transparent 62%),
+    radial-gradient(820px 460px at 90% -2%, var(--gold-10), transparent 64%),
+    radial-gradient(900px 620px at 50% 112%, rgba(176,128,255,.07), transparent 66%),
+    radial-gradient(1200px 600px at 50% -100px, var(--panel-deep) 0%, var(--bg) 60%);
   background:
     radial-gradient(900px 520px at 10% -12%, color-mix(in srgb, var(--hydro) 10%, transparent), transparent 62%),
     radial-gradient(820px 460px at 90% -2%, var(--gold-10), transparent 64%),
     radial-gradient(900px 620px at 50% 112%, color-mix(in srgb, var(--electro) 7%, transparent), transparent 66%),
     radial-gradient(1200px 600px at 50% -100px, var(--panel-deep) 0%, var(--bg) 60%);
   background-attachment: fixed;
-  color: var(--text); font-family: "Microsoft YaHei", "PingFang SC", sans-serif; min-height: 100vh;
+  color: var(--text); font-family: "Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", "Source Han Sans SC", sans-serif; min-height: 100vh;
 }
 .wrap { max-width: 1280px; margin: 0 auto; padding: 22px 16px 110px; }
 
@@ -269,7 +280,7 @@ td.cnt { color: var(--gold); white-space: nowrap; }
    不在这里用 :has() 反推——历史面板在文档流内、对比栏是常驻浮条，
    它们不是模态层，一并锁住会让「选中过对比卡之后整页再也滚不动」。 */
 html.layer-lock, html.layer-lock body { overflow: hidden; }
-#overlay { position: fixed; inset: 0; background: color-mix(in srgb, var(--scrim) 78%, transparent); backdrop-filter: blur(3px); display: none; align-items: center; justify-content: center; z-index: var(--z-overlay); padding: 24px; overscroll-behavior: contain; }
+#overlay { position: fixed; top: 0; right: 0; bottom: 0; left: 0; background: rgba(5,7,11,.78); background: color-mix(in srgb, var(--scrim) 78%, transparent); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); display: none; align-items: center; justify-content: center; z-index: var(--z-overlay); padding: 24px; overscroll-behavior: contain; }
 #overlay.show { display: flex; }
 .detail { position: relative; background: linear-gradient(180deg, var(--panel2), var(--panel)); border: 1px solid rgba(211,188,142,.4); border-radius: 16px; max-width: 880px; width: 100%; max-height: 88vh; max-height: 88dvh; overflow: auto; overscroll-behavior: contain; display: flex; gap: 20px; padding: 22px; box-shadow: var(--elev-4); }
 .detail::before { content: ""; position: absolute; top: 0; left: 22px; right: 22px; height: 1px; background: linear-gradient(90deg, transparent, rgba(211,188,142,.6), transparent); }
@@ -292,7 +303,7 @@ html.layer-lock, html.layer-lock body { overflow: hidden; }
 .detail .skcost, #view-skills .skcost { margin-left: auto; display: inline-flex; }
 .sk-tag { font-size: var(--fs-11); padding: 1px 7px; border-radius: 9px; background: rgba(255,255,255,.05); border: 1px solid var(--line); color: var(--text-3); }
 .sk-tag.prep { color: var(--warn); border-color: rgba(211,188,142,.45); background: rgba(211,188,142,.1); }
-.sk-tag.passive { color: var(--info); border-color: color-mix(in srgb, var(--info) 35%, transparent); background: color-mix(in srgb, var(--info) 9%, transparent); }
+.sk-tag.passive { color: var(--info); border-color: rgba(143,179,217,.35); border-color: color-mix(in srgb, var(--info) 35%, transparent); background: rgba(143,179,217,.09); background: color-mix(in srgb, var(--info) 9%, transparent); }
 .sk-tag.muted { opacity: .7; }
 .tagpill.prep { color: var(--warn); border-color: rgba(211,188,142,.45); background: rgba(211,188,142,.1); }
 .tagpill.costpill { padding: 1px 8px; }
@@ -416,9 +427,9 @@ footer { margin-top: 46px; color: var(--faint); font-size: var(--fs-12); text-al
 
 /* ===== 依赖徽标（牌组限制 + 打出限制统一渲染） ===== */
 .badges { position: absolute; top: 7px; left: 7px; display: flex; flex-direction: column; gap: 4px; align-items: flex-start; }
-.rbadge { background: rgba(8,10,14,.85); border: 1px solid; font-size: var(--fs-11); padding: 1px 7px; border-radius: 9px; letter-spacing: .5px; backdrop-filter: blur(2px); }
+.rbadge { background: rgba(8,10,14,.85); border: 1px solid; font-size: var(--fs-11); padding: 1px 7px; border-radius: 9px; letter-spacing: .5px; -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px); }
 .rpill { font-size: var(--fs-12); border: 1px solid currentColor; border-radius: 10px; padding: 1px 9px; white-space: nowrap; }
-.rline { margin: 10px 0; padding: 9px 12px; background: color-mix(in srgb, var(--err) 6%, transparent); border: 1px solid color-mix(in srgb, var(--err) 25%, transparent); border-radius: 9px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; font-size: var(--fs-13); }
+.rline { margin: 10px 0; padding: 9px 12px; background: rgba(224,122,122,.06); background: color-mix(in srgb, var(--err) 6%, transparent); border: 1px solid rgba(224,122,122,.25); border: 1px solid color-mix(in srgb, var(--err) 25%, transparent); border-radius: 9px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; font-size: var(--fs-13); }
 .rline b { color: var(--err); font-size: var(--fs-12); letter-spacing: 1px; }
 .rtxt { color: var(--text-2); }
 /* 详情页「依赖与限制」：牌组限制（构筑门槛）/ 打出限制（对局中生效）同构双组。
@@ -430,9 +441,9 @@ footer { margin-top: 46px; color: var(--faint); font-size: var(--fs-12); text-al
 .rhead b { font-size: var(--fs-12); letter-spacing: 1px; white-space: nowrap; }
 .rgroup .rghint { font-size: var(--fs-11); color: var(--dim); letter-spacing: .5px; }
 .rrow { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 6px; }
-.rgroup-deck { background: color-mix(in srgb, var(--warn) 7%, transparent); }
+.rgroup-deck { background: rgba(224,192,104,.07); background: color-mix(in srgb, var(--warn) 7%, transparent); }
 .rgroup-deck .rhead b { color: var(--warn); }
-.rgroup-play { background: color-mix(in srgb, var(--err) 5%, transparent); }
+.rgroup-play { background: rgba(224,122,122,.05); background: color-mix(in srgb, var(--err) 5%, transparent); }
 .rgroup-play .rhead b { color: var(--err); }
 .rgroup .blchip { padding: 0 8px; font-size: var(--fs-12); }
 
@@ -446,7 +457,7 @@ footer { margin-top: 46px; color: var(--faint); font-size: var(--fs-12); text-al
 .die.en .core { fill: #fff3d0; }
 .en-mark { display: inline-flex; align-items: center; gap: 2px; color: var(--gold); font-size: var(--fs-11); margin-left: 4px; }
 .en-mark .ico { width: 11px; height: 11px; }
-.en-badge { position: absolute; top: 10px; right: 10px; display: inline-flex; align-items: center; gap: 1px; padding: 4px 9px; border-radius: 12px; background: rgba(10,12,16,.78); border: 1px solid rgba(211,188,142,.45); color: var(--gold); box-shadow: 0 2px 10px rgba(0,0,0,.45); backdrop-filter: blur(3px); }
+.en-badge { position: absolute; top: 10px; right: 10px; display: inline-flex; align-items: center; gap: 1px; padding: 4px 9px; border-radius: 12px; background: rgba(10,12,16,.78); border: 1px solid rgba(211,188,142,.45); color: var(--gold); box-shadow: 0 2px 10px rgba(0,0,0,.45); -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px); }
 .en-badge .ico { width: 12px; height: 12px; }
 
 /* ===== 概览扩展：充能 / 限制 / 费用曲线 ===== */
@@ -485,7 +496,7 @@ th.sortable:hover { color: var(--gold); }
 /* 悬停预览：超长文本由 clampTip（90-detail）按渲染实况截断补省略号，
    这里 overflow 用 hidden 而非 auto——pointer-events:none 的框滚不动，
    auto 只会做出一条切到一半、谁也够不着的假滚动 */
-#tip { position: fixed; z-index: var(--z-tip); display: none; max-width: 360px; max-height: 72vh; overflow: hidden; background: color-mix(in srgb, var(--panel) 97%, transparent); border: 1px solid var(--gold-dim); border-radius: 10px; padding: 11px 13px; font-size: var(--fs-12); line-height: 1.7; box-shadow: 0 10px 34px rgba(0,0,0,.6); pointer-events: none; color: var(--text-2); }
+#tip { position: fixed; z-index: var(--z-tip); display: none; max-width: 360px; max-height: 72vh; overflow: hidden; background: var(--panel); background: color-mix(in srgb, var(--panel) 97%, transparent); border: 1px solid var(--gold-dim); border-radius: 10px; padding: 11px 13px; font-size: var(--fs-12); line-height: 1.7; box-shadow: 0 10px 34px rgba(0,0,0,.6); pointer-events: none; color: var(--text-2); }
 #tip.show { display: block; }
 /* 触摸设备没有"悬停"这回事：点按会合成 mousemove 把预览点亮，
    于是遮罩之上会多出一个被切掉的小框。这里直接禁用，点击照样能进概念页。 */
@@ -674,7 +685,7 @@ body.cmp-on #draftPanel { bottom: 136px; }
 
 /* ===== 卡库浏览：筛选栏 ===== */
 /* sticky 工具栏不加 backdrop-filter：背景已 98% 不透明，模糊看不出来，但滚动时每帧都要对下方内容采样 */
-.browse-bar { position: sticky; top: 0; z-index: var(--z-sticky); background: linear-gradient(180deg, color-mix(in srgb, var(--panel) 99%, transparent), color-mix(in srgb, var(--bg2) 99%, transparent)); border: 1px solid var(--gold-15); border-radius: 12px; padding: 10px 14px; margin-bottom: 18px; box-shadow: 0 10px 28px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.04); }
+.browse-bar { position: sticky; top: 0; z-index: var(--z-sticky); background: var(--panel); background: linear-gradient(180deg, color-mix(in srgb, var(--panel) 99%, transparent), color-mix(in srgb, var(--bg2) 99%, transparent)); border: 1px solid var(--gold-15); border-radius: 12px; padding: 10px 14px; margin-bottom: 18px; box-shadow: 0 10px 28px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.04); }
 .bg-row { display: flex; align-items: flex-start; gap: 10px; padding: 5px 0; }
 .bg-row + .bg-row { border-top: 1px dashed var(--line-soft); }
 /* 顶行（常驻）：筛选开关 + 已激活 chips + 重置 + 排序 + 计数 */
@@ -720,8 +731,8 @@ body.cmp-on #draftPanel { bottom: 136px; }
 .dk-acts button { padding: 3px 8px; font-size: var(--fs-12); }
 .dp-head.dp-sub { margin-top: 14px; border-top: 1px dashed var(--line); padding-top: 12px; }
 .dk-val { margin-top: 12px; padding: 8px 12px; border-radius: 9px; font-size: var(--fs-12); line-height: 1.7; }
-.dk-val.ok { background: color-mix(in srgb, var(--ok) 8%, transparent); border: 1px solid color-mix(in srgb, var(--ok) 30%, transparent); color: var(--ok); }
-.dk-val.err { background: color-mix(in srgb, var(--err) 6%, transparent); border: 1px solid color-mix(in srgb, var(--err) 25%, transparent); color: var(--err); }
+.dk-val.ok { background: rgba(125,196,131,.08); background: color-mix(in srgb, var(--ok) 8%, transparent); border: 1px solid rgba(125,196,131,.3); border: 1px solid color-mix(in srgb, var(--ok) 30%, transparent); color: var(--ok); }
+.dk-val.err { background: rgba(224,122,122,.06); background: color-mix(in srgb, var(--err) 6%, transparent); border: 1px solid rgba(224,122,122,.25); border: 1px solid color-mix(in srgb, var(--err) 25%, transparent); color: var(--err); }
 /* 违规条目做成按钮：有关联卡的条目可点（定位到卡），纯计数问题禁用态仅展示 */
 .dk-val .val-item { display: block; width: 100%; text-align: left; background: none; border: 0; padding: 2px 0; color: inherit; font: inherit; line-height: inherit; cursor: pointer; }
 .dk-val .val-item:hover:not(:disabled) { text-decoration: underline; }
@@ -737,22 +748,22 @@ body.cmp-on #draftPanel { bottom: 136px; }
 
 /* 检索描述命中的上下文片段（为什么命中） */
 .tsnip { color: var(--dim); font-size: var(--fs-12); line-height: 1.5; margin-top: 3px; overflow-wrap: anywhere; }
-.tsnip mark { background: color-mix(in srgb, var(--gold) 26%, transparent); color: var(--gold); padding: 0 1px; border-radius: 3px; }
+.tsnip mark { background: var(--gold-30); background: color-mix(in srgb, var(--gold) 26%, transparent); color: var(--gold); padding: 0 1px; border-radius: 3px; }
 
 /* ===== 文本牌表导入（98-textimport） ===== */
 .ti-text { width: 100%; box-sizing: border-box; background: var(--bg2); border: 1px solid var(--line); border-radius: 9px; color: var(--text); font: var(--fs-13)/1.7 var(--sans, sans-serif); padding: 10px 12px; resize: vertical; }
 .ti-hint { color: var(--dim); font-size: var(--fs-12); line-height: 1.8; margin: 10px 0 0; }
 .ti-acts { display: flex; gap: 8px; justify-content: flex-end; margin-top: 14px; }
 .ti-sec { margin: 16px 0 6px; color: var(--gold-dim); font-size: var(--fs-12); letter-spacing: 2px; }
-.ti-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; padding: 3px 0; font-size: var(--fs-13); border-bottom: 1px dashed color-mix(in srgb, var(--line) 55%, transparent); }
+.ti-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; padding: 3px 0; font-size: var(--fs-13); border-bottom: 1px dashed var(--line-soft); border-bottom: 1px dashed color-mix(in srgb, var(--line) 55%, transparent); }
 .ti-row:last-of-type { border-bottom: 0; }
 .ti-n { color: var(--gold); font-weight: bold; }
 .ti-alt, .ti-raw { color: var(--dim); font-size: var(--fs-12); }
 .ti-miss { color: var(--err); }
 .ti-cands { display: inline-flex; flex-wrap: wrap; gap: 4px; }
-.ti-code { display: flex; gap: 10px; align-items: center; margin: 10px 0; padding: 8px 12px; border: 1px solid color-mix(in srgb, var(--gold) 35%, transparent); border-radius: 9px; color: var(--gold); font-size: var(--fs-13); }
+.ti-code { display: flex; gap: 10px; align-items: center; margin: 10px 0; padding: 8px 12px; border: 1px solid var(--gold-35); border: 1px solid color-mix(in srgb, var(--gold) 35%, transparent); border-radius: 9px; color: var(--gold); font-size: var(--fs-13); }
 .ti-checks { margin-top: 6px; padding: 8px 12px; border-radius: 9px; border: 1px solid var(--line); background: var(--bg2); }
-.ti-checks.err { border-color: color-mix(in srgb, var(--err) 40%, transparent); }
+.ti-checks.err { border-color: rgba(224,122,122,.4); border-color: color-mix(in srgb, var(--err) 40%, transparent); }
 .ti-check { font-size: var(--fs-12); line-height: 1.9; color: var(--dim); }
 .ti-check.err { color: var(--err); }
 .ti-check.ok { color: var(--ok); }
@@ -787,6 +798,7 @@ body.cmp-on #draftPanel { bottom: 136px; }
    只留列表视图的表头与表格；行不跨页截断。暗色主题下打印不再是一张黑纸。 */
 @media print {
   :root, html[data-theme="dark"], html[data-theme="light"] {
+    color-scheme: light;
     --bg: #fff; --bg2: #f7f7f3; --panel: #fff; --panel2: #f7f7f3; --panel3: #fff; --panel-deep: #f2f2ee;
     --line: #ccc; --line-soft: #ddd; --line-strong: #bbb; --scrim: transparent;
     --text: #111; --text-2: #333; --text-3: #444; --dim: #666; --faint: #999;
@@ -999,11 +1011,11 @@ body.cmp-on .wrap { padding-bottom: 180px; }
 .dd-tip { color: var(--dim); font-size: var(--fs-12); }
 .dd-dirty {
   display: none; color: var(--warn); font-size: var(--fs-12); padding: 7px 10px;
-  background: color-mix(in srgb, var(--warn) 7%, transparent); border: 1px solid color-mix(in srgb, var(--warn) 25%, transparent);
+  background: rgba(224,192,104,.07); background: color-mix(in srgb, var(--warn) 7%, transparent); border: 1px solid rgba(224,192,104,.25); border: 1px solid color-mix(in srgb, var(--warn) 25%, transparent);
   border-radius: 8px; margin-bottom: 12px;
 }
 .dd-dirty.show { display: block; }
-.dd-err { color: var(--err); font-size: var(--fs-12); padding: 8px 10px; background: color-mix(in srgb, var(--err) 8%, transparent); border: 1px solid color-mix(in srgb, var(--err) 30%, transparent); border-radius: 8px; }
+.dd-err { color: var(--err); font-size: var(--fs-12); padding: 8px 10px; background: rgba(224,122,122,.08); background: color-mix(in srgb, var(--err) 8%, transparent); border: 1px solid rgba(224,122,122,.3); border: 1px solid color-mix(in srgb, var(--err) 30%, transparent); border-radius: 8px; }
 .dd-hint { color: var(--dim); font-size: var(--fs-12); line-height: 1.8; padding: 18px 4px; }
 .dd-decks { display: flex; gap: 12px; flex-wrap: wrap; margin: 12px 0; }
 .dd-deck { flex: 1 1 240px; min-width: 0; border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; background: var(--bg2); }
@@ -1014,8 +1026,8 @@ body.cmp-on .wrap { padding-bottom: 180px; }
 .dd-sum { display: flex; gap: 8px; flex-wrap: wrap; margin: 10px 0; }
 .dd-tag { font-size: var(--fs-12); padding: 3px 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg2); color: var(--dim); }
 .dd-tag b { color: var(--text); }
-.dd-tag.add { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 35%, transparent); }
-.dd-tag.del { color: var(--err); border-color: color-mix(in srgb, var(--err) 35%, transparent); }
+.dd-tag.add { color: var(--ok); border-color: rgba(125,196,131,.35); border-color: color-mix(in srgb, var(--ok) 35%, transparent); }
+.dd-tag.del { color: var(--err); border-color: rgba(224,122,122,.35); border-color: color-mix(in srgb, var(--err) 35%, transparent); }
 .dd-tag.chg { color: var(--gold); border-color: var(--gold-35); }
 .dd-sec { margin-top: 16px; }
 .dd-sec h3 { display: flex; align-items: center; gap: 10px; font-size: var(--fs-13); color: var(--gold-dim); letter-spacing: 2px; font-weight: normal; margin-bottom: 6px; }
@@ -1023,7 +1035,7 @@ body.cmp-on .wrap { padding-bottom: 180px; }
 .dd-cols > div { flex: 1 1 240px; min-width: 0; }
 .dd-table { width: 100%; border-collapse: collapse; font-size: var(--fs-12); }
 .dd-table th { text-align: left; color: var(--gold-dim); font-weight: normal; font-size: var(--fs-11); letter-spacing: 1px; padding: 6px 8px; border-bottom: 1px solid var(--line); }
-.dd-table td { padding: 6px 8px; border-bottom: 1px solid color-mix(in srgb, var(--line) 60%, transparent); color: var(--text-2); }
+.dd-table td { padding: 6px 8px; border-bottom: 1px solid var(--line-soft); border-bottom: 1px solid color-mix(in srgb, var(--line) 60%, transparent); color: var(--text-2); }
 .dd-table tr.added td:first-child { color: var(--ok); }
 .dd-table tr.removed td:first-child { color: var(--err); }
 .dd-table tr.changed td:first-child { color: var(--gold); }
@@ -1044,7 +1056,7 @@ body.cmp-on .wrap { padding-bottom: 180px; }
 .sim-head { display: flex; align-items: baseline; gap: 8px; padding: 8px 12px; background: var(--panel); border-bottom: 1px solid var(--line); }
 .sim-head span { color: var(--text); font-size: var(--fs-12); }
 .sim-head small { color: var(--dim); font-size: var(--fs-11); }
-.sim-item { display: flex; align-items: center; gap: 8px; padding: 7px 12px; border-bottom: 1px solid color-mix(in srgb, var(--line) 50%, transparent); flex-wrap: wrap; }
+.sim-item { display: flex; align-items: center; gap: 8px; padding: 7px 12px; border-bottom: 1px solid var(--line-soft); border-bottom: 1px solid color-mix(in srgb, var(--line) 50%, transparent); flex-wrap: wrap; }
 .sim-item:last-child { border-bottom: none; }
 .sim-name { border: none; background: none; color: var(--text-2); font-size: var(--fs-12); padding: 0; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sim-name:hover { color: var(--gold); }
@@ -1104,7 +1116,7 @@ body.cmp-on .wrap { padding-bottom: 180px; }
   .blchip { padding: 4px 12px; }
 
   /* 大遮罩上的实时模糊在中低端手机上会拖慢滚动 */
-  #overlay { backdrop-filter: none; background: color-mix(in srgb, var(--scrim) 88%, transparent); }
+  #overlay { backdrop-filter: none; -webkit-backdrop-filter: none; background: rgba(5,7,11,.88); background: color-mix(in srgb, var(--scrim) 88%, transparent); }
 }
 
 /* ===== 卡库分组：可构筑 / 对局实体与历史变体 =====
@@ -1197,13 +1209,13 @@ body.cmp-on .wrap { padding-bottom: 180px; }
 .skidx-group .skill:last-child { margin-bottom: 0; }
 
 /* ===== 卡面灯箱：详情页点击卡面 → 全屏原尺寸（层序在弹层之上） ===== */
-#lightbox { display: none; position: fixed; inset: 0; z-index: var(--z-lightbox); background: color-mix(in srgb, var(--scrim) 92%, transparent); align-items: center; justify-content: center; }
+#lightbox { display: none; position: fixed; top: 0; right: 0; bottom: 0; left: 0; background: rgba(5,7,11,.92); background: color-mix(in srgb, var(--scrim) 92%, transparent); z-index: var(--z-lightbox); align-items: center; justify-content: center; }
 #lightbox.show { display: flex; animation: ovl-in var(--t-med) ease; }
 #lightbox.show img { animation: lb-img var(--t-panel) var(--ease-pop); }
 @keyframes lb-img { from { opacity: 0; transform: scale(.965); } }
 /* 退场：与弹层同一套 .closing 契约（animateExit 挂上，动画结束摘除） */
 #lightbox.closing { display: flex; animation: ovl-out var(--t-med) ease forwards; pointer-events: none; }
-#lightbox img { max-height: 92dvh; max-width: 92vw; width: auto; height: auto; border-radius: var(--r-lg); border: 1px solid var(--gold-35); box-shadow: var(--elev-4), 0 0 44px -12px var(--gold-45); }
+#lightbox img { max-height: 92vh; max-height: 92dvh; max-width: 92vw; width: auto; height: auto; border-radius: var(--r-lg); border: 1px solid var(--gold-35); box-shadow: var(--elev-4), 0 0 44px -12px var(--gold-45); }
 #lightbox .lb-x { position: absolute; top: 18px; right: 18px; }
 #lightbox .lb-nav { position: absolute; top: 50%; transform: translateY(-50%); font-size: var(--fs-24); line-height: 1; padding: 12px 15px; }
 #lightbox .lb-prev { left: 18px; }

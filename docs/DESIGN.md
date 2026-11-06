@@ -617,7 +617,16 @@ TermEntry desc/story 下沉后，同构哑弹与散落约定的清除：
 ### 16.3 坑
 
 - build-app 缓存指纹只收集 src/gi-data——**vendor 改动不失效缓存**，产物陈旧
-  却查不出原因；指纹补上 vendor。
+  却查不出原因；指纹补上 vendor；改 target 等打包参数同理——**指纹再补上构建
+  脚本自身 mtime**。
+- **color-mix / backdrop-filter 无回退 = 跨设备透明层**（用户报：部分环境弹层
+  遮罩、大图预览、sticky 栏整块透明）：不支持 color-mix 的内核（Chrome/WebView
+  <111、Safari<16.2）把整条声明丢弃。规范做法是**同位双声明**——回退行在前
+  （rgba 或既有主题令牌），color-mix 行在后；backdrop-filter 一律配
+  -webkit- 前缀（Safari）。dvh 同理必须先给 vh 回退（#lightbox img 曾漏）。
+- **color-scheme 缺失 = 暗色模式不完全暗**：滚动条 / select 下拉 / overscroll
+  底色由 UA 按该属性决定，纯靠自定义样式管不住。meta（首帧前）+ :root dark +
+  [data-theme=light] light + @media print light 四处都要设。
 - 同名技能去重按「描述最长」保留：**上游渲染残缺的文本反而更长**（模板 token
   未替换），会把干净条目挤掉——先清洗再比较，且残留 token 构建期断死。
 - 测试 harness 是外层模板字符串：正则写 `\d` 会被吃成 `d`，用 `[0-9]` 或 `\\d`。
