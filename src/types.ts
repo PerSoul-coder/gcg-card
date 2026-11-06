@@ -498,12 +498,18 @@ export interface TermEntry {
   ckind?: string;
 }
 
-/* ---------- 上下文菜单（93-contextmenu） ----------
-   长按 / 右键共用的纯数据描述：注册表给什么，菜单画什么。sep 是分隔线占位。 */
+/* ---------- 上下文菜单（core/menu 渲染，93-contextmenu 定策略） ----------
+   长按 / 右键 / 键盘共用的纯数据描述：注册表给什么，菜单画什么。
+   children 为子级（根层保持 ≤7 项，同族操作收进子级）；checked 画 ✓；
+   hint 是右侧弱化说明；danger 危险色；sep 分隔线占位。 */
 export interface CtxItem {
   label: string;
   run?: () => void;
+  children?: CtxItem[];
+  checked?: boolean;
+  hint?: string;
   danger?: boolean;
+  disabled?: boolean;
   sep?: boolean;
 }
 export interface CtxMenu {

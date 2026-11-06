@@ -102,20 +102,30 @@ assert(/decodeAndRender\(h\);\s*switchView\("grid"\)/.test(mainSrc), "分享码�
 assert(/decodeAndRender\(SAMPLE\)\.then\(\(\) => switchView\("grid"\)\)/.test(mainSrc), "「加载示例牌组」后直接进卡面视图");
 
 
-/* ===== 7. 上下文菜单（93-contextmenu）：长按/右键统一交互 ===== */
+/* ===== 7. 指针引擎 + 菜单系统：长按/右键/悬停统一交互 ===== */
 const ctxSrc = fs.readFileSync(path.join(here, "src/93-contextmenu.ts"), "utf8");
+const menuSrc = fs.readFileSync(path.join(here, "src/core/menu.ts"), "utf8");
+const gestureSrc = fs.readFileSync(path.join(here, "src/core/gesture.ts"), "utf8");
 assert(fs.readFileSync(path.join(here, "src/main.ts"), "utf8").includes(String.raw`import "./93-contextmenu";`), "上下文菜单模块已挂进应用依赖图");
-assert(ctxSrc.includes("document.addEventListener(\"contextmenu\""), "右键事件接入了分发");
-assert(ctxSrc.includes("LONG_MS = 480") && ctxSrc.includes("pointerdown"), "触屏长按计时器（480ms）存在");
-assert(ctxSrc.includes("MOVE_PX") && ctxSrc.includes("pointermove"), "长按移动即取消（防误触滚动）");
-assert(ctxSrc.includes("showTipAt"), "概念链接长按/右键走悬浮预览（与 hover 同路）");
-assert(ctxSrc.includes("swallowUntil"), "长按后的合成 click 被吞掉一次");
-for (const label of ["查看详情", "加入牌组", "设为核心牌", "取消收藏", "复制该卡链接", "单卡分享图（PNG）"])
-  assert(ctxSrc.includes(label), "卡池条目菜单含「" + label + "」");
+assert(gestureSrc.includes("export function bindGestures"), "指针引擎提供 bindGestures 注册表");
+assert(gestureSrc.includes("LONG_MS = 480") && gestureSrc.includes("pointerdown"), "触屏长按计时器（480ms）在引擎");
+assert(gestureSrc.includes("MOVE_PX") && gestureSrc.includes("pointermove"), "长按移动即取消（防误触滚动）在引擎");
+assert(gestureSrc.includes("contextmenu") && gestureSrc.includes("preventDefault"), "右键分发在引擎（托管目标拦截，其余保留原生）");
+assert(gestureSrc.includes("swallowUntil"), "长按后的合成 click 被吞掉一次（引擎单点）");
+assert(gestureSrc.includes("(hover: hover) and (pointer: fine)"), "悬停能力判定单点在引擎（isHoverCapable）");
+assert(!fs.readFileSync(path.join(here, "src/90-detail.ts"), "utf8").includes("document.addEventListener(\"mousemove\""), "90-detail 不再自带 mousemove（hover 已并入引擎）");
+assert(ctxSrc.includes("bindGestures") && !ctxSrc.includes("addEventListener"), "93 是纯策略层（菜单规格 + 注册意图，无自有监听）");
+assert(ctxSrc.includes("showTipAt"), "概念链接长按/右键/悬停走悬浮预览（与 hover 同路）");
+assert(menuSrc.includes("export function openMenuAt") && menuSrc.includes("export function closeMenu"), "菜单组件：openMenuAt/closeMenu 单实例收口");
+assert(menuSrc.includes("openChild") && menuSrc.includes("trimTo"), "菜单子级：飞出式展开与逐层修剪");
+assert(menuSrc.includes("ArrowRight") && menuSrc.includes("ArrowLeft") && menuSrc.includes("Escape"), "菜单键盘导航（↑↓←→/Esc 逐层）");
+assert(menuSrc.includes("role=\"menuitem\"") && menuSrc.includes("aria-haspopup"), "菜单 ARIA（menuitem/haspopup）");
+assert(menuSrc.includes("hashchange"), "路由变化收起菜单（组件统一收口）");
+assert(css.includes(".cmenu") && css.includes("cmenu-check") && css.includes("cmenu-caret"), "菜单系统样式（层级面板/勾选列/子级箭头）已入库");
+for (const label of ["查看详情", "加入对比", "设为核心牌", "取消收藏", "复制该卡链接", "单卡分享图（PNG）", "children"])
+  assert(ctxSrc.includes(label), "卡池条目菜单含「" + label + "」（同族操作收子级）");
 for (const label of ["设为当前牌组", "重命名", "创建副本", "删除"])
   assert(ctxSrc.includes(label), "牌组行菜单含「" + label + "」");
-assert(ctxSrc.includes("hashchange"), "路由变化收起菜单");
-assert(css.includes("#ctxmenu"), "上下文菜单样式已入库");
 assert(css.includes("-webkit-touch-callout"), "iOS 长按呼出已被压掉");
 assert(css.includes("--fscale") && css.includes(String.raw`html[data-fs="xl"]`), "字号缩放令牌与档位存在");
 assert(html.includes("btnFs") && html.includes("viewport-fit=cover"), "字号按钮与安全区 viewport 已入库");

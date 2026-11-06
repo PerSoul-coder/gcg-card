@@ -25,6 +25,7 @@ import { dataOrigins } from "./20-data";
 import { costHtml } from "./30-deps";
 import { linkify } from "./40-concepts";
 import { pool, poolStats, isFav, toggleFav } from "./45-pool";
+import { isHoverCapable } from "./core/gesture";
 import { skillsHtml, skillsHtmlCard, equipSkillsHtml } from "./47-skills";
 import { termHtml } from "./50-backlinks";
 import { COMPARE_MAX } from "./88-compare";
@@ -562,15 +563,9 @@ document.body.appendChild(tip);
    切掉一半的预览框（它的 z-index 比遮罩高，浮在最上层）。 */
 /* 悬停能力只随设备变，不在每次 mousemove 里现查 matchMedia：
    缓存 MediaQueryList，系统切换悬停偏好时 matches 自动跟随。 */
-let hoverMQL: { matches: boolean } | null | undefined;
-function canHover() {
-  try {
-    if (hoverMQL === undefined) {
-      hoverMQL = typeof matchMedia === "function" ? matchMedia("(hover: hover) and (pointer: fine)") : null;
-    }
-    return !hoverMQL || hoverMQL.matches;
-  } catch { return true; }
-}
+/* 悬停能力判定单点在 core/gesture（MQL 单例、随系统偏好实时变化）；
+   这里保留同名出口给 93 的 hover 回调与既有测试断言。 */
+function canHover() { return isHoverCapable(); }
 let tipTerm: string | null = null;      /* 预览当前展示的术语名，用于避免重复重建 DOM */
 function hideTip() { if (tip && tip.classList) { tip.classList.remove("show"); tipTerm = null; } }
 /* 概念预览的按需截断：不硬编码行数——内容渲染后实测量一下，放不下才裁，
@@ -670,17 +665,8 @@ export function showTipAt(termName: string, clientX: number, clientY: number): v
   y = Math.max(pad, Math.min(y, innerHeight - r.height - pad));
   tip.style.left = x + "px"; tip.style.top = y + "px";
 }
-document.addEventListener("mousemove", ev => {
-  /* 触摸设备没有悬停：不显示预览（触屏的"预览"由长按与点击后的概念页承担）。
-     弹层内不在此禁用——卡文里的术语在详情弹层里同样需要悬浮预览，
-     真正要处理的是"弹层打开那一刻的残留"，由 setOverlayOpen 负责收起。 */
-  if (!canHover()) { hideTip(); return; }
-  const el = (ev.target as HTMLElement).closest ? (ev.target as HTMLElement).closest(".term") : null;
-  if (!el) { hideTip(); return; }
-  const termName = el.dataset.term;
-  if (!termName) { hideTip(); return; }
-  showTipAt(termName, ev.clientX, ev.clientY);
-});
+/* 悬停预览的 mousemove 已并入 core/gesture 引擎（93-contextmenu 注册
+   hover 回调）——本模块只保留 showTipAt / hideTip 的内容与收起职责。 */
 /* 指针离开 / 页面滚动 / 触摸开始 → 收起预览（触摸开始就收，避免它跟着手指残留在屏幕上） */
 document.addEventListener("touchstart", hideTip, { passive: true });
 /* 滚动事件不冒泡，用捕获阶段在文档上兜住任意滚动容器 */

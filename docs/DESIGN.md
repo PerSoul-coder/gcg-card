@@ -620,6 +620,20 @@ TermEntry desc/story 下沉后，同构哑弹与散落约定的清除：
   入调色板键，无牌面卡壳补浅色四类（与 CSS light 同源）；卡面覆盖层与二维码
   双主题保持深底浅字/白底深码（可扫性优先）。测试环境护栏：window 级监听与
   视口尺寸全部走守卫 + 兜底（注入的 window 可能是空对象）。
+- **菜单系统 + 指针引擎（第二轮：操作逻辑全面统一）**：交互层拆成三块——
+  ① core/gesture 指针状态机：长按计时/右键竞态/合成 click 吞咽/悬停能力判定
+  下沉为引擎，消费方 bindGestures(选择器, {hover,hoverend,longpress,contextmenu})
+  注册意图，按序匹配先注册先赢；90-detail 的自有 mousemove 与 canHover MQL
+  就地退役（canHover 保留函数名委托引擎，test-mobile 结构断言不断）。click
+  不归引擎管——浏览器 click 本就全平台同语义，迁移只有风险没有收益。
+  ② core/menu 菜单组件：纯数据规格（CtxItem 增 children/checked/hint/disabled）
+  → 层级面板；子级悬停(120ms 防抖)与点按同一条 openChild 路，就近飞出靠边
+  翻左；键盘 ↑↓←→/Esc 逐层 + Home/End，活动项真实 focus（Enter/Space 交给
+  原生 button click，keydown 再 activate 会双触发——教训）；ARIA menuitem/
+  haspopup；四边钳制 + resize/hashchange 收口。
+  ③ 93-contextmenu 退成策略层：菜单规格（池条目根层 5 项，构筑/分享两族收
+  子级；deck 行平铺 5 项，删除保持顶级危险色）+ 五个 bindGestures 注册。
+  信息密度契约：勾选列固定宽度对齐标签、分隔线弱分区、hint/caret 靠右弱化。
 - **描述模板 token 清洗**：piovium 的 `description` 由上游按 keyMap 渲染，但隐藏
   变体技能 keyMap 缺值时 `$[D__KEY__DAMAGE]` 会原样残留（嘉明踏云献瑞/瓦雷莎夜虹
   逐跃/水形幻人汛波·洪啸），`$[A角色id]` 会渲染成残缺 REALNAME 占位（梦迹一风）。

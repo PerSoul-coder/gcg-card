@@ -39,5 +39,7 @@ export * from "./98-textimport";
 export * from "./49-cache";
 export * from "./51-pwa";
 export * from "./93-contextmenu";
+export { openMenuAt, closeMenu, menuOpen } from "./core/menu";
+export { bindGestures, isHoverCapable } from "./core/gesture";
 export * from "./46-recent";
 export * from "./99-main";
